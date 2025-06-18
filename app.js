@@ -12,6 +12,14 @@ form.addEventListener('submit', (e) => {
   }
 })
 
+const schedulerSection = document.getElementById('schedulerSection');
+// For example, only show the form if the user visits with ?admin=true
+const isAdmin = new URLSearchParams(window.location.search).get('admin') === 'true';
+
+if (isAdmin) {
+  schedulerSection.style.display = 'block';
+}
+
 const scheduleForm = document.getElementById('scheduleForm');
 const nextGame = document.getElementById('nextGame');
 
