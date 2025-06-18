@@ -1,28 +1,15 @@
-const form = document.getElementById('rsvpForm');
-const guestList = document.getElementById('guestList');
-
-form.addEventListener('submit', (e) => {
-  e.preventDefault();
-  const guestName = document.getElementById('guestName').value.trim();
-  if (guestName) {
-    const listItem = document.createElement('li');
-    listItem.textContent = guestName + ' is coming! 🎉';
-    guestList.appendChild(listItem);
-    form.reset();
-  }
-})
-
-const schedulerSection = document.getElementById('schedulerSection');
-// For example, only show the form if the user visits with ?admin=true
+// 🌐 Admin Check
 const isAdmin = new URLSearchParams(window.location.search).get('admin') === 'true';
-
+const schedulerSection = document.getElementById('schedulerSection');
 if (isAdmin && schedulerSection) {
   schedulerSection.style.display = 'block';
 }
 
+// 📦 DOM Elements
 const scheduleForm = document.getElementById('scheduleForm');
 const gameList = document.getElementById('gameList');
 
+// 📦 LocalStorage Helpers
 function loadGameNights() {
   const stored = localStorage.getItem('gameNights');
   return stored ? JSON.parse(stored) : [];
@@ -32,6 +19,20 @@ function saveGameNights(nights) {
   localStorage.setItem('gameNights', JSON.stringify(nights));
 }
 
+// 🆕 Game Night Creator
+function createGameNight({ date, time }) {
+  return {
+    id: `event-${Date.now()}`,
+    date,
+    time,
+    createdBy: 'host',
+    repeat: 'none',
+    notes: '',
+    rsvps: []
+  };
+}
+
+// 📅 Render Game Nights
 function renderGameNights(nights) {
   gameList.innerHTML = '';
 
@@ -46,90 +47,76 @@ function renderGameNights(nights) {
       const li = document.createElement('li');
       li.textContent = `🎯 ${night.date} at ${night.time}`;
 
-      // Cancel button
-      const cancelBtn = document.createElement('button');
-      cancelBtn.textContent = 'Cancel';
-      cancelBtn.onclick = () => {
-        const updated = nights.filter(n => n.id !== night.id);
-        saveGameNights(updated);
-        renderGameNights(updated);
+      // ✏️ Edit & Cancel (Admin Only)
+      if (isAdmin) {
+        const editBtn = document.createElement('button');
+        editBtn.textContent = 'Edit';
+        editBtn.onclick = () => {
+          document.getElementById('gameDate').value = night.date;
+          document.getElementById('gameTime').value = night.time;
+          const filtered = nights.filter(n => n.id !== night.id);
+          saveGameNights(filtered);
+          renderGameNights(filtered);
+        };
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.onclick = () => {
+          const updated = nights.filter(n => n.id !== night.id);
+          saveGameNights(updated);
+          renderGameNights(updated);
+        };
+
+        li.appendChild(editBtn);
+        li.appendChild(cancelBtn);
+      }
+
+      // 🙋 RSVP (All Users)
+      const rsvpBtn = document.createElement('button');
+      rsvpBtn.textContent = 'RSVP';
+      rsvpBtn.onclick = () => {
+        const name = prompt(`Enter your name to RSVP for ${night.date} at ${night.time}`);
+        if (name) {
+          night.rsvps = night.rsvps || [];
+          night.rsvps.push(name.trim());
+          saveGameNights(nights);
+          renderGameNights(nights);
+        }
       };
+      li.appendChild(rsvpBtn);
 
-      // Edit button
-      const editBtn = document.createElement('button');
-      editBtn.textContent = 'Edit';
-      editBtn.onclick = () => {
-        document.getElementById('gameDate').value = night.date;
-        document.getElementById('gameTime').value = night.time;
+      // 🧾 RSVP List
+      if (night.rsvps && night.rsvps.length > 0) {
+        const rsvpList = document.createElement('ul');
+        night.rsvps.forEach(name => {
+          const guestItem = document.createElement('li');
+          guestItem.textContent = `🎟️ ${name} is coming`;
+          rsvpList.appendChild(guestItem);
+        });
+        li.appendChild(rsvpList);
+      }
 
-        const filtered = nights.filter(n => n.id !== night.id);
-        saveGameNights(filtered);
-        renderGameNights(filtered);
-      };
-
-	// RSVP button
-	const rsvpBtn = document.createElement('button');
-	rsvpBtn.textContent = 'RSVP';
-	rsvpBtn.onclick = () => {
-	  const name = prompt(`Enter your name to RSVP for ${night.date} at ${night.time}`);
-	  if (name) {
-		night.rsvps = night.rsvps || [];
-		night.rsvps.push(name.trim());
-		saveGameNights(nights);
-		renderGameNights(nights);
-	  }
-	};
-
-      li.appendChild(editBtn);
-      li.appendChild(cancelBtn);
-	  li.appendChild(rsvpBtn)
       gameList.appendChild(li);
     });
 }
 
+// 📝 Form Submit Handler
+if (scheduleForm) {
+  scheduleForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const date = document.getElementById('gameDate').value;
+    const time = document.getElementById('gameTime').value;
 
-// On submit: add a new game night
-function createGameNight({ date, time }) {
-  return {
-    id: `event-${Date.now()}`,
-    date,
-    time,
-    createdBy: "host",
-    repeat: "none",
-    notes: "",
-	rsvps: []
-  };
+    if (date && time) {
+      const nights = loadGameNights();
+      const newNight = createGameNight({ date, time });
+      nights.push(newNight);
+      saveGameNights(nights);
+      renderGameNights(nights);
+      scheduleForm.reset();
+    }
+  });
 }
 
-scheduleForm.addEventListener("submit", (e) => {
-  e.preventDefault();
-  const date = document.getElementById("gameDate").value;
-  const time = document.getElementById("gameTime").value;
-
-  if (date && time) {
-    const nights = loadGameNights();
-    const newNight = createGameNight({ date, time });
-    nights.push(newNight);
-    saveGameNights(nights);
-    renderGameNights(nights);
-    scheduleForm.reset();
-  }
-});
-
-
-// Initialize on page load
+// 🚀 Initialize
 renderGameNights(loadGameNights());
-
-
-const clearButton = document.getElementById('clearSchedule');
-
-clearButton.addEventListener('click', () => {
-  localStorage.removeItem('nextGameNight');
-  nextGame.textContent = '🎯 No game night scheduled.';
-});
-
-// Show stored schedule on page load
-const storedGameNight = localStorage.getItem('nextGameNight');
-if (storedGameNight) {
-  nextGame.textContent = `🎯 Next Game Night: ${storedGameNight}`;
-};
