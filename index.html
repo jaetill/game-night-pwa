@@ -16,6 +16,18 @@
     <input type="text" id="guestName" placeholder="Your name" required />
     <button type="submit">RSVP Yes</button>
   </form>
+  <h2>📅 Schedule a Game Night</h2>
+	<form id="scheduleForm">
+	  <label for="gameDate">Date:</label>
+	  <input type="date" id="gameDate" required />
+
+	  <label for="gameTime">Time:</label>
+	  <input type="time" id="gameTime" required />
+
+	  <button type="submit">Save Schedule</button>
+	</form>
+
+	<div id="nextGame"></div>
   <ul id="guestList"></ul>
   <script src="app.js"></script>
 </body>

@@ -10,4 +10,26 @@ form.addEventListener('submit', (e) => {
     guestList.appendChild(listItem);
     form.reset();
   }
+})
+
+const scheduleForm = document.getElementById('scheduleForm');
+const nextGame = document.getElementById('nextGame');
+
+scheduleForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const date = document.getElementById('gameDate').value;
+  const time = document.getElementById('gameTime').value;
+  
+  if (date && time) {
+    const gameNight = `${date} at ${time}`;
+    localStorage.setItem('nextGameNight', gameNight);
+    nextGame.textContent = `🎯 Next Game Night: ${gameNight}`;
+    scheduleForm.reset();
+  }
 });
+
+// Show stored schedule on page load
+const storedGameNight = localStorage.getItem('nextGameNight');
+if (storedGameNight) {
+  nextGame.textContent = `🎯 Next Game Night: ${storedGameNight}`;
+};
