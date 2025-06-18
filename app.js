@@ -67,8 +67,22 @@ function renderGameNights(nights) {
         renderGameNights(filtered);
       };
 
+	// RSVP button
+	const rsvpBtn = document.createElement('button');
+	rsvpBtn.textContent = 'RSVP';
+	rsvpBtn.onclick = () => {
+	  const name = prompt(`Enter your name to RSVP for ${night.date} at ${night.time}`);
+	  if (name) {
+		night.rsvps = night.rsvps || [];
+		night.rsvps.push(name.trim());
+		saveGameNights(nights);
+		renderGameNights(nights);
+	  }
+	};
+
       li.appendChild(editBtn);
       li.appendChild(cancelBtn);
+	  li.appendChild(rsvpBtn)
       gameList.appendChild(li);
     });
 }
@@ -83,6 +97,7 @@ function createGameNight({ date, time }) {
     createdBy: "host",
     repeat: "none",
     notes: ""
+	rsvps: []
   };
 }
 
