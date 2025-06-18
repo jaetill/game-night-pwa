@@ -96,7 +96,7 @@ function createGameNight({ date, time }) {
     time,
     createdBy: "host",
     repeat: "none",
-    notes: ""
+    notes: "",
 	rsvps: []
   };
 }
