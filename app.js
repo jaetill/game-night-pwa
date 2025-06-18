@@ -36,6 +36,13 @@ scheduleForm.addEventListener('submit', (e) => {
   }
 });
 
+const clearButton = document.getElementById('clearSchedule');
+
+clearButton.addEventListener('click', () => {
+  localStorage.removeItem('nextGameNight');
+  nextGame.textContent = '🎯 No game night scheduled.';
+});
+
 // Show stored schedule on page load
 const storedGameNight = localStorage.getItem('nextGameNight');
 if (storedGameNight) {
