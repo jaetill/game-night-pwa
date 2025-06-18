@@ -21,20 +21,52 @@ if (isAdmin) {
 }
 
 const scheduleForm = document.getElementById('scheduleForm');
-const nextGame = document.getElementById('nextGame');
+const gameList = document.getElementById('gameList');
 
+function loadGameNights() {
+  const stored = localStorage.getItem('gameNights');
+  return stored ? JSON.parse(stored) : [];
+}
+
+function saveGameNights(nights) {
+  localStorage.setItem('gameNights', JSON.stringify(nights));
+}
+
+function renderGameNights(nights) {
+  gameList.innerHTML = '';
+
+  if (nights.length === 0) {
+    gameList.innerHTML = '<li>No game nights scheduled.</li>';
+    return;
+  }
+
+  nights
+    .sort((a, b) => new Date(`${a.date}T${a.time}`) - new Date(`${b.date}T${b.time}`))
+    .forEach(night => {
+      const li = document.createElement('li');
+      li.textContent = `🎯 ${night.date} at ${night.time}`;
+      gameList.appendChild(li);
+    });
+}
+
+// On submit: add a new game night
 scheduleForm.addEventListener('submit', (e) => {
   e.preventDefault();
   const date = document.getElementById('gameDate').value;
   const time = document.getElementById('gameTime').value;
-  
+
   if (date && time) {
-    const gameNight = `${date} at ${time}`;
-    localStorage.setItem('nextGameNight', gameNight);
-    nextGame.textContent = `🎯 Next Game Night: ${gameNight}`;
+    const nights = loadGameNights();
+    nights.push({ date, time });
+    saveGameNights(nights);
+    renderGameNights(nights);
     scheduleForm.reset();
   }
 });
+
+// Initialize on page load
+renderGameNights(loadGameNights());
+
 
 const clearButton = document.getElementById('clearSchedule');
 
