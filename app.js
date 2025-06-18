@@ -50,19 +50,32 @@ function renderGameNights(nights) {
 }
 
 // On submit: add a new game night
-scheduleForm.addEventListener('submit', (e) => {
+function createGameNight({ date, time }) {
+  return {
+    id: `event-${Date.now()}`,
+    date,
+    time,
+    createdBy: "host",
+    repeat: "none",
+    notes: ""
+  };
+}
+
+scheduleForm.addEventListener("submit", (e) => {
   e.preventDefault();
-  const date = document.getElementById('gameDate').value;
-  const time = document.getElementById('gameTime').value;
+  const date = document.getElementById("gameDate").value;
+  const time = document.getElementById("gameTime").value;
 
   if (date && time) {
     const nights = loadGameNights();
-    nights.push({ date, time });
+    const newNight = createGameNight({ date, time });
+    nights.push(newNight);
     saveGameNights(nights);
     renderGameNights(nights);
     scheduleForm.reset();
   }
 });
+
 
 // Initialize on page load
 renderGameNights(loadGameNights());
