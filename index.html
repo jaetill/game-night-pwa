@@ -16,6 +16,11 @@
     <input type="text" id="guestName" placeholder="Your name" required />
     <button type="submit">RSVP Yes</button>
   </form>
+  <!-- Visibile to everyone  -->
+	<h2>📅 Upcoming Game Nights</h2>
+	<ul id="gameList"></ul>
+  
+  <!-- Only visible to admin -->
   <section id="schedulerSection" style="display: none;">
   <h2>📅 Schedule a Game Night</h2>
 	<form id="scheduleForm">
@@ -27,8 +32,6 @@
 
 	  <button type="submit">Add Game Night</button>
 	</form>
-	<ul id="gameList"></ul>
-	<button id="clearSchedule" type="button">Clear Schedule</button>
     </section>
 
 	<div id="nextGame"></div>

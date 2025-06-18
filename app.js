@@ -16,7 +16,7 @@ const schedulerSection = document.getElementById('schedulerSection');
 // For example, only show the form if the user visits with ?admin=true
 const isAdmin = new URLSearchParams(window.location.search).get('admin') === 'true';
 
-if (isAdmin) {
+if (isAdmin && schedulerSection) {
   schedulerSection.style.display = 'block';
 }
 
