@@ -45,9 +45,34 @@ function renderGameNights(nights) {
     .forEach(night => {
       const li = document.createElement('li');
       li.textContent = `🎯 ${night.date} at ${night.time}`;
+
+      // Cancel button
+      const cancelBtn = document.createElement('button');
+      cancelBtn.textContent = 'Cancel';
+      cancelBtn.onclick = () => {
+        const updated = nights.filter(n => n.id !== night.id);
+        saveGameNights(updated);
+        renderGameNights(updated);
+      };
+
+      // Edit button
+      const editBtn = document.createElement('button');
+      editBtn.textContent = 'Edit';
+      editBtn.onclick = () => {
+        document.getElementById('gameDate').value = night.date;
+        document.getElementById('gameTime').value = night.time;
+
+        const filtered = nights.filter(n => n.id !== night.id);
+        saveGameNights(filtered);
+        renderGameNights(filtered);
+      };
+
+      li.appendChild(editBtn);
+      li.appendChild(cancelBtn);
       gameList.appendChild(li);
     });
 }
+
 
 // On submit: add a new game night
 function createGameNight({ date, time }) {
