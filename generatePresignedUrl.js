@@ -1,10 +1,13 @@
+// 🔧 Required AWS SDK modules
 const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
-const REGION = "us-east-1"; // Change if your bucket is in another region
+// 🌎 Config
+const REGION = "us-east-1";
 const BUCKET_NAME = "jaetill-game-nights";
 const KEY = "gameNights.json";
 
+// 🔑 Credentials from environment (make sure they're set)
 const client = new S3Client({
   region: REGION,
   credentials: {
@@ -17,11 +20,12 @@ async function generatePresignedUrl() {
   const command = new PutObjectCommand({
     Bucket: BUCKET_NAME,
     Key: KEY,
-    ContentType: "application/json"
+    ContentType: "application/json",
+    ChecksumAlgorithm: undefined // ✨ Critical: disables implicit x-amz-sdk-checksum-algorithm
   });
 
-  const url = await getSignedUrl(client, command, { expiresIn: 300 }); // valid for 5 min
-  console.log("Upload URL:\n", url);
+  const url = await getSignedUrl(client, command, { expiresIn: 300 }); // 5-minute URL
+  console.log("✅ Presigned URL:\n", url);
 }
 
 generatePresignedUrl();
