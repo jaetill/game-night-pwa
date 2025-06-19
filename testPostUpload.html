@@ -11,7 +11,7 @@
         log.textContent = "Uploading...\n";
 
         // Your S3 regional endpoint
-        const url = "https://jaetill.game.nights.s3.us-east-1.amazonaws.com/";
+        const url = "https://jaetill-game-nights.s3.us-east-1.amazonaws.com/";
 
         // Paste your generated fields here
         const fields = {
@@ -19,9 +19,9 @@
           "Content-Type": "application/json",
           "x-amz-algorithm": "AWS4-HMAC-SHA256",
           "x-amz-credential": "AKIATD5ZASBEN3WXOFMW/20250619/us-east-1/s3/aws4_request",
-          "x-amz-date": "20250619T113231ZZ",
-          "policy": "eyJleHBpcmF0aW9uIjoiMjAyNS0wNi0xOVQxMTozNzozMS41MzBaIiwiY29uZGl0aW9ucyI6W3siYnVja2V0IjoiamFldGlsbC5nYW1lLm5pZ2h0cyJ9LFsic3RhcnRzLXdpdGgiLCIka2V5IiwiZ2FtZU5pZ2h0cy5qc29uIl0seyJDb250ZW50LVR5cGUiOiJhcHBsaWNhdGlvbi9qc29uIn0seyJ4LWFtei1hbGdvcml0aG0iOiJBV1M0LUhNQUMtU0hBMjU2In0seyJ4LWFtei1jcmVkZW50aWFsIjoiQUtJQVRENVpBU0JFTjNXWE9GTVcvMjAyNTA2MTkvdXMtZWFzdC0xL3MzL2F3czRfcmVxdWVzdCJ9LHsieC1hbXotZGF0ZSI6IjIwMjUwNjE5VDExMzIzMVpaIn1dfQ==",
-          "x-amz-signature": "fdd3cc497904ef77c8b69966ef9c570d327fc8fb496ba9935b7a3434874a3083"
+          "x-amz-date": "20250619T114358Z",
+          "policy": "eyJleHBpcmF0aW9uIjoiMjAyNS0wNi0xOVQxMTo0ODo1OFoiLCJjb25kaXRpb25zIjpbWyJzdGFydHMtd2l0aCIsIiRDb250ZW50LVR5cGUiLCJhcHBsaWNhdGlvbi9qc29uIl0seyJDb250ZW50LVR5cGUiOiJhcHBsaWNhdGlvbi9qc29uIn0seyJidWNrZXQiOiJqYWV0aWxsLWdhbWUtbmlnaHRzIn0seyJYLUFtei1BbGdvcml0aG0iOiJBV1M0LUhNQUMtU0hBMjU2In0seyJYLUFtei1DcmVkZW50aWFsIjoiQUtJQVRENVpBU0JFTjNXWE9GTVcvMjAyNTA2MTkvdXMtZWFzdC0xL3MzL2F3czRfcmVxdWVzdCJ9LHsiWC1BbXotRGF0ZSI6IjIwMjUwNjE5VDExNDM1OFoifSx7ImtleSI6ImdhbWVOaWdodHMuanNvbiJ9XX0=",
+          "x-amz-signature": "b81685e7bbeaf071b84b0bf21e700e0c0b1bb70174136d4f6423af74afb46f99"
         };
 
         const formData = new FormData();
