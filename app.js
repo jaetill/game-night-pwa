@@ -4,6 +4,14 @@ const currentUser = {
   name: "Jason"       // Or: prompt(), localStorage.getItem("name"), etc.
 };
 
+const uploadBtn = document.getElementById('uploadBtn');
+if (isAdmin && uploadBtn) {
+  uploadBtn.addEventListener('click', () => {
+    const data = loadGameNights();
+    saveToCloud(data);
+  });
+}
+
 // 🌐 Admin Check
 const isAdmin = new URLSearchParams(window.location.search).get('admin') === 'true';
 const schedulerSection = document.getElementById('schedulerSection');
@@ -143,6 +151,24 @@ if (scheduleForm) {
     }
   });
 }
+
+async function saveToCloud(gameNights) {
+  const response = await fetch("https://jaetill-game-nights.s3.us-east-1.amazonaws.com/gameNights.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIATD5ZASBEN3WXOFMW%2F20250619%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250619T023439Z&X-Amz-Expires=300&X-Amz-Signature=f2ff165f258bb61f269c715d894a105349b1eb837d0531a4b3eba1062c7f11e4&X-Amz-SignedHeaders=host&x-amz-checksum-crc32=AAAAAA%3D%3D&x-amz-sdk-checksum-algorithm=CRC32&x-id=PutObject", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(gameNights)
+  });
+
+  if (response.ok) {
+    alert("✅ Data uploaded to S3!");
+  } else {
+    alert("❌ Upload failed.");
+    console.error(await response.text());
+  }
+}
+
 
 // 🚀 Initialize
 renderGameNights(loadGameNights());
