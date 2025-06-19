@@ -3,7 +3,7 @@ import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
 import * as dotenv from "dotenv";
 dotenv.config();
 
-const REGION = "us-east-1";
+const REGION = "us-east-2";
 const BUCKET = "jaetill-game-nights";         // Update as needed
 const OBJECT_KEY = "gameNights.json";         // Destination key in S3
 const CONTENT_TYPE = "application/json";      // Type of upload
