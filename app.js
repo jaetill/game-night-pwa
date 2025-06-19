@@ -158,14 +158,16 @@ async function saveToCloud(gameNights) {
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify(gameNights)
+    body: JSON.stringify(gameNights),
+    mode: "cors"
   });
 
   if (response.ok) {
-    alert("✅ Data uploaded to S3!");
+    alert("✅ Synced to S3!");
   } else {
-    alert("❌ Upload failed.");
-    console.error(await response.text());
+    const errorText = await response.text();
+    console.error("Upload failed:", errorText);
+    alert("❌ Upload error. See console for details.");
   }
 }
 
