@@ -153,7 +153,7 @@ if (scheduleForm) {
 }
 
 async function saveToCloud(gameNights) {
-  const response = await fetch("https://jaetill-game-nights.s3.us-east-1.amazonaws.com/gameNights.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIATD5ZASBEN3WXOFMW%2F20250619%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250619T023439Z&X-Amz-Expires=300&X-Amz-Signature=f2ff165f258bb61f269c715d894a105349b1eb837d0531a4b3eba1062c7f11e4&X-Amz-SignedHeaders=host&x-amz-checksum-crc32=AAAAAA%3D%3D&x-amz-sdk-checksum-algorithm=CRC32&x-id=PutObject", {
+  const response = await fetch("https://jaetill-game-nights.s3.us-east-1.amazonaws.com/gameNights.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIATD5ZASBEN3WXOFMW%2F20250619%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250619T025937Z&X-Amz-Expires=300&X-Amz-Signature=6448df4e1647c108febd8ff3452ac54d52878b95f1ca2f5f0c72a9f320f0e850&X-Amz-SignedHeaders=host&x-amz-checksum-crc32=AAAAAA%3D%3D&x-amz-sdk-checksum-algorithm=CRC32&x-id=PutObject", {
     method: "PUT",
     headers: {
       "Content-Type": "application/json"
