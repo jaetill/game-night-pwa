@@ -153,23 +153,42 @@ if (scheduleForm) {
 }
 
 async function saveToCloud(gameNights) {
-  const response = await fetch("https://jaetill-game-nights.s3.us-east-1.amazonaws.com/gameNights.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIATD5ZASBEN3WXOFMW%2F20250619%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250619T034558Z&X-Amz-Expires=300&X-Amz-Signature=3306cfe8ad0dca7249812b4b4d02f93b51accaea57613b206dd724fcd748aeee&X-Amz-SignedHeaders=host&x-amz-checksum-crc32=AAAAAA%3D%3D&x-amz-sdk-checksum-algorithm=CRC32&x-id=PutObject", {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(gameNights),
-    mode: "cors"
-  });
+  try {
+    // Step 1: Fetch the presigned POST fields
+    const res = await fetch("https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod/upload-token");
+    const { url, fields } = await res.json();
 
-  if (response.ok) {
-    alert("✅ Synced to S3!");
-  } else {
-    const errorText = await response.text();
-    console.error("Upload failed:", errorText);
-    alert("❌ Upload error. See console for details.");
+    // Step 2: Build the form data
+    const formData = new FormData();
+    Object.entries(fields).forEach(([key, value]) => {
+      formData.append(key, value);
+    });
+
+    // Step 3: Append the file blob
+    const fileBlob = new Blob([JSON.stringify(gameNights)], {
+      type: "application/json"
+    });
+    formData.append("file", fileBlob);
+
+    // Step 4: Upload to S3
+    const upload = await fetch(url, {
+      method: "POST",
+      body: formData
+    });
+
+    if (upload.ok) {
+      alert("✅ Synced to S3!");
+    } else {
+      const errorText = await upload.text();
+      console.error("Upload failed:", errorText);
+      alert("❌ Upload error. See console for details.");
+    }
+  } catch (err) {
+    console.error("Upload error:", err);
+    alert("❌ Upload exception. See console.");
   }
 }
+
 
 
 
