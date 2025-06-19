@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <h2>S3 Presigned POST Test</h2>
+  <button onclick="upload()">Upload JSON</button>
+  <pre id="log"></pre>
+  <script>
+    async function upload() {
+      const log = document.getElementById("log");
+      log.textContent = "Uploading...\n";
+
+      // Replace with the result from your Node script
+      const url = "https://jaetill-game-nights.s3.us-east-1.amazonaws.com/";
+      const fields = {
+        'Content-Type': 'application/json',
+  bucket: 'jaetill-game-nights',
+  'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
+  'X-Amz-Credential': 'AKIATD5ZASBEN3WXOFMW/20250619/us-east-1/s3/aws4_request',
+  'X-Amz-Date': '20250619T044145Z',
+  key: 'gameNights.json',
+  Policy: 'eyJleHBpcmF0aW9uIjoiMjAyNS0wNi0xOVQwNDo0Njo0NVoiLCJjb25kaXRpb25zIjpbWyJzdGFydHMtd2l0aCIsIiRDb250ZW50LVR5cGUiLCJhcHBsaWNhdGlvbi9qc29uIl0seyJDb250ZW50LVR5cGUiOiJhcHBsaWNhdGlvbi9qc29uIn0seyJidWNrZXQiOiJqYWV0aWxsLWdhbWUtbmlnaHRzIn0seyJYLUFtei1BbGdvcml0aG0iOiJBV1M0LUhNQUMtU0hBMjU2In0seyJYLUFtei1DcmVkZW50aWFsIjoiQUtJQVRENVpBU0JFTjNXWE9GTVcvMjAyNTA2MTkvdXMtZWFzdC0xL3MzL2F3czRfcmVxdWVzdCJ9LHsiWC1BbXotRGF0ZSI6IjIwMjUwNjE5VDA0NDE0NVoifSx7ImtleSI6ImdhbWVOaWdodHMuanNvbiJ9XX0=',
+  'X-Amz-Signature': 'fb23da81ffc05e4e3b2c063475d65bfdcd8114fdbad199aec3353069d0748567'
+      };
+
+      const formData = new FormData();
+      for (const name in fields) {
+        formData.append(name, fields[name]);
+      }
+
+      const blob = new Blob(
+        [JSON.stringify({ from: "presigned POST", success: true }, null, 2)],
+        { type: "application/json" }
+      );
+      formData.append("file", blob); // 'file' field required
+
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          body: formData
+        });
+
+        if (res.ok) {
+          log.textContent += "✅ Upload succeeded!";
+        } else {
+          log.textContent += `❌ Upload failed: ${res.status}`;
+        }
+      } catch (e) {
+        log.textContent += `❌ Error: ${e.message}`;
+      }
+    }
+  </script>
+</body>
+</html>
