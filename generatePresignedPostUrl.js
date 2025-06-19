@@ -1,35 +1,40 @@
-const { S3Client } = require("@aws-sdk/client-s3");
-const { createPresignedPost } = require("@aws-sdk/s3-presigned-post");
-require("dotenv").config();
+import { S3Client } from "@aws-sdk/client-s3";
+import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
+import * as dotenv from "dotenv";
+dotenv.config();
 
-const BUCKET = "jaetill-game-nights"; // update if renamed
 const REGION = "us-east-1";
-const KEY = "gameNights.json";
+const BUCKET = "jaetill-game-nights";         // Update as needed
+const OBJECT_KEY = "gameNights.json";         // Destination key in S3
+const CONTENT_TYPE = "application/json";      // Type of upload
+const EXPIRES_IN_SECONDS = 300;               // 5 minutes
 
 const client = new S3Client({
   region: REGION,
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
   }
 });
 
-async function go() {
+async function generate() {
   const { url, fields } = await createPresignedPost(client, {
     Bucket: BUCKET,
-    Key: KEY,
-    Conditions: [["starts-with", "$Content-Type", "application/json"]],
+    Key: OBJECT_KEY,
     Fields: {
-      "Content-Type": "application/json"
+      "Content-Type": CONTENT_TYPE
     },
-    Expires: 300
+    Conditions: [
+      ["starts-with", "$Content-Type", CONTENT_TYPE]
+    ],
+    Expires: EXPIRES_IN_SECONDS
   });
 
-  console.log("✅ URL:", url);
-  console.log("📦 Fields:");
-  for (const [k, v] of Object.entries(fields)) {
-    console.log(`${k}: ${v}`);
+  console.log("✅ POST URL:\n", url);
+  console.log("\n📦 Form Fields:\n");
+  for (const [name, value] of Object.entries(fields)) {
+    console.log(`${name}: ${value}`);
   }
 }
 
-go();
+generate().catch(console.error);
