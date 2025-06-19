@@ -1,54 +1,55 @@
 <!DOCTYPE html>
 <html>
-<body>
-  <h2>S3 Presigned POST Test</h2>
-  <button onclick="upload()">Upload JSON</button>
-  <pre id="log"></pre>
+  <body>
+    <h2>S3 Presigned POST Test</h2>
+    <button onclick="upload()">Upload JSON</button>
+    <pre id="log"></pre>
 
-  <script>
-    async function upload() {
-      const log = document.getElementById("log");
-      log.textContent = "Uploading...\n";
+    <script>
+      async function upload() {
+        const log = document.getElementById("log");
+        log.textContent = "Uploading...\n";
 
-      // 👇 Replace with your actual values (these are placeholders)
-      const url = "https://s3.us-east-1.amazonaws.com/jaetill-game-nights";
-      const fields = {
-        "Content-Type": "application/json",
-        "bucket": "jaetill-game-nights",
-        "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
-        "X-Amz-Credential": "AKIATD5ZASBEN3WXOFMW/20250619/us-east-1/s3/aws4_request",
-        "X-Amz-Date": "20250619T045845Z",
-        "key": "gameNights.json",
-        "Policy": 'eyJleHBpcmF0aW9uIjoiMjAyNS0wNi0xOVQwNDo1OTozNVoiLCJjb25kaXRpb25zIjpbWyJzdGFydHMtd2l0aCIsIiRDb250ZW50LVR5cGUiLCJhcHBsaWNhdGlvbi9qc29uIl0seyJDb250ZW50LVR5cGUiOiJhcHBsaWNhdGlvbi9qc29uIn0seyJidWNrZXQiOiJqYWV0aWxsLWdhbWUtbmlnaHRzIn0seyJYLUFtei1BbGdvcml0aG0iOiJBV1M0LUhNQUMtU0hBMjU2In0seyJYLUFtei1DcmVkZW50aWFsIjoiQUtJQVRENVpBU0JFTjNXWE9GTVcvMjAyNTA2MTkvdXMtZWFzdC0xL3MzL2F3czRfcmVxdWVzdCJ9LHsiWC1BbXotRGF0ZSI6IjIwMjUwNjE5VDA0NTQzNVoifSx7ImtleSI6ImdhbWVOaWdodHMuanNvbiJ9XX0=',
-        "X-Amz-Signature": "5c94ff...snip..."
-      };
+        // Your S3 regional endpoint
+        const url = "https://s3.us-east-1.amazonaws.com/jaetill-game-nights";
 
-      const formData = new FormData();
-      for (const name in fields) {
-        formData.append(name, fields[name]);
-      }
+        // Paste your generated fields here
+        const fields = {
+          "key": "gameNights.json",
+          "Content-Type": "application/json",
+          "x-amz-algorithm": "AWS4-HMAC-SHA256",
+          "x-amz-credential": "AKIATD5ZASBEN3WXOFMW/20250619/us-east-1/s3/aws4_request",
+          "x-amz-date": "20250619T045900Z",
+          "policy": "eyJleHBpcmF0aW9uIjoiMjAyNS0wNi0xOVQxMTowOToyNy4xMDJaIiwiY29uZGl0aW9ucyI6W3siYnVja2V0IjoiamFldGlsbC1nYW1lLW5pZ2h0cyJ9LFsic3RhcnRzLXdpdGgiLCIka2V5IiwiZ2FtZU5pZ2h0cy5qc29uIl0seyJDb250ZW50LVR5cGUiOiJhcHBsaWNhdGlvbi9qc29uIn0seyJ4LWFtei1hbGdvcml0aG0iOiJBV1M0LUhNQUMtU0hBMjU2In0seyJ4LWFtei1jcmVkZW50aWFsIjoiQUtJQVRENVpBU0JFTjNXWE9GTVcvMjAyNTA2MTkvdXMtZWFzdC0xL3MzL2F3czRfcmVxdWVzdCJ9LHsieC1hbXotZGF0ZSI6IjIwMjUwNjE5VDExMDQyN1paIn1dfQ==",
+          "x-amz-signature": "96cbf69398cf41a48416869ec3a75a98bdfeb05b12c70eb4e68e256e83042c1e"
+        };
 
-      const blob = new Blob(
-        [JSON.stringify({ from: "presigned POST", success: true }, null, 2)],
-        { type: "application/json" }
-      );
-      formData.append("file", blob); // this must be named 'file'
-
-      try {
-        const res = await fetch(url, {
-          method: "POST",
-          body: formData
-        });
-
-        if (res.ok) {
-          log.textContent += "✅ Upload succeeded!";
-        } else {
-          log.textContent += `❌ Upload failed: ${res.status}`;
+        const formData = new FormData();
+        for (const name in fields) {
+          formData.append(name, fields[name]);
         }
-      } catch (e) {
-        log.textContent += `❌ Error: ${e.message}`;
+
+        const blob = new Blob(
+          [JSON.stringify({ from: "manual policy POST", success: true }, null, 2)],
+          { type: "application/json" }
+        );
+        formData.append("file", blob); // Must be 'file' field
+
+        try {
+          const res = await fetch(url, {
+            method: "POST",
+            body: formData
+          });
+
+          if (res.ok) {
+            log.textContent += "✅ Upload succeeded!";
+          } else {
+            log.textContent += `❌ Upload failed: ${res.status}`;
+          }
+        } catch (e) {
+          log.textContent += `❌ Error: ${e.message}`;
+        }
       }
-    }
-  </script>
-</body>
+    </script>
+  </body>
 </html>
