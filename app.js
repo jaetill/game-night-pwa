@@ -172,5 +172,6 @@ async function saveToCloud(gameNights) {
 }
 
 
+
 // 🚀 Initialize
 renderGameNights(loadGameNights());
