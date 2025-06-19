@@ -16,6 +16,8 @@ const client = new S3Client({
   }
 });
 
+client.middlewareStack.remove("awsChunkedEncodingMiddleware");
+
 async function generatePresignedUrl() {
   const command = new PutObjectCommand({
     Bucket: BUCKET_NAME,
