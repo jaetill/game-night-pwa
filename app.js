@@ -4,14 +4,6 @@ const currentUser = {
   name: "Jason"       // Or: prompt(), localStorage.getItem("name"), etc.
 };
 
-const uploadBtn = document.getElementById('uploadBtn');
-if (isAdmin && uploadBtn) {
-  uploadBtn.addEventListener('click', () => {
-    const data = loadGameNights();
-    saveToCloud(data);
-  });
-}
-
 // 🌐 Admin Check
 const isAdmin = new URLSearchParams(window.location.search).get('admin') === 'true';
 const schedulerSection = document.getElementById('schedulerSection');
@@ -22,6 +14,14 @@ if (isAdmin && schedulerSection) {
 // 🎯 DOM Elements
 const scheduleForm = document.getElementById('scheduleForm');
 const gameList = document.getElementById('gameList');
+
+const uploadBtn = document.getElementById('uploadBtn');
+if (isAdmin && uploadBtn) {
+  uploadBtn.addEventListener('click', () => {
+    const data = loadGameNights();
+    saveToCloud(data);
+  });
+}
 
 // 📦 LocalStorage Helpers
 function loadGameNights() {
