@@ -1,7 +1,7 @@
 const crypto = require("crypto");
 require("dotenv").config(); // make sure you have AWS credentials in your .env
 
-const BUCKET = "jaetill-game-nights";
+const BUCKET = "jaetill.game.nights";
 const REGION = "us-east-1";
 const KEY = "gameNights.json";
 const EXPIRE_IN_MINUTES = 5;
