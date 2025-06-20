@@ -1,3 +1,19 @@
+
+import { loadGameNights, syncAndRender } from './storage.js';
+import { renderGameNights } from './render.js';
+import { setupEventListeners } from './events.js';
+import { fetchOwnedGames } from './bgg.js';
+
+async function init() {
+  const nights = await loadGameNights(); // handles cloud + fallback
+  renderGameNights(nights);
+  setupEventListeners(); // form buttons, date input, etc.
+  fetchOwnedGames("jaetill"); // async, non-blocking
+}
+
+init();
+
+/**
 // 🔐 Simulated Logged-In User
 const currentUser = {
   userId: "user-123",
@@ -286,15 +302,50 @@ async function syncAndRender(nights) {
 
 // Get games from BGG
 async function fetchOwnedGames(username) {
-  const res = await fetch(`https://boardgamegeek.com/xmlapi2/collection?username=${username}&own=1`);
-  const xmlText = await res.text();
-  const parser = new DOMParser();
-  const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+  const cached = localStorage.getItem('bggOwnedGames');
+  if (cached) {
+    try {
+      ownedGames = JSON.parse(cached);
+      console.log("✅ Loaded BGG games from local cache.");
+      return;
+    } catch {
+      console.warn("⚠️ Failed to parse cached games.");
+    }
+  }
 
-  ownedGames = [...xmlDoc.querySelectorAll("item")].map(item => ({
-    id: item.getAttribute("objectid"),
-    title: item.querySelector("name")?.textContent || "Untitled"
-  }));
+  let attempts = 0;
+  const maxAttempts = 5;
+
+  async function tryFetch() {
+    attempts++;
+    try {
+      const res = await fetch(`https://boardgamegeek.com/xmlapi2/collection?username=${username}&own=1`);
+      const text = await res.text();
+      const xml = new window.DOMParser().parseFromString(text, "text/xml");
+
+      if (xml.querySelector("message")) {
+        if (attempts < maxAttempts) {
+          console.log(`⏳ BGG queue (${attempts}). Retrying in 3s...`);
+          setTimeout(tryFetch, 3000);
+        } else {
+          console.warn("❌ BGG collection still not ready after several tries.");
+        }
+        return;
+      }
+
+      ownedGames = [...xml.querySelectorAll("item")].map(item => ({
+        id: item.getAttribute("objectid"),
+        title: item.querySelector("name")?.textContent || "Untitled"
+      }));
+
+      localStorage.setItem('bggOwnedGames', JSON.stringify(ownedGames));
+      console.log(`✅ BGG collection loaded: ${ownedGames.length} games.`);
+    } catch (err) {
+      console.error("❌ Failed to fetch BGG collection:", err);
+    }
+  }
+
+  tryFetch();
 }
 
 // 🚀 Init
@@ -318,3 +369,4 @@ async function fetchOwnedGames(username) {
   
   
 })();
+**/
