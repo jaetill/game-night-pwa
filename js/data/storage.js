@@ -1,3 +1,5 @@
+import { renderGameNights } from '../components/render.js';
+
 export function loadGameNights() {
   try {
     const cloud = JSON.parse(localStorage.getItem("gameNightsCloud"));
