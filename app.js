@@ -16,13 +16,6 @@ const scheduleForm = document.getElementById('scheduleForm');
 const gameList = document.getElementById('gameList');
 const uploadBtn = document.getElementById('uploadBtn');
 
-if (isAdmin && uploadBtn) {
-  uploadBtn.addEventListener('click', () => {
-    const data = loadGameNights();
-    saveToCloud(data);
-  });
-}
-
 // 📦 LocalStorage Helpers
 function loadGameNights() {
   const stored = localStorage.getItem('gameNights');
