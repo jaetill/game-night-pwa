@@ -12,10 +12,12 @@ export function renderAdminTools(night, nights, ownedGames) {
   gameSelect.size = 4;
   gameSelect.style.marginTop = '0.5em';
 
+  console.log("Owned games at render:", ownedGames);
   ownedGames.forEach(game => {
     const option = document.createElement('option');
     option.value = game.id;
     option.textContent = game.title;
+	console.log("Game option:", game);
     if (night.selectedGames?.includes(game.id)) {
       option.selected = true;
     }
