@@ -303,10 +303,10 @@ async function fetchOwnedGames(username) {
     const cloud = await loadFromCloud();
     syncAndRender(cloud);
     console.log("✅ Synced from cloud");
-	ownedGames = fetchOwnedGames(jaetill)
   } catch (e) {
     console.warn("⚠️ Cloud fetch failed. Falling back.");
     const local = loadGameNights();
     renderGameNights(local);
   }
+  ownedGames = fetchOwnedGames(jaetill)
 })();
