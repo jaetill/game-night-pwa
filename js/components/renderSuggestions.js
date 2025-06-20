@@ -1,6 +1,7 @@
 import { syncAndRender } from '../data/storage.js';
 import { currentUser } from '../data/state.js';
 
+
 export function renderSuggestions(night, nights) {
   const wrapper = document.createElement('div');
 

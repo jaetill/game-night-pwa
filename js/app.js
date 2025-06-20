@@ -1,5 +1,5 @@
 
-import { loadGameNights, syncAndRender } from './data/storage.js';
+import { loadGameNights, syncGameNights } from './data/storage.js';
 import { renderGameNights } from './components/render.js';
 import { setupEventListeners } from './events/events.js';
 import { fetchOwnedGames } from './data/bgg.js';
