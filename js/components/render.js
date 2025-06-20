@@ -8,7 +8,8 @@ import {
   loadGameNights,
   syncGameNights,
   isAdmin,
-  fetchOwnedGames
+  fetchOwnedGames,
+  ownedGames
 } from '../data/index.js';
 
 // Component helpers
