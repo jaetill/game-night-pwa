@@ -189,8 +189,29 @@ async function saveToCloud(gameNights) {
   }
 }
 
+async function loadFromCloud() {
+  try {
+    // Step 1: Fetch the presigned GET URL
+    const res = await fetch("https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod/get-token");
+    const { url } = await res.json();
 
+    // Step 2: Fetch the actual JSON from S3
+    const dataRes = await fetch(url);
+    const gameNights = await dataRes.json();
+
+    // Step 3: Load into your app
+    renderGameNights(gameNights); // or however your app handles it
+  } catch (err) {
+    console.error("Could not load game nights:", err);
+  }
+}
 
 
 // 🚀 Initialize
-renderGameNights(loadGameNights());
+loadFromCloud().then(() => {
+  console.log("✅ Loaded from cloud");
+}).catch(() => {
+  console.warn("⚠️ Cloud load failed, falling back to localStorage");
+  const local = loadGameNights();
+  renderGameNights(local);
+});
