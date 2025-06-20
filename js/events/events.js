@@ -7,7 +7,7 @@ import {
 } from '../data/index.js';
 
 export function setupEventListeners() {
-  const form = document.getElementById("newNightForm");
+  const form = document.getElementById("scheduleForm");
   if (!form) return;
 
   form.onsubmit = (e) => {
