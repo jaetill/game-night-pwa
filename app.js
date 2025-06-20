@@ -1,7 +1,7 @@
-// 🔐 Simulated Logged-In User (placeholder for future backend auth)
+// 🔐 Simulated Logged-In User
 const currentUser = {
-  userId: "user-123", // Later: replace with real auth ID
-  name: "Jason"       // Or: prompt(), localStorage.getItem("name"), etc.
+  userId: "user-123",
+  name: "Jason"
 };
 
 // 🌐 Admin Check
@@ -14,8 +14,8 @@ if (isAdmin && schedulerSection) {
 // 🎯 DOM Elements
 const scheduleForm = document.getElementById('scheduleForm');
 const gameList = document.getElementById('gameList');
-
 const uploadBtn = document.getElementById('uploadBtn');
+
 if (isAdmin && uploadBtn) {
   uploadBtn.addEventListener('click', () => {
     const data = loadGameNights();
@@ -33,7 +33,7 @@ function saveGameNights(nights) {
   localStorage.setItem('gameNights', JSON.stringify(nights));
 }
 
-// 🧱 Game Night Builder
+// 🧱 Builder
 function createGameNight({ date, time }) {
   return {
     id: `event-${Date.now()}`,
@@ -46,11 +46,11 @@ function createGameNight({ date, time }) {
   };
 }
 
-// 🖼️ Render Events + Actions
+// 🖼️ Renderer
 function renderGameNights(nights) {
   gameList.innerHTML = '';
 
-  if (nights.length === 0) {
+  if (!nights.length) {
     gameList.innerHTML = '<li>No game nights scheduled.</li>';
     return;
   }
@@ -61,52 +61,42 @@ function renderGameNights(nights) {
       const li = document.createElement('li');
       li.innerHTML = `<strong>🎯 ${night.date} at ${night.time}</strong>`;
 
-      // ✍️ RSVP Button
       const rsvpBtn = document.createElement('button');
       rsvpBtn.textContent = 'RSVP';
       rsvpBtn.onclick = () => {
         const name = prompt(`RSVP name for ${night.date}?`, currentUser.name);
         if (name) {
           night.rsvps = night.rsvps || [];
-
-          // Check for existing RSVP by current user
-          const alreadyRSVPed = night.rsvps.find(r => r.userId === currentUser.userId);
-          if (!alreadyRSVPed) {
+          const already = night.rsvps.find(r => r.userId === currentUser.userId);
+          if (!already) {
             night.rsvps.push({ userId: currentUser.userId, name: name.trim() });
-            saveGameNights(nights);
-            renderGameNights(nights);
+            syncAndRender(nights);
           } else {
-            alert("You've already RSVP'd for this night.");
+            alert("You've already RSVP'd.");
           }
         }
       };
       li.appendChild(rsvpBtn);
 
-      // 🗒️ RSVP List + Un-RSVP
-      if (night.rsvps && night.rsvps.length > 0) {
+      if (night.rsvps?.length) {
         const rsvpList = document.createElement('ul');
         night.rsvps.forEach((rsvp, index) => {
           const guestItem = document.createElement('li');
           guestItem.textContent = `🎟️ ${rsvp.name}`;
-
-          // 🎯 Only current user can cancel their own RSVP
           if (rsvp.userId === currentUser.userId) {
-            const removeBtn = document.createElement('button');
-            removeBtn.textContent = 'Cancel RSVP';
-            removeBtn.onclick = () => {
+            const cancelBtn = document.createElement('button');
+            cancelBtn.textContent = 'Cancel RSVP';
+            cancelBtn.onclick = () => {
               night.rsvps.splice(index, 1);
-              saveGameNights(nights);
-              renderGameNights(nights);
+              syncAndRender(nights);
             };
-            guestItem.appendChild(removeBtn);
+            guestItem.appendChild(cancelBtn);
           }
-
           rsvpList.appendChild(guestItem);
         });
         li.appendChild(rsvpList);
       }
 
-      // 🛡️ Admin: Edit + Cancel
       if (isAdmin) {
         const editBtn = document.createElement('button');
         editBtn.textContent = 'Edit';
@@ -114,16 +104,14 @@ function renderGameNights(nights) {
           document.getElementById('gameDate').value = night.date;
           document.getElementById('gameTime').value = night.time;
           const filtered = nights.filter(n => n.id !== night.id);
-          saveGameNights(filtered);
-          renderGameNights(filtered);
+          syncAndRender(filtered);
         };
 
         const cancelBtn = document.createElement('button');
         cancelBtn.textContent = 'Cancel Event';
         cancelBtn.onclick = () => {
           const updated = nights.filter(n => n.id !== night.id);
-          saveGameNights(updated);
-          renderGameNights(updated);
+          syncAndRender(updated);
         };
 
         li.appendChild(editBtn);
@@ -134,7 +122,7 @@ function renderGameNights(nights) {
     });
 }
 
-// 📅 Schedule Form
+// 📅 Scheduler
 if (scheduleForm) {
   scheduleForm.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -145,76 +133,57 @@ if (scheduleForm) {
       const nights = loadGameNights();
       const newNight = createGameNight({ date, time });
       nights.push(newNight);
-      saveGameNights(nights);
-      renderGameNights(nights);
+      syncAndRender(nights);
       scheduleForm.reset();
     }
   });
 }
 
+// ☁️ Save to S3
 async function saveToCloud(gameNights) {
   try {
-    // Step 1: Fetch the presigned POST fields
     const res = await fetch("https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod/upload-token");
     const { url, fields } = await res.json();
 
-    // Step 2: Build the form data
     const formData = new FormData();
-    Object.entries(fields).forEach(([key, value]) => {
-      formData.append(key, value);
-    });
+    Object.entries(fields).forEach(([k, v]) => formData.append(k, v));
+    formData.append("file", new Blob([JSON.stringify(gameNights)], { type: "application/json" }));
 
-    // Step 3: Append the file blob
-    const fileBlob = new Blob([JSON.stringify(gameNights)], {
-      type: "application/json"
-    });
-    formData.append("file", fileBlob);
+    const upload = await fetch(url, { method: "POST", body: formData });
 
-    // Step 4: Upload to S3
-    const upload = await fetch(url, {
-      method: "POST",
-      body: formData
-    });
-
-    if (upload.ok) {
-      alert("✅ Synced to S3!");
-    } else {
-      const errorText = await upload.text();
-      console.error("Upload failed:", errorText);
-      alert("❌ Upload error. See console for details.");
+    if (!upload.ok) {
+      const err = await upload.text();
+      console.error("S3 upload failed:", err);
     }
   } catch (err) {
     console.error("Upload error:", err);
-    alert("❌ Upload exception. See console.");
   }
 }
 
+// ☁️ Load from S3
 async function loadFromCloud() {
-  try {
-    // Step 1: Fetch the presigned GET URL
-    const res = await fetch("https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod/get-token");
-    const { url } = await res.json();
-
-    // Step 2: Fetch the actual JSON from S3
-    const dataRes = await fetch(url);
-    const gameNights = await dataRes.json();
-
-    // Step 3: Load into your app
-    saveGameNights(gameNights);
-    renderGameNights(gameNights);
-  } catch (err) {
-    console.error("Cloud load failed:", err);
-    const fallback = loadGameNights();
-    renderGameNights(fallback);
-  }
+  const res = await fetch("https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod/get-token");
+  const { url } = await res.json();
+  const dataRes = await fetch(url);
+  return await dataRes.json();
 }
 
+// 🌀 Sync Utility
+async function syncAndRender(nights) {
+  saveGameNights(nights);
+  renderGameNights(nights);
+  await saveToCloud(nights);
+}
 
-// 🚀 Initialize
-loadFromCloud().then(() => {
-  console.log("✅ Loaded from cloud");
-}).catch(() => {
-  console.warn("⚠️ Cloud load failed, falling back to localStorage");
-  const local = loadGameNights();
-  renderGameNights(local);
-});
+// 🚀 Init
+(async function () {
+  try {
+    const cloud = await loadFromCloud();
+    syncAndRender(cloud);
+    console.log("✅ Synced from cloud");
+  } catch (e) {
+    console.warn("⚠️ Cloud fetch failed. Falling back.");
+    const local = loadGameNights();
+    renderGameNights(local);
+  }
+})();
