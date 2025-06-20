@@ -36,7 +36,8 @@ function createGameNight({ date, time, snacks }) {
     repeat: 'none',
     notes: '',
 	snacks,
-    rsvps: []
+    rsvps: [],
+	suggestions: []
   };
 }
 
@@ -96,6 +97,34 @@ function renderGameNights(nights) {
         });
         li.appendChild(rsvpList);
       }
+
+		const suggestionInput = document.createElement('input');
+		suggestionInput.placeholder = 'Suggest a game';
+
+		const suggestBtn = document.createElement('button');
+		suggestBtn.textContent = 'Suggest';
+		suggestBtn.onclick = () => {
+		  const title = suggestionInput.value.trim();
+		  if (title) {
+			night.suggestions = night.suggestions || [];
+			night.suggestions.push({ title, suggestedBy: currentUser.name });
+			syncAndRender(nights);
+		  }
+		};
+
+		li.appendChild(suggestionInput);
+		li.appendChild(suggestBtn);
+		
+		if (night.suggestions?.length) {
+		  const suggestionList = document.createElement('ul');
+		  suggestionList.innerHTML = night.suggestions.map(s =>
+			`<li>🎲 ${s.title} <em>(suggested by ${s.suggestedBy})</em></li>`
+		  ).join('');
+		  li.appendChild(suggestionList);
+		}
+
+
+
 
       if (isAdmin) {
         const editBtn = document.createElement('button');
