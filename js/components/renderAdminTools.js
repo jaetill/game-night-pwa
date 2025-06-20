@@ -37,8 +37,12 @@ export function renderAdminTools(night, nights, ownedGames) {
   editBtn.onclick = () => {
     document.getElementById('gameDate').value = night.date;
     document.getElementById('gameTime').value = night.time;
-    const filtered = nights.filter(n => n.id !== night.id);
-    syncAndRender(filtered);
+    //const filtered = nights.filter(n => n.id !== night.id);
+    //syncAndRender(filtered);
+	  // Optional: store the ID of the night being edited
+	localStorage.setItem('editingNightId', night.id);
+
+  // Don’t remove anything yet—wait for form submission to update
   };
 
   // ❌ Cancel Button
