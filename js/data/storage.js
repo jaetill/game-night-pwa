@@ -5,9 +5,16 @@ export async function loadGameNights() {
     const dataRes = await fetch(url);
     const cloudData = await dataRes.json();
 
-    // Optionally cache it
-    localStorage.setItem('gameNightsCloud', JSON.stringify(cloudData));
-    return cloudData;
+    // Sanity log
+    console.log("Fetched cloudData:", cloudData, Array.isArray(cloudData));
+
+    // Optional cache
+    if (Array.isArray(cloudData)) {
+      localStorage.setItem('gameNightsCloud', JSON.stringify(cloudData));
+      return cloudData;
+    } else {
+      throw new Error("Cloud data is not an array.");
+    }
   } catch (err) {
     console.warn('🪫 Cloud load failed, falling back to localStorage.', err);
     return JSON.parse(localStorage.getItem('gameNights') || '[]');
