@@ -311,7 +311,7 @@ async function fetchOwnedGames(username) {
   // Fetch BGG games early, outside the cloud sync try block
 	try {
 	  //await fetchGames(); // only this fails if there's a BGG hiccup
-	  ownedGames = await fetchOwnedGames(jaetill)
+	  ownedGames = await fetchOwnedGames("jaetill")
 	} catch (err) {
 	  console.warn("⚠️ Failed to fetch owned games:", err);
 	}
