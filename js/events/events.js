@@ -3,13 +3,8 @@ import {
   syncAndRender
 } from '../utils/index.js';
 import {
-  currentUser,
-  loadGameNights,
-  syncGameNights,
-  isAdmin,
-  fetchOwnedGames
+  loadGameNights
 } from '../data/index.js';
-
 
 export function setupEventListeners() {
   const form = document.getElementById("newNightForm");
@@ -17,14 +12,33 @@ export function setupEventListeners() {
 
   form.onsubmit = (e) => {
     e.preventDefault();
+
     const date = form.date.value;
     const time = form.time.value;
     const snacks = form.snackNotes.value;
-    const newNight = createGameNight({ date, time, snacks });
     const nights = loadGameNights();
-    nights.push(newNight);
+
+    const editingId = localStorage.getItem('editingNightId');
+
+    if (editingId) {
+      // We're editing an existing night
+      const index = nights.findIndex(n => n.id === editingId);
+      if (index !== -1) {
+        nights[index] = {
+          ...nights[index],
+          date,
+          time,
+          snacks
+        };
+      }
+      localStorage.removeItem('editingNightId');
+    } else {
+      // Creating a new night
+      const newNight = createGameNight({ date, time, snacks });
+      nights.push(newNight);
+    }
+
     syncAndRender(nights);
-	console.log("Saving nights:", nights)
     form.reset();
   };
 }
