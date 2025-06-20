@@ -21,6 +21,7 @@ import { setupEventListeners } from './events/events.js';
 //App initialization
 async function init() {
   const nights = await loadGameNights(); // handles cloud + fallback
+  await fetchOwnedGames("jaetill"); // async, non-blocking
   renderGameNights(nights);
 
   // ✅ Reveal scheduler if admin
@@ -29,7 +30,6 @@ async function init() {
   }
 
   setupEventListeners(); // form buttons, date input, etc.
-  fetchOwnedGames("jaetill"); // async, non-blocking
 }
 
 init();
