@@ -308,5 +308,13 @@ async function fetchOwnedGames(username) {
     const local = loadGameNights();
     renderGameNights(local);
   }
-  ownedGames = fetchOwnedGames(jaetill)
+  // Fetch BGG games early, outside the cloud sync try block
+	try {
+	  //await fetchGames(); // only this fails if there's a BGG hiccup
+	  ownedGames = await fetchOwnedGames(jaetill)
+	} catch (err) {
+	  console.warn("⚠️ Failed to fetch owned games:", err);
+	}
+  
+  
 })();
