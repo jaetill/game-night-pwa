@@ -10,19 +10,19 @@ export function setupEventListeners() {
   const form = document.getElementById("scheduleForm");
   if (!form) return;
 
-  form.onsubmit = (e) => {
+  form.onsubmit = async (e) => {
     e.preventDefault();
 
-	const date = document.getElementById('gameDate')?.value;
-	const time = document.getElementById('gameTime')?.value;
-	const snacks = document.getElementById('snackNotes')?.value;
-    const nights = loadGameNights();
+    const date = document.getElementById('gameDate')?.value;
+    const time = document.getElementById('gameTime')?.value;
+    const snacks = document.getElementById('snackNotes')?.value;
+
+    const nights = await loadGameNights(); // ✅ Await the async function
 
     const editingId = localStorage.getItem('editingNightId');
 
     if (editingId) {
-      // We're editing an existing night
-      const index = nights.findIndex(n => n.id === editingId);
+      const index = nights.findIndex(n => n.id === editingId || n.id === Number(editingId));
       if (index !== -1) {
         nights[index] = {
           ...nights[index],
@@ -33,7 +33,6 @@ export function setupEventListeners() {
       }
       localStorage.removeItem('editingNightId');
     } else {
-      // Creating a new night
       const newNight = createGameNight({ date, time, snacks });
       nights.push(newNight);
     }
