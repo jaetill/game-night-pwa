@@ -5,7 +5,7 @@ import {
   syncGameNights,
   isAdmin,
   fetchOwnedGames
-} from '../data/index.js';
+} from './data/index.js';
 
 import {
   renderSummary,
@@ -13,7 +13,7 @@ import {
   renderSuggestions,
   renderAdminTools,
   renderSelectedGames
-} from '../components/index.js';
+} from './components/index.js';
 import { renderGameNights } from './components/render.js';
 
 import { setupEventListeners } from './events/events.js';
