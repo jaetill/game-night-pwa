@@ -132,7 +132,7 @@ if (scheduleForm) {
 
     if (date && time) {
       const nights = loadGameNights();
-      const newNight = createGameNight({ date, time });
+      const newNight = createGameNight({ date, time, snacks });
       nights.push(newNight);
       syncAndRender(nights);
       scheduleForm.reset();
