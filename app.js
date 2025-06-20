@@ -35,6 +35,7 @@ function createGameNight({ date, time }) {
     createdBy: currentUser.userId,
     repeat: 'none',
     notes: '',
+	snacks,
     rsvps: []
   };
 }
@@ -53,6 +54,12 @@ function renderGameNights(nights) {
     .forEach(night => {
       const li = document.createElement('li');
       li.innerHTML = `<strong>🎯 ${night.date} at ${night.time}</strong>`;
+
+	  if (night.snacks) {
+		const snackNote = document.createElement('p');
+		snackNote.textContent = `🥨 Snacks: ${night.snacks}`;
+		li.appendChild(snackNote);
+	  }
 
       const rsvpBtn = document.createElement('button');
       rsvpBtn.textContent = 'RSVP';
@@ -121,6 +128,7 @@ if (scheduleForm) {
     e.preventDefault();
     const date = document.getElementById('gameDate').value;
     const time = document.getElementById('gameTime').value;
+	const snacks = document.getElementById('snackNotes').value;
 
     if (date && time) {
       const nights = loadGameNights();
