@@ -1,4 +1,4 @@
-import { syncAndRender } from '../data/storage.js';
+import { syncAndRender } from '../utils/sync.js';
 import { currentUser } from '../data/state.js';
 
 

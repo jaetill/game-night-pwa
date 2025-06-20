@@ -1,5 +1,5 @@
 // Core imports
-import { syncAndRender } from '../data/storage.js';
+import { syncAndRender } from '../utils/sync.js';
 import { isAdmin, currentUser } from '../data/state.js';
 import { ownedGames } from '../data/state.js'; // or import from bgg.js if that’s where it's still updated
 
