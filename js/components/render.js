@@ -1,7 +1,9 @@
-import { syncAndRender } from './storage.js';
-import { isAdmin, currentUser } from './state.js';
-import { ownedGames } from './bgg.js';
+// Core imports
+import { syncAndRender } from '../data/storage.js';
+import { isAdmin, currentUser } from '../data/state.js';
+import { ownedGames } from '../data/state.js'; // or import from bgg.js if that’s where it's still updated
 
+// Component helpers
 import { renderSummary } from './renderSummary.js';
 import { renderRSVP } from './renderRSVP.js';
 import { renderSuggestions } from './renderSuggestions.js';

@@ -1,5 +1,5 @@
-import { syncAndRender } from './storage.js';
-import { currentUser } from './state.js';
+import { syncAndRender } from '../data/storage.js';
+import { currentUser } from '../data/state.js';
 
 export function renderRSVP(night, nights) {
   const wrapper = document.createElement('div');

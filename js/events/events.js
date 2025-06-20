@@ -1,5 +1,5 @@
-import { createGameNight } from './util.js';
-import { loadGameNights, syncAndRender } from './storage.js';
+import { createGameNight } from '../util.js';
+import { loadGameNights, syncAndRender } from '../data/storage.js';
 
 export function setupEventListeners() {
   const form = document.getElementById("newNightForm");
