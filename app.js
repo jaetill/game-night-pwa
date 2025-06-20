@@ -44,6 +44,7 @@ function createGameNight({ date, time, snacks }) {
 // 🖼️ Renderer
 function renderGameNights(nights) {
   gameList.innerHTML = '';
+  gameList.className = 'game-list';
 
   if (!nights.length) {
     gameList.innerHTML = '<li>No game nights scheduled.</li>';
@@ -53,7 +54,8 @@ function renderGameNights(nights) {
   nights
     .sort((a, b) => new Date(`${a.date}T${a.time}`) - new Date(`${b.date}T${b.time}`))
     .forEach(night => {
-      const li = document.createElement('li');
+      const li = document.createElement('div');
+	  li.className = 'game-card'
       li.style.marginBottom = '1em';
 
       // 🧭 Minimal summary
