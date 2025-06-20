@@ -1,7 +1,15 @@
 // Core imports
-import { syncAndRender } from '../utils/sync.js';
-import { isAdmin, currentUser } from '../data/state.js';
-import { ownedGames } from '../data/state.js'; // or import from bgg.js if that’s where it's still updated
+import {
+  createGameNight,
+  syncAndRender
+} from '../utils/index.js';
+import {
+  currentUser,
+  loadGameNights,
+  syncGameNights,
+  isAdmin,
+  fetchOwnedGames
+} from '../data/index.js';
 
 // Component helpers
 import { renderSummary } from './renderSummary.js';

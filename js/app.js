@@ -1,9 +1,24 @@
+//Import statements
+import {
+  currentUser,
+  loadGameNights,
+  syncGameNights,
+  isAdmin,
+  fetchOwnedGames
+} from '../data/index.js';
 
-import { loadGameNights, syncGameNights } from './data/storage.js';
+import {
+  renderSummary,
+  renderRSVP,
+  renderSuggestions,
+  renderAdminTools,
+  renderSelectedGames
+} from '../components/index.js';
 import { renderGameNights } from './components/render.js';
-import { setupEventListeners } from './events/events.js';
-import { fetchOwnedGames } from './data/bgg.js';
 
+import { setupEventListeners } from './events/events.js';
+
+//App initialization
 async function init() {
   const nights = await loadGameNights(); // handles cloud + fallback
   renderGameNights(nights);

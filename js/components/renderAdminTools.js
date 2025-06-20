@@ -1,4 +1,7 @@
-import { syncAndRender } from '../utils/sync.js';
+import {
+  createGameNight,
+  syncAndRender
+} from '../utils/index.js';
 
 export function renderAdminTools(night, nights, ownedGames) {
   const wrapper = document.createElement('div');
