@@ -200,9 +200,12 @@ async function loadFromCloud() {
     const gameNights = await dataRes.json();
 
     // Step 3: Load into your app
-    renderGameNights(gameNights); // or however your app handles it
+    saveGameNights(gameNights);
+    renderGameNights(gameNights);
   } catch (err) {
-    console.error("Could not load game nights:", err);
+    console.error("Cloud load failed:", err);
+    const fallback = loadGameNights();
+    renderGameNights(fallback);
   }
 }
 
