@@ -27,7 +27,7 @@ function saveGameNights(nights) {
 }
 
 // 🧱 Builder
-function createGameNight({ date, time }) {
+function createGameNight({ date, time, snacks }) {
   return {
     id: `event-${Date.now()}`,
     date,
