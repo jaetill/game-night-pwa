@@ -12,3 +12,26 @@ ul {
   list-style: none;
   padding: 0;
 }
+
+.game-list {
+  list-style: none;
+  padding: 0;
+}
+
+.game-card {
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 1em;
+  margin-bottom: 1em;
+  background: #f9f9f9;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  transition: background 0.3s;
+}
+
+.game-card:hover {
+  background: #f0f8ff;
+}
+
+.game-card button {
+  margin-top: 0.5em;
+}
