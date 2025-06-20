@@ -4,6 +4,8 @@ const currentUser = {
   name: "Jason"
 };
 
+let ownedGames = [];
+
 // 🌐 Admin Check
 const isAdmin = new URLSearchParams(window.location.search).get('admin') === 'true';
 const schedulerSection = document.getElementById('schedulerSection');
@@ -37,7 +39,8 @@ function createGameNight({ date, time, snacks }) {
     notes: '',
 	snacks,
     rsvps: [],
-	suggestions: []
+	suggestions: [],
+	selectedGames: []
   };
 }
 
@@ -146,9 +149,12 @@ function renderGameNights(nights) {
         );
         detailsDiv.appendChild(suggestionList);
       }
+	  
+	  
 
       // 🛡️ Admin tools
       if (isAdmin) {
+		//Edit Date and Time of Event
         const editBtn = document.createElement('button');
         editBtn.textContent = 'Edit';
         editBtn.onclick = () => {
@@ -158,6 +164,7 @@ function renderGameNights(nights) {
           syncAndRender(filtered);
         };
 
+		//Cancel Game Night completely
         const cancelBtn = document.createElement('button');
         cancelBtn.textContent = 'Cancel Event';
         cancelBtn.onclick = () => {
@@ -165,10 +172,47 @@ function renderGameNights(nights) {
           syncAndRender(updated);
         };
 
+			//Select Games that are going to be played
+		  const gameSelect = document.createElement('select');
+		  gameSelect.multiple = true;
+		  gameSelect.size = 4;
+		  gameSelect.style.marginTop = '0.5em';
+
+		  ownedGames.forEach(game => {
+			const option = document.createElement('option');
+			option.value = game.id;
+			option.textContent = game.title;
+			if (night.selectedGames?.includes(game.id)) {
+			  option.selected = true;
+			}
+			gameSelect.appendChild(option);
+		  });
+
+		  gameSelect.addEventListener('change', () => {
+			night.selectedGames = [...gameSelect.selectedOptions].map(opt => opt.value);
+			syncAndRender(nights);
+		  });
+
+		  detailsDiv.appendChild(document.createElement('br'));
+		  detailsDiv.appendChild(document.createTextNode("🎯 Select games to play:"));
+		  detailsDiv.appendChild(gameSelect);
+
+
         detailsDiv.appendChild(document.createElement('br'));
         detailsDiv.appendChild(editBtn);
         detailsDiv.appendChild(cancelBtn);
       }
+
+		if (night.selectedGames?.length && ownedGames.length) {
+		  const titles = night.selectedGames.map(id => {
+			const match = ownedGames.find(g => g.id === id);
+			return match?.title || `#${id}`;
+		  });
+
+		  const gameList = document.createElement('p');
+		  gameList.textContent = `🎲 Playing: ${titles.join(", ")}`;
+		  detailsDiv.appendChild(gameList);
+		}
 
       // 🔀 Toggle logic
       toggleBtn.onclick = () => {
@@ -183,6 +227,8 @@ function renderGameNights(nights) {
       gameList.appendChild(li);
     });
 }
+
+
 
 // 📅 Scheduler
 if (scheduleForm) {
@@ -238,12 +284,26 @@ async function syncAndRender(nights) {
   await saveToCloud(nights);
 }
 
+// Get games from BGG
+async function fetchOwnedGames(username) {
+  const res = await fetch(`https://boardgamegeek.com/xmlapi2/collection?username=${username}&own=1`);
+  const xmlText = await res.text();
+  const parser = new DOMParser();
+  const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+
+  ownedGames = [...xmlDoc.querySelectorAll("item")].map(item => ({
+    id: item.getAttribute("objectid"),
+    title: item.querySelector("name")?.textContent || "Untitled"
+  }));
+}
+
 // 🚀 Init
 (async function () {
   try {
     const cloud = await loadFromCloud();
     syncAndRender(cloud);
     console.log("✅ Synced from cloud");
+	ownedGames = fetchOwnedGames(jaetill)
   } catch (e) {
     console.warn("⚠️ Cloud fetch failed. Falling back.");
     const local = loadGameNights();
