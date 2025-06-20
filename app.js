@@ -54,14 +54,32 @@ function renderGameNights(nights) {
     .sort((a, b) => new Date(`${a.date}T${a.time}`) - new Date(`${b.date}T${b.time}`))
     .forEach(night => {
       const li = document.createElement('li');
-      li.innerHTML = `<strong>🎯 ${night.date} at ${night.time}</strong>`;
+      li.style.marginBottom = '1em';
 
-	  if (night.snacks) {
-		const snackNote = document.createElement('p');
-		snackNote.textContent = `🥨 Snacks: ${night.snacks}`;
-		li.appendChild(snackNote);
-	  }
+      // 🧭 Minimal summary
+      const summary = document.createElement('div');
+      summary.innerHTML = `
+        <strong>📅 ${night.date} @ ${night.time}</strong><br>
+        👥 ${night.rsvps?.length || 0} attending
+      `;
 
+      // 🔽 Toggle button
+      const toggleBtn = document.createElement('button');
+      toggleBtn.textContent = 'Show Details ▾';
+
+      // 🧩 Details block
+      const detailsDiv = document.createElement('div');
+      detailsDiv.style.display = 'none';
+      detailsDiv.style.marginTop = '0.5em';
+
+      // 🥨 Snacks
+      if (night.snacks) {
+        const snackP = document.createElement('p');
+        snackP.textContent = `🥨 Snacks: ${night.snacks}`;
+        detailsDiv.appendChild(snackP);
+      }
+
+      // ✍️ RSVP
       const rsvpBtn = document.createElement('button');
       rsvpBtn.textContent = 'RSVP';
       rsvpBtn.onclick = () => {
@@ -77,55 +95,57 @@ function renderGameNights(nights) {
           }
         }
       };
-      li.appendChild(rsvpBtn);
+      detailsDiv.appendChild(rsvpBtn);
 
+      // 🎟️ RSVP List
       if (night.rsvps?.length) {
-        const rsvpList = document.createElement('ul');
-        night.rsvps.forEach((rsvp, index) => {
-          const guestItem = document.createElement('li');
-          guestItem.textContent = `🎟️ ${rsvp.name}`;
+        const list = document.createElement('ul');
+        night.rsvps.forEach((rsvp, i) => {
+          const item = document.createElement('li');
+          item.textContent = `🎟️ ${rsvp.name}`;
           if (rsvp.userId === currentUser.userId) {
             const cancelBtn = document.createElement('button');
             cancelBtn.textContent = 'Cancel RSVP';
             cancelBtn.onclick = () => {
-              night.rsvps.splice(index, 1);
+              night.rsvps.splice(i, 1);
               syncAndRender(nights);
             };
-            guestItem.appendChild(cancelBtn);
+            item.appendChild(cancelBtn);
           }
-          rsvpList.appendChild(guestItem);
+          list.appendChild(item);
         });
-        li.appendChild(rsvpList);
+        detailsDiv.appendChild(list);
       }
 
-		const suggestionInput = document.createElement('input');
-		suggestionInput.placeholder = 'Suggest a game';
+      // 🎲 Game Suggestions
+      const suggestionInput = document.createElement('input');
+      suggestionInput.placeholder = 'Suggest a game';
+      suggestionInput.style.marginRight = '0.5em';
 
-		const suggestBtn = document.createElement('button');
-		suggestBtn.textContent = 'Suggest';
-		suggestBtn.onclick = () => {
-		  const title = suggestionInput.value.trim();
-		  if (title) {
-			night.suggestions = night.suggestions || [];
-			night.suggestions.push({ title, suggestedBy: currentUser.name });
-			syncAndRender(nights);
-		  }
-		};
+      const suggestBtn = document.createElement('button');
+      suggestBtn.textContent = 'Suggest';
+      suggestBtn.onclick = () => {
+        const title = suggestionInput.value.trim();
+        if (title) {
+          night.suggestions = night.suggestions || [];
+          night.suggestions.push({ title, suggestedBy: currentUser.name });
+          syncAndRender(nights);
+        }
+      };
 
-		li.appendChild(suggestionInput);
-		li.appendChild(suggestBtn);
-		
-		if (night.suggestions?.length) {
-		  const suggestionList = document.createElement('ul');
-		  suggestionList.innerHTML = night.suggestions.map(s =>
-			`<li>🎲 ${s.title} <em>(suggested by ${s.suggestedBy})</em></li>`
-		  ).join('');
-		  li.appendChild(suggestionList);
-		}
+      detailsDiv.appendChild(document.createElement('br'));
+      detailsDiv.appendChild(suggestionInput);
+      detailsDiv.appendChild(suggestBtn);
 
+      if (night.suggestions?.length) {
+        const suggestionList = document.createElement('ul');
+        night.suggestions.forEach(s =>
+          suggestionList.innerHTML += `<li>🎲 ${s.title} <em>(suggested by ${s.suggestedBy})</em></li>`
+        );
+        detailsDiv.appendChild(suggestionList);
+      }
 
-
-
+      // 🛡️ Admin tools
       if (isAdmin) {
         const editBtn = document.createElement('button');
         editBtn.textContent = 'Edit';
@@ -143,10 +163,21 @@ function renderGameNights(nights) {
           syncAndRender(updated);
         };
 
-        li.appendChild(editBtn);
-        li.appendChild(cancelBtn);
+        detailsDiv.appendChild(document.createElement('br'));
+        detailsDiv.appendChild(editBtn);
+        detailsDiv.appendChild(cancelBtn);
       }
 
+      // 🔀 Toggle logic
+      toggleBtn.onclick = () => {
+        const isOpen = detailsDiv.style.display === 'block';
+        detailsDiv.style.display = isOpen ? 'none' : 'block';
+        toggleBtn.textContent = isOpen ? 'Show Details ▾' : 'Hide Details ▴';
+      };
+
+      li.appendChild(summary);
+      li.appendChild(toggleBtn);
+      li.appendChild(detailsDiv);
       gameList.appendChild(li);
     });
 }
