@@ -14,6 +14,7 @@ export function setupEventListeners() {
     const nights = loadGameNights();
     nights.push(newNight);
     syncAndRender(nights);
+	console.log("Saving nights:", nights)
     form.reset();
   };
 }
