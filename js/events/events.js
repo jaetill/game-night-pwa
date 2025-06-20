@@ -1,4 +1,4 @@
-import { createGameNight } from '../util.js';
+import { createGameNight } from '../utils.js';
 import { loadGameNights, syncAndRender } from '../data/storage.js';
 
 export function setupEventListeners() {
