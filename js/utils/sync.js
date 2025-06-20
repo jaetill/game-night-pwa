@@ -10,7 +10,8 @@ import {
   renderRSVP,
   renderSuggestions,
   renderAdminTools,
-  renderSelectedGames
+  renderSelectedGames,
+  renderGameNights
 } from '../components/index.js';
 
 export function syncAndRender(nights) {
