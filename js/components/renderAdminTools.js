@@ -1,4 +1,4 @@
-import { syncAndRender } from './storage.js';
+import { syncAndRender } from '../data/storage.js';
 
 export function renderAdminTools(night, nights, ownedGames) {
   const wrapper = document.createElement('div');
