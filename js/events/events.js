@@ -13,9 +13,9 @@ export function setupEventListeners() {
   form.onsubmit = (e) => {
     e.preventDefault();
 
-    const date = form.date.value;
-    const time = form.time.value;
-    const snacks = form.snackNotes.value;
+	const date = document.getElementById('gameDate')?.value;
+	const time = document.getElementById('gameTime')?.value;
+	const snacks = document.getElementById('snackNotes')?.value;
     const nights = loadGameNights();
 
     const editingId = localStorage.getItem('editingNightId');
