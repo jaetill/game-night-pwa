@@ -6,7 +6,7 @@ export async function fetchOwnedGames(username) {
     try {
       const parsed = JSON.parse(cached);
       ownedGames.length = 0;
-      ownedGames.push(...parsed); // ✅ mutate the shared array
+      ownedGames.push(...parsed);
       return;
     } catch {
       console.warn("Corrupt cache.");
@@ -27,13 +27,21 @@ export async function fetchOwnedGames(username) {
       return;
     }
 
-    const games = [...xml.querySelectorAll("item")].map(item => ({
-      id: item.getAttribute("objectid"),
-      title: item.querySelector("name")?.textContent || "Untitled"
-    }));
+    const games = [...xml.querySelectorAll("item")].map(item => {
+      const stats = item.querySelector("stats");
+      const minPlayers = stats?.getAttribute("minplayers");
+      const maxPlayers = stats?.getAttribute("maxplayers");
+
+      return {
+        id: item.getAttribute("objectid"),
+        title: item.querySelector("name")?.textContent || "Untitled",
+        minPlayers: Number(minPlayers) || 1, // fallback to 1
+        maxPlayers: Number(maxPlayers) || 99 // fallback to 99
+      };
+    });
 
     ownedGames.length = 0;
-    ownedGames.push(...games); // ✅ update in-place
+    ownedGames.push(...games);
 
     localStorage.setItem("bggOwnedGames", JSON.stringify(ownedGames));
   }

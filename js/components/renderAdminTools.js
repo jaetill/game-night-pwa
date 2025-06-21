@@ -1,37 +1,59 @@
-import {
-  createGameNight,
-  syncAndRender
-} from '../utils/index.js';
+import { syncAndRender } from '../utils/index.js';
+import { openGameSelectionModal } from '../components/gameSelectionModal.js';
+import { ownedGames } from '../data/state.js';
 
-export function renderAdminTools(night, nights, ownedGames) {
+export function renderAdminTools(night, nights) {
   const wrapper = document.createElement('div');
 
-  // 🎯 Game Selection Dropdown
-  const gameSelect = document.createElement('select');
-  gameSelect.multiple = true;
-  gameSelect.size = 4;
-  gameSelect.style.marginTop = '0.5em';
+  // 🎯 Game Display + Add Button
+  const gameBlock = document.createElement('div');
+  gameBlock.style.marginTop = '0.5em';
+  gameBlock.innerHTML = `<strong>🎯 Games:</strong>`;
 
-  console.log("Owned games at render:", ownedGames);
-  ownedGames.forEach(game => {
-    const option = document.createElement('option');
-    option.value = game.id;
-    option.textContent = game.title;
-	console.log("Game option:", game);
-    if (night.selectedGames?.includes(game.id)) {
-      option.selected = true;
-    }
-    gameSelect.appendChild(option);
-  });
+  const list = document.createElement('ul');
+  list.style.margin = '0.5em 0';
+  list.style.paddingLeft = '1.2em';
 
-  gameSelect.addEventListener('change', () => {
-    night.selectedGames = [...gameSelect.selectedOptions].map(opt => opt.value);
-    syncAndRender(nights);
-  });
+  function renderSelectedGames() {
+    list.innerHTML = '';
+    (night.selectedGames || []).forEach(gameId => {
+      const game = ownedGames.find(g => g.id === gameId);
+      if (!game) return;
+      const li = document.createElement('li');
+      li.textContent = game.title;
+      const removeBtn = document.createElement('button');
+      removeBtn.textContent = '×';
+      removeBtn.title = 'Remove';
+      removeBtn.style.marginLeft = '0.5em';
+      removeBtn.onclick = () => {
+        night.selectedGames = night.selectedGames.filter(id => id !== game.id);
+        renderSelectedGames();
+      };
+      li.appendChild(removeBtn);
+      list.appendChild(li);
+    });
+  }
 
-  wrapper.appendChild(document.createElement('br'));
-  wrapper.appendChild(document.createTextNode("🎯 Select games to play:"));
-  wrapper.appendChild(gameSelect);
+  renderSelectedGames();
+
+  const addGameBtn = document.createElement('button');
+  addGameBtn.textContent = '➕ Add Game';
+  addGameBtn.onclick = () => {
+    openGameSelectionModal({
+      night,
+      onSelect: game => {
+        night.selectedGames = night.selectedGames || [];
+        if (!night.selectedGames.includes(game.id)) {
+          night.selectedGames.push(game.id);
+        }
+        renderSelectedGames();
+      }
+    });
+  };
+
+  gameBlock.appendChild(list);
+  gameBlock.appendChild(addGameBtn);
+  wrapper.appendChild(gameBlock);
 
   // 📝 Edit Button
   const editBtn = document.createElement('button');
@@ -39,12 +61,7 @@ export function renderAdminTools(night, nights, ownedGames) {
   editBtn.onclick = () => {
     document.getElementById('gameDate').value = night.date;
     document.getElementById('gameTime').value = night.time;
-    //const filtered = nights.filter(n => n.id !== night.id);
-    //syncAndRender(filtered);
-	  // Optional: store the ID of the night being edited
-	localStorage.setItem('editingNightId', night.id);
-
-  // Don’t remove anything yet—wait for form submission to update
+    localStorage.setItem('editingNightId', night.id);
   };
 
   // ❌ Cancel Button
