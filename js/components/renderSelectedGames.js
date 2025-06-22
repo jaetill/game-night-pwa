@@ -1,18 +1,41 @@
 export function renderSelectedGames(night, ownedGames) {
-  //console.log("renderSelectedGames called with:", night, ownedGames);
-  if (!night || !ownedGames || !Array.isArray(ownedGames)) {
-    console.warn("Invalid night or ownedGames data");
-    return document.createElement('div');
-  }
-  if (!night.selectedGames?.length || !ownedGames.length) return document.createElement('div');
+  const container = document.createElement('div');
+  container.className = 'selected-games';
 
-  const titles = night.selectedGames.map(id => {
+  if (!night || !Array.isArray(ownedGames)) {
+    console.warn("Invalid night or ownedGames data");
+    return container;
+  }
+
+  const selectedGames = night.selectedGames || [];
+  if (!selectedGames.length) return container;
+
+  const titles = [];
+  const thumbContainer = document.createElement('div');
+  thumbContainer.className = 'thumbnail-list';
+
+  selectedGames.forEach(id => {
     const selectedGame = ownedGames.find(g => g.id === id);
-    console.log("Resolved game:", selectedGame);
-    return selectedGame?.title || `#${id}`;
+    if (selectedGame) {
+      titles.push(selectedGame.title || `#${id}`);
+
+      if (selectedGame.thumbnail) {
+        const img = document.createElement('img');
+        img.src = selectedGame.thumbnail;
+        img.alt = selectedGame.title || 'Game';
+        img.className = 'game-thumbnail';
+        thumbContainer.appendChild(img);
+      }
+    }
   });
 
-  const gameSelectedList = document.createElement('p');
-  gameSelectedList.textContent = `🎯 Playing: ${titles.join(', ')}`;
-  return gameSelectedList;
+  const titleList = document.createElement('p');
+  titleList.textContent = `🎯 Playing: ${titles.join(', ')}`;
+
+  container.appendChild(titleList);
+  if (thumbContainer.children.length) {
+    container.appendChild(thumbContainer);
+  }
+
+  return container;
 }
