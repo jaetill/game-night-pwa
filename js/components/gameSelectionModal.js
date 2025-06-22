@@ -1,4 +1,4 @@
-import { filterGames } from '../data/index.js';
+import { filterGames, loadGameNights } from '../data/index.js';
 import { syncAndRender } from '../utils/index.js';
 
 export function openGameSelectionModal({ night }) {
