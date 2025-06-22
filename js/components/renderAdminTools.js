@@ -70,7 +70,7 @@ export function renderAdminTools(night, nights) {
   cancelBtn.onclick = () => {
     const updated = nights.filter(n => n.id !== night.id);
     //syncAndRender(updated);
-    syncAndRender();
+    syncAndRender().catch(console.error);
   };
 
   wrapper.appendChild(document.createElement('br'));

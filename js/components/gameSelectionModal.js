@@ -63,8 +63,8 @@ export function openGameSelectionModal({ night }) {
         if (!night.selectedGames.includes(game.id)) {
           night.selectedGames.push(game.id);
         }
-
-        syncAndRender();
+        
+        syncAndRender().catch(console.error);
       };
 
 
