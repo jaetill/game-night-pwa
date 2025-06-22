@@ -55,14 +55,18 @@ export function openGameSelectionModal({ night }) {
         modal.classList.add('hidden');
         clearInputs();
 
-        // 💾 Update the selected games list
+        // 💾 Safely ensure selectedGames is initialized
+        if (!Array.isArray(night.selectedGames)) {
+          night.selectedGames = [];
+        }
+
         if (!night.selectedGames.includes(game.id)) {
           night.selectedGames.push(game.id);
         }
 
-        // 🔁 Trigger a full UI re-render
         syncAndRender();
       };
+
 
       gameSelectionList.appendChild(li);
     });
