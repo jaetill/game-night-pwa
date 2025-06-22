@@ -24,7 +24,7 @@ export function renderGameNights(nights) {
   gameNightList.innerHTML = '';
   gameNightList.className = 'game-list';
 
-  if (!nights.length) {
+  if (!Array.isArray(nights) || !nights.length) {
     gameNightList.innerHTML = '<li>No game nights scheduled.</li>';
     return;
   }
