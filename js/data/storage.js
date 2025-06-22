@@ -5,21 +5,37 @@ export async function loadGameNights() {
     const dataRes = await fetch(url);
     const cloudData = await dataRes.json();
 
-    // Sanity log
     console.log("Fetched cloudData:", cloudData, Array.isArray(cloudData));
 
-    // Optional cache
     if (Array.isArray(cloudData)) {
-      localStorage.setItem('gameNightsCloud', JSON.stringify(cloudData));
-      return cloudData;
+      const sanitized = cloudData.map(night => ({
+        ...night,
+        selectedGames: Array.isArray(night.selectedGames) ? night.selectedGames : [],
+        rsvps: Array.isArray(night.rsvps) ? night.rsvps : [],
+        suggestions: Array.isArray(night.suggestions) ? night.suggestions : []
+      }));
+
+      localStorage.setItem('gameNightsCloud', JSON.stringify(sanitized));
+      return sanitized;
     } else {
       throw new Error("Cloud data is not an array.");
     }
   } catch (err) {
     console.warn('🪫 Cloud load failed, falling back to localStorage.', err);
-    return JSON.parse(localStorage.getItem('gameNights') || '[]');
+    const localRaw = localStorage.getItem('gameNights') || '[]';
+    const localData = JSON.parse(localRaw);
+
+    return Array.isArray(localData)
+      ? localData.map(night => ({
+          ...night,
+          selectedGames: Array.isArray(night.selectedGames) ? night.selectedGames : [],
+          rsvps: Array.isArray(night.rsvps) ? night.rsvps : [],
+          suggestions: Array.isArray(night.suggestions) ? night.suggestions : []
+        }))
+      : [];
   }
 }
+
 
 export function syncGameNights(nights) {
   console.log("Saving gameNights in storage.SyncGameNights:", nights, "Type:", typeof nights);
