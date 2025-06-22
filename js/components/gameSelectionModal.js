@@ -47,6 +47,7 @@ export function openGameSelectionModal({ night, onSelect }) {
         }
       };
       gameList.appendChild(entry);
+	  console.log("Rendered", matches.length, "games into", gameList);
     });
   }
 
