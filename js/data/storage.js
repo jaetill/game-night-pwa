@@ -22,7 +22,11 @@ export async function loadGameNights() {
 }
 
 export function syncGameNights(nights) {
-  console.log("syncGameNights called")	
+  console.log("Saving gameNights in storage.SyncGameNights:", gameNights, "Type:", typeof gameNights);
+    if (!Array.isArray(nights)) {
+    console.warn("⚠️ syncGameNights received non-array data:", nights);
+    return;
+  }
   localStorage.setItem("gameNights", JSON.stringify(nights));
   localStorage.setItem("gameNightsCloud", JSON.stringify(nights)); // simulate cloud sync
 }
