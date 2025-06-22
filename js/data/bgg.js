@@ -53,10 +53,11 @@ async function tryFetch() {
       const detailsXml = new DOMParser().parseFromString(detailsText, "text/xml");
 
       chunk.forEach(game => {
+		
         const detail = detailsXml.querySelector(`item[objectid="${game.id}"]`);
         const min = detail?.querySelector("minplayers")?.getAttribute("value");
         const max = detail?.querySelector("maxplayers")?.getAttribute("value");
-
+		  console.log("Detail XML for game", game.id, detail?.outerHTML);
         enrichedGames.push({
           ...game,
           minPlayers: Number(min) || 1,
