@@ -22,7 +22,7 @@ export async function loadGameNights() {
 }
 
 export function syncGameNights(nights) {
-  console.log("Saving gameNights in storage.SyncGameNights:", gameNights, "Type:", typeof gameNights);
+  console.log("Saving gameNights in storage.SyncGameNights:", nights, "Type:", typeof nights);
     if (!Array.isArray(nights)) {
     console.warn("⚠️ syncGameNights received non-array data:", nights);
     return;
