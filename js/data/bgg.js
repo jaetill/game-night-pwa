@@ -34,7 +34,10 @@ export async function fetchOwnedGames(username) {
 
     // Fetch game details with stats
     const ids = baseGames.map(g => g.id).join(',');
-    const detailsRes = await fetch(`https://boardgamegeek.com/xmlapi2/thing?id=${ids}&stats=1`);
+    //const detailsRes = await fetch(`https://boardgamegeek.com/xmlapi2/thing?id=${ids}&stats=1`);
+	const corsProxy = 'https://corsproxy.io/?';
+	const proxiedUrl = `${corsProxy}https://boardgamegeek.com/xmlapi2/thing?id=${ids}&stats=1`;
+	const detailsRes = await fetch(proxiedUrl);
     const detailsText = await detailsRes.text();
     const detailsXml = new DOMParser().parseFromString(detailsText, "text/xml");
 
