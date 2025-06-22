@@ -14,7 +14,7 @@ export function renderAdminTools(night, nights) {
   list.style.margin = '0.5em 0';
   list.style.paddingLeft = '1.2em';
 
-  function renderSelectedGames() {
+  function updateGameSelectionUI() {
     list.innerHTML = '';
     (night.selectedGames || []).forEach(gameId => {
       const game = ownedGames.find(g => g.id === gameId);
@@ -27,14 +27,14 @@ export function renderAdminTools(night, nights) {
       removeBtn.style.marginLeft = '0.5em';
       removeBtn.onclick = () => {
         night.selectedGames = night.selectedGames.filter(id => id !== game.id);
-        renderSelectedGames();
+        updateGameSelectionUI();
       };
       li.appendChild(removeBtn);
       list.appendChild(li);
     });
   }
 
-  renderSelectedGames();
+  updateGameSelectionUI();
 
   const addGameBtn = document.createElement('button');
   addGameBtn.textContent = '➕ Add Game';
@@ -46,7 +46,7 @@ export function renderAdminTools(night, nights) {
         if (!night.selectedGames.includes(game.id)) {
           night.selectedGames.push(game.id);
         }
-        renderSelectedGames();
+        updateGameSelectionUI();
       }
     });
   };

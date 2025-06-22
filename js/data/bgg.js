@@ -61,11 +61,13 @@ async function tryFetch() {
 }
         const min = detail?.querySelector("minplayers")?.getAttribute("value");
         const max = detail?.querySelector("maxplayers")?.getAttribute("value");
+        const thumbnail = detail?.querySelector("thumbnail")?.textContent;
 		  console.log("Detail XML for game", game.id, detail?.outerHTML);
         enrichedGames.push({
           ...game,
           minPlayers: Number(min) || 1,
-          maxPlayers: Number(max) || 99
+          maxPlayers: Number(max) || 99,
+           thumbnail: thumbnail || ''
         });
       });
     } catch (err) {
