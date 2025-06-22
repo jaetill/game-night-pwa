@@ -27,23 +27,31 @@ export async function fetchOwnedGames(username) {
       return;
     }
 
-	const games = [...xml.querySelectorAll("item")].map(item => {
-	  const stats = item.querySelector("stats");
-	  const minPlayers = stats?.getAttribute("minplayers");
-	  const maxPlayers = stats?.getAttribute("maxplayers");
+    const baseGames = [...xml.querySelectorAll("item")].map(item => ({
+      id: item.getAttribute("objectid"),
+      title: item.querySelector("name")?.textContent || "Untitled"
+    }));
 
-	  return {
-		id: item.getAttribute("objectid"),
-		title: item.querySelector("name")?.textContent || "Untitled",
-		minPlayers: Number(minPlayers) || 1,
-		maxPlayers: Number(maxPlayers) || 99
-	  };
-	});
+    // Fetch game details with stats
+    const ids = baseGames.map(g => g.id).join(',');
+    const detailsRes = await fetch(`https://boardgamegeek.com/xmlapi2/thing?id=${ids}&stats=1`);
+    const detailsText = await detailsRes.text();
+    const detailsXml = new DOMParser().parseFromString(detailsText, "text/xml");
 
+    const enrichedGames = baseGames.map(game => {
+      const detail = detailsXml.querySelector(`item[objectid="${game.id}"]`);
+      const min = detail?.querySelector("minplayers")?.getAttribute("value");
+      const max = detail?.querySelector("maxplayers")?.getAttribute("value");
+
+      return {
+        ...game,
+        minPlayers: Number(min) || 1,
+        maxPlayers: Number(max) || 99
+      };
+    });
 
     ownedGames.length = 0;
-    ownedGames.push(...games);
-
+    ownedGames.push(...enrichedGames);
     localStorage.setItem("bggOwnedGames", JSON.stringify(ownedGames));
   }
 
