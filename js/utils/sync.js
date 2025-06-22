@@ -1,20 +1,8 @@
-import {
-  currentUser,
-  loadGameNights,
-  syncGameNights,
-  isAdmin,
-  fetchOwnedGames
-} from '../data/index.js';
-import {
-  renderSummary,
-  renderRSVP,
-  renderSuggestions,
-  //renderAdminTools, // Uncomment if admin tools are needed
-  renderSelectedGames,
-  renderGameNights
-} from '../components/index.js';
+import { loadGameNights, syncGameNights } from '../data/index.js';
+import { renderGameNights } from '../components/render.js';
 
-export function syncAndRender(nights) {
+export function syncAndRender() {
+  const nights = loadGameNights();
   syncGameNights(nights);
   renderGameNights(nights);
 }

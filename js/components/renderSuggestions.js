@@ -1,13 +1,8 @@
 import {
-  createGameNight,
   syncAndRender
 } from '../utils/index.js';
 import {
-  currentUser,
-  loadGameNights,
-  syncGameNights,
-  isAdmin,
-  fetchOwnedGames
+  currentUser
 } from '../data/index.js';
 
 

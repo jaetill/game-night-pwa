@@ -69,7 +69,8 @@ export function renderAdminTools(night, nights) {
   cancelBtn.textContent = 'Cancel Event';
   cancelBtn.onclick = () => {
     const updated = nights.filter(n => n.id !== night.id);
-    syncAndRender(updated);
+    //syncAndRender(updated);
+    syncAndRender();
   };
 
   wrapper.appendChild(document.createElement('br'));
