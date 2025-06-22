@@ -54,7 +54,11 @@ async function tryFetch() {
 
       chunk.forEach(game => {
 		
-        const detail = detailsXml.querySelector(`item[objectid="${game.id}"]`);
+        const detail = detailsXml.querySelector(`item[id="${game.id}"]`);
+		if (!detail) {
+			console.warn(`No detail found for game ID ${game.id}`);
+			return;
+}
         const min = detail?.querySelector("minplayers")?.getAttribute("value");
         const max = detail?.querySelector("maxplayers")?.getAttribute("value");
 		  console.log("Detail XML for game", game.id, detail?.outerHTML);
