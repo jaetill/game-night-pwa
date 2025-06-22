@@ -20,12 +20,12 @@ import { renderAdminTools } from './renderAdminTools.js';
 import { renderSelectedGames } from './renderSelectedGames.js';
 
 export function renderGameNights(nights) {
-  const gameList = document.getElementById('gameList');
-  gameList.innerHTML = '';
-  gameList.className = 'game-list';
+  const gameNightList = document.getElementById('gameNightList');
+  gameNightList.innerHTML = '';
+  gameNightList.className = 'game-list';
 
   if (!nights.length) {
-    gameList.innerHTML = '<li>No game nights scheduled.</li>';
+    gameNightList.innerHTML = '<li>No game nights scheduled.</li>';
     return;
   }
 
@@ -65,6 +65,6 @@ export function renderGameNights(nights) {
       card.appendChild(summary);
       card.appendChild(toggleBtn);
       card.appendChild(detailsDiv);
-      gameList.appendChild(card);
+      gameNightList.appendChild(card);
     });
 }

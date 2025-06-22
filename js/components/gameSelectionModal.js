@@ -4,7 +4,7 @@ export function openGameSelectionModal({ night, onSelect }) {
   const modal = document.getElementById('gameModal');
   const searchInput = document.getElementById('gameSearch');
   const playerInput = document.getElementById('gamePlayerCount');
-  const gameList = document.getElementById('gameList');
+  const gameSelectionList = document.getElementById('gameSelectionList');
   const closeBtn = document.getElementById('closeModal');
 
   if (!modal) {
@@ -22,7 +22,7 @@ export function openGameSelectionModal({ night, onSelect }) {
   function clearInputs() {
     searchInput.value = '';
     playerInput.value = 4;
-    gameList.innerHTML = '';
+    gameSelectionList.innerHTML = '';
   }
 
   function renderFilteredGames() {
@@ -38,14 +38,14 @@ export function openGameSelectionModal({ night, onSelect }) {
 
   console.log("Filter returned:", matches);
 
-  gameList.innerHTML = '';
+  gameSelectionList.innerHTML = '';
 
   if (matches.length === 0) {
     const emptyMsg = document.createElement('div');
     emptyMsg.className = 'no-results';
     emptyMsg.textContent = 'No matching games found.';
-    gameList.appendChild(emptyMsg);
-    console.log("Rendered 0 games into", gameList);
+    gameSelectionList.appendChild(emptyMsg);
+    console.log("Rendered 0 games into", gameSelectionList);
     return;
   }
 
@@ -60,10 +60,10 @@ export function openGameSelectionModal({ night, onSelect }) {
         onSelect(game);
       }
     };
-    gameList.appendChild(li);
+    gameSelectionList.appendChild(li);
   });
 
-  console.log("Rendered", matches.length, "games into", gameList);
+  console.log("Rendered", matches.length, "games into", gameSelectionList);
 }
 
   searchInput.oninput = renderFilteredGames;

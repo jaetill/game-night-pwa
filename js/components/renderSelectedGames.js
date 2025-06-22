@@ -6,7 +6,7 @@ export function renderSelectedGames(night, ownedGames) {
     return match?.title || `#${id}`;
   });
 
-  const gameList = document.createElement('p');
-  gameList.textContent = `🎯 Playing: ${titles.join(', ')}`;
-  return gameList;
+  const gameSelectedList = document.createElement('p');
+  gameSelectedList.textContent = `🎯 Playing: ${titles.join(', ')}`;
+  return gameSelectedList;
 }
