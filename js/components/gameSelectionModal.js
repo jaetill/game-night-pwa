@@ -28,8 +28,9 @@ export function openGameSelectionModal({ night, onSelect }) {
   function renderFilteredGames() {
     const query = searchInput.value.trim();
     const count = Number(playerInput.value || 1);
-
+	console.log("Owned games at modal open:", ownedGames);
     const matches = filterGames({ searchTerm: query, minPlayers: count });
+	console.log("Filter returned:", matches);
 
     gameList.innerHTML = '';
 
