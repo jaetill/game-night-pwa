@@ -51,21 +51,25 @@ export function openGameSelectionModal({ night }) {
       li.className = 'game-option';
       li.textContent = `${game.title} (${game.minPlayers}–${game.maxPlayers})`;
 
-      li.onclick = () => {
+      li.onclick = async () => {
         modal.classList.add('hidden');
         clearInputs();
 
-        // 💾 Safely ensure selectedGames is initialized
-        if (!Array.isArray(night.selectedGames)) {
-          night.selectedGames = [];
-        }
+        const nights = await loadGameNights();
+        const index = nights.findIndex(n => n.id === night.id);
 
-        if (!night.selectedGames.includes(game.id)) {
-          night.selectedGames.push(game.id);
+        if (index !== -1) {
+          const selected = nights[index].selectedGames ?? [];
+          if (!selected.includes(game.id)) {
+            selected.push(game.id);
+          }
+          nights[index].selectedGames = selected;
+          syncAndRender(nights);
+        } else {
+          console.warn("Could not find matching night to update.");
         }
-        
-        syncAndRender().catch(console.error);
       };
+
 
 
       gameSelectionList.appendChild(li);
