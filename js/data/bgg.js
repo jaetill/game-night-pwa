@@ -34,7 +34,7 @@ async function tryFetch() {
   }));
 
   // 🔁 Break game IDs into chunks of 40
-  const chunkSize = 40;
+  const chunkSize = 20;
   const chunks = [];
   for (let i = 0; i < baseGames.length; i += chunkSize) {
     chunks.push(baseGames.slice(i, i + chunkSize));
