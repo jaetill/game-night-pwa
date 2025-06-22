@@ -1,4 +1,9 @@
 export function renderSelectedGames(night, ownedGames) {
+  console.log("renderSelectedGames called with:", night, ownedGames);
+  if (!night || !ownedGames || !Array.isArray(ownedGames)) {
+    console.warn("Invalid night or ownedGames data");
+    return document.createElement('div');
+  }
   if (!night.selectedGames?.length || !ownedGames.length) return document.createElement('div');
 
   const titles = night.selectedGames.map(id => {
