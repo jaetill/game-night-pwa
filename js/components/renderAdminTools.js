@@ -37,7 +37,7 @@ export function renderAdminTools(night, nights) {
   updateGameSelectionUI();
 
   const addGameBtn = document.createElement('button');
-  addGameBtn.textContent = '➕ Add Game';
+  addGameBtn.textContent = 'Add Game';
   addGameBtn.onclick = () => {
     openGameSelectionModal({
       night,

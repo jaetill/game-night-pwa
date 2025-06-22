@@ -29,7 +29,7 @@ export function openGameSelectionModal({ night, onSelect }) {
   const query = searchInput.value.trim();
   const count = Number(playerInput.value || 1);
 
-  console.log("Owned games at modal open:", ownedGames);
+  //console.log("Owned games at modal open:", ownedGames);
 
 	const matches = filterGames({
 	  searchTerm: query,
@@ -37,7 +37,7 @@ export function openGameSelectionModal({ night, onSelect }) {
 	  maxPlayers: count
 	});
 
-  console.log("Filter returned:", matches);
+  //console.log("Filter returned:", matches);
 
   gameSelectionList.innerHTML = '';
 
@@ -46,7 +46,7 @@ export function openGameSelectionModal({ night, onSelect }) {
     emptyMsg.className = 'no-results';
     emptyMsg.textContent = 'No matching games found.';
     gameSelectionList.appendChild(emptyMsg);
-    console.log("Rendered 0 games into", gameSelectionList);
+    //console.log("Rendered 0 games into", gameSelectionList);
     return;
   }
 
