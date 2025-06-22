@@ -27,18 +27,19 @@ export async function fetchOwnedGames(username) {
       return;
     }
 
-    const games = [...xml.querySelectorAll("item")].map(item => {
-      const stats = item.querySelector("stats");
-      const minPlayers = stats?.getAttribute("minplayers");
-      const maxPlayers = stats?.getAttribute("maxplayers");
+	const games = [...xml.querySelectorAll("item")].map(item => {
+	  const stats = item.querySelector("stats");
+	  const minPlayers = stats?.getAttribute("minplayers");
+	  const maxPlayers = stats?.getAttribute("maxplayers");
 
-      return {
-        id: item.getAttribute("objectid"),
-        title: item.querySelector("name")?.textContent || "Untitled",
-        minPlayers: Number(minPlayers) || 1, // fallback to 1
-        maxPlayers: Number(maxPlayers) || 99 // fallback to 99
-      };
-    });
+	  return {
+		id: item.getAttribute("objectid"),
+		title: item.querySelector("name")?.textContent || "Untitled",
+		minPlayers: Number(minPlayers) || 1,
+		maxPlayers: Number(maxPlayers) || 99
+	  };
+	});
+
 
     ownedGames.length = 0;
     ownedGames.push(...games);
