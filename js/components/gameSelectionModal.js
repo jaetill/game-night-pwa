@@ -31,10 +31,11 @@ export function openGameSelectionModal({ night, onSelect }) {
 
   console.log("Owned games at modal open:", ownedGames);
 
-  const matches = filterGames({
-    searchTerm: query,
-    playerCount: count // assuming your filter takes `playerCount` now
-  });
+	const matches = filterGames({
+	  searchTerm: query,
+	  minPlayers: count,
+	  maxPlayers: count
+	});
 
   console.log("Filter returned:", matches);
 
