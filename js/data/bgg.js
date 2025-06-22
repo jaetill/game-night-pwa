@@ -15,48 +15,65 @@ export async function fetchOwnedGames(username) {
 
   let tries = 0;
 
-  async function tryFetch() {
-    tries++;
-    const res = await fetch(`https://boardgamegeek.com/xmlapi2/collection?username=${username}&own=1`);
-    const text = await res.text();
-    const xml = new DOMParser().parseFromString(text, "text/xml");
+async function tryFetch() {
+  tries++;
 
-    if (xml.querySelector("message")) {
-      if (tries < 5) return setTimeout(tryFetch, 3000);
-      console.warn("BGG timeout.");
-      return;
-    }
+  const res = await fetch(`https://boardgamegeek.com/xmlapi2/collection?username=${username}&own=1`);
+  const text = await res.text();
+  const xml = new DOMParser().parseFromString(text, "text/xml");
 
-    const baseGames = [...xml.querySelectorAll("item")].map(item => ({
-      id: item.getAttribute("objectid"),
-      title: item.querySelector("name")?.textContent || "Untitled"
-    }));
-
-    // Fetch game details with stats
-    const ids = baseGames.map(g => g.id).join(',');
-    //const detailsRes = await fetch(`https://boardgamegeek.com/xmlapi2/thing?id=${ids}&stats=1`);
-	const corsProxy = 'https://corsproxy.io/?';
-	const proxiedUrl = `${corsProxy}https://boardgamegeek.com/xmlapi2/thing?id=${ids}&stats=1`;
-	const detailsRes = await fetch(proxiedUrl);
-    const detailsText = await detailsRes.text();
-    const detailsXml = new DOMParser().parseFromString(detailsText, "text/xml");
-
-    const enrichedGames = baseGames.map(game => {
-      const detail = detailsXml.querySelector(`item[objectid="${game.id}"]`);
-      const min = detail?.querySelector("minplayers")?.getAttribute("value");
-      const max = detail?.querySelector("maxplayers")?.getAttribute("value");
-
-      return {
-        ...game,
-        minPlayers: Number(min) || 1,
-        maxPlayers: Number(max) || 99
-      };
-    });
-
-    ownedGames.length = 0;
-    ownedGames.push(...enrichedGames);
-    localStorage.setItem("bggOwnedGames", JSON.stringify(ownedGames));
+  if (xml.querySelector("message")) {
+    if (tries < 5) return setTimeout(tryFetch, 3000);
+    console.warn("BGG timeout.");
+    return;
   }
+
+  const baseGames = [...xml.querySelectorAll("item")].map(item => ({
+    id: item.getAttribute("objectid"),
+    title: item.querySelector("name")?.textContent || "Untitled"
+  }));
+
+  // 🔁 Break game IDs into chunks of 40
+  const chunkSize = 40;
+  const chunks = [];
+  for (let i = 0; i < baseGames.length; i += chunkSize) {
+    chunks.push(baseGames.slice(i, i + chunkSize));
+  }
+
+  const enrichedGames = [];
+
+  for (const chunk of chunks) {
+    const ids = chunk.map(g => g.id).join(',');
+    const corsProxy = 'https://corsproxy.io/?';
+    const detailsUrl = `${corsProxy}https://boardgamegeek.com/xmlapi2/thing?id=${ids}&stats=1`;
+
+    try {
+      const detailsRes = await fetch(detailsUrl);
+      const detailsText = await detailsRes.text();
+      const detailsXml = new DOMParser().parseFromString(detailsText, "text/xml");
+
+      chunk.forEach(game => {
+        const detail = detailsXml.querySelector(`item[objectid="${game.id}"]`);
+        const min = detail?.querySelector("minplayers")?.getAttribute("value");
+        const max = detail?.querySelector("maxplayers")?.getAttribute("value");
+
+        enrichedGames.push({
+          ...game,
+          minPlayers: Number(min) || 1,
+          maxPlayers: Number(max) || 99
+        });
+      });
+    } catch (err) {
+      console.warn(`Failed to load chunk for IDs: ${ids}`, err);
+    }
+  }
+
+  ownedGames.length = 0;
+  ownedGames.push(...enrichedGames);
+
+  localStorage.setItem("bggOwnedGames", JSON.stringify(ownedGames));
+}
+
 
   tryFetch();
 }
