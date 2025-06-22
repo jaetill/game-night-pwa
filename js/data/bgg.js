@@ -64,7 +64,7 @@ async function tryFetch() {
         //console.log(detail.outerHTML); // optional, just for verification
         const thumbnail = detail?.querySelector("thumbnail")?.textContent;
 		    //console.log("Detail XML for game", game.id, detail?.outerHTML);
-        console.log(thumbnail);
+        console.log("Thumbnail for game is at: ", thumbnail);
         enrichedGames.push({
           ...game,
           minPlayers: Number(min) || 1,
