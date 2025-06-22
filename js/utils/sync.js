@@ -7,6 +7,7 @@ export async function syncAndRender() {
     console.warn("⚠️ syncAndRender: loaded data is not an array", nights);
     return;
   }
+  console.log("Loaded nights:", nights.map(n => n.selectedGames));
 
   syncGameNights(nights);
   renderGameNights(nights);
