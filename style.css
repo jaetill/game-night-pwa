@@ -14,9 +14,11 @@ ul {
 }
 
 .game-list {
-  list-style: none;
-  padding: 0;
+  position: relative; /* Keep it layered inside modal */
+  z-index: auto;
+  margin-top: 1em;
 }
+
 
 .game-card {
   border: 2px solid #444;
@@ -64,8 +66,14 @@ ul {
 }
 
 .game-option {
-  background: lightgray;
-  padding: 0.5em;
+  background: #f2f2f2;
+  padding: 0.5em 0.75em;
   margin-bottom: 4px;
   cursor: pointer;
+  border-radius: 4px;
 }
+
+.game-option:hover {
+  background-color: #e0e0e0;
+}
+
