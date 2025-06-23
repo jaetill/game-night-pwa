@@ -51,3 +51,4 @@ export function withdrawFromGame(night, gameId, playerName) {
   game.signedUpPlayers = game.signedUpPlayers.filter(p => p !== playerName);
   night.lastModified = Date.now();
 }
+

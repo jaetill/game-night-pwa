@@ -2,15 +2,27 @@
 
 const API_BASE = 'https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod';
 
-function sanitizeNight(night) {
+export function sanitizeNight(night) {
+  const selectedGames =
+    Array.isArray(night.selectedGames) && typeof night.selectedGames[0] === 'string'
+      ? night.selectedGames.map(gameId => ({
+          gameId,
+          maxPlayers: 4,
+          signedUpPlayers: []
+        }))
+      : Array.isArray(night.selectedGames)
+        ? night.selectedGames
+        : [];
+
   return {
     ...night,
-    selectedGames: Array.isArray(night.selectedGames) ? night.selectedGames : [],
+    selectedGames,
     rsvps: Array.isArray(night.rsvps) ? night.rsvps : [],
     suggestions: Array.isArray(night.suggestions) ? night.suggestions : [],
     lastModified: typeof night.lastModified === 'number' ? night.lastModified : 0
   };
 }
+
 
 function mergeNights(cloudNights, localNights) {
   const byId = new Map();
