@@ -1,6 +1,5 @@
-import { ownedGames } from './data/state.js';
-import { signUpForGame, withdrawFromGame, isGameFull } from './utils.js';
-import { syncGameNights } from './storage.js';
+import { signUpForGame, withdrawFromGame, isGameFull } from '../utils/index.js';
+import { ownedGames, syncGameNights } from '../data/index.js';
 
 export function renderGameNights(nights, currentUser) {
   const container = document.getElementById('gameNightList');
