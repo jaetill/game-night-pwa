@@ -27,7 +27,7 @@ function mergeNights(cloudNights, localNights) {
 
 async function pushGameNightsToCloud(gameNights) {
   try {
-    const res = await fetch(`${API_BASE}/get-upload-url`);
+    const res = await fetch(`${API_BASE}/upload-token`);
     const { url } = await res.json();
 
     const uploadRes = await fetch(url, {
