@@ -1,5 +1,3 @@
-import { signUpForGame, withdrawFromGame, isGameFull } from '../utils/index.js';
-import { ownedGames, syncGameNights } from '../data/index.js';
 import { renderSelectedGames } from './renderSelectedGames.js'; 
 
 export function renderGameNights(nights, currentUser) {
@@ -26,5 +24,6 @@ export function renderGameNights(nights, currentUser) {
       const selectedGamesUI = renderSelectedGames(night, currentUser, nights);
       li.appendChild(selectedGamesUI);
     }
+    container.appendChild(li);
  }); 
 }

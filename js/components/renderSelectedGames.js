@@ -13,7 +13,7 @@ export function renderSelectedGames(night, currentUser, nights) {
     const entry = document.createElement('div');
 
     const info = document.createElement('p');
-    info.textContent = `${game.name} (${signedUpPlayers.length}/${maxPlayers}): ${signedUpPlayers.join(', ') || 'No one yet'}`;
+    info.textContent = `${game.title} (${signedUpPlayers.length}/${maxPlayers}): ${signedUpPlayers.join(', ') || 'No one yet'}`;
     entry.appendChild(info);
 
     const img = document.createElement('img');
