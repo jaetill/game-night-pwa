@@ -25,5 +25,6 @@ export function renderGameNights(nights, currentUser) {
     if (night.selectedGames.length > 0) {
       const selectedGamesUI = renderSelectedGames(night, currentUser, nights);
       li.appendChild(selectedGamesUI);
-  });
+    }
+ }); 
 }
