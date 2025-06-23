@@ -7,19 +7,15 @@ import {
   fetchOwnedGames
 } from './data/index.js';
 
-import {
-  renderSummary,
-  renderRSVP,
-  renderSuggestions,
-  renderAdminTools,
-  renderSelectedGames
-} from './components/index.js';
+
 import { renderGameNights } from './components/render.js';
 
 import { setupEventListeners } from './events/events.js';
 
 //App initialization
 async function init() {
+  window.addEventListener('DOMContentLoaded', init);
+  console.log('🌟 Game Night Planner initialized!');
   const nights = await loadGameNights(); // handles cloud + fallback
   await fetchOwnedGames("jaetill"); // async, non-blocking
   renderGameNights(nights);
