@@ -1,70 +1,72 @@
 // Core imports
-import {
-  createGameNight,
-  syncAndRender
-} from '../utils/index.js';
-import {
-  currentUser,
-  loadGameNights,
-  syncGameNights,
-  isAdmin,
-  fetchOwnedGames,
-  ownedGames
-} from '../data/index.js';
+import { ownedGames, syncGameNights } from '../data/index.js';
+import { signUpForGame, withdrawFromGame, isGameFull } from '../utils/index.js';
 
-// Component helpers
-import { renderSummary } from './renderSummary.js';
-import { renderRSVP } from './renderRSVP.js';
-import { renderSuggestions } from './renderSuggestions.js';
-import { renderAdminTools } from './renderAdminTools.js';
-import { renderSelectedGames } from './renderSelectedGames.js';
+export function renderGameNights(nights, currentUser) {
+  const container = document.getElementById('game-nights');
+  container.innerHTML = '';
 
-export function renderGameNights(nights) {
-  const gameNightList = document.getElementById('gameNightList');
-  gameNightList.innerHTML = '';
-  gameNightList.className = 'game-list';
+  nights.forEach(night => {
+    const card = document.createElement('div');
+    card.className = 'game-night-card';
 
-  if (!Array.isArray(nights) || !nights.length) {
-    gameNightList.innerHTML = '<li>No game nights scheduled.</li>';
-    return;
+    const header = document.createElement('h3');
+    header.textContent = `${night.date} @ ${night.time}`;
+    card.appendChild(header);
+
+    const snacks = document.createElement('p');
+    snacks.textContent = `Snacks: ${night.snacks}`;
+    card.appendChild(snacks);
+
+    const rsvp = document.createElement('p');
+    rsvp.textContent = `RSVPs: ${night.rsvps.join(', ') || 'None yet'}`;
+    card.appendChild(rsvp);
+
+    const gameSection = document.createElement('div');
+    gameSection.className = 'selected-games';
+
+night.selectedGames.forEach(({ gameId, maxPlayers, signedUpPlayers }) => {
+  const game = ownedGames.find(g => g.id === gameId);
+  if (!game) return;
+
+  const entry = document.createElement('div');
+
+  const info = document.createElement('p');
+  info.textContent = `${game.name} (${signedUpPlayers.length}/${maxPlayers}): ${signedUpPlayers.join(', ') || 'No one yet'}`;
+  entry.appendChild(info);
+
+  const img = document.createElement('img');
+  img.src = game.thumbnail;
+  img.alt = game.name;
+  img.className = 'game-thumbnail';
+  entry.appendChild(img);
+
+  if (night.rsvps.includes(currentUser)) {
+    const isFull = isGameFull(night, gameId);
+    const isSignedUp = signedUpPlayers.includes(currentUser);
+
+    const button = document.createElement('button');
+    button.textContent = isSignedUp ? 'Leave' : isFull ? 'Full' : 'Join';
+    button.disabled = isFull && !isSignedUp;
+
+    button.onclick = () => {
+      if (isSignedUp) {
+        withdrawFromGame(night, gameId, currentUser);
+      } else {
+        signUpForGame(night, gameId, currentUser);
+      }
+      syncGameNights(nights);
+      renderGameNights(nights, currentUser);
+    };
+
+    entry.appendChild(button);
   }
 
-  nights
-    .sort((a, b) => new Date(`${a.date}T${a.time}`) - new Date(`${b.date}T${b.time}`))
-    .forEach(night => {
-      const card = document.createElement('div');
-      card.className = 'game-card';
+  gameSection.appendChild(entry);
+});
 
-      const summary = renderSummary(night);
-      const toggleBtn = document.createElement('button');
-      toggleBtn.textContent = 'Show Details ▾';
 
-      const detailsDiv = document.createElement('div');
-      detailsDiv.style.display = 'none';
-      detailsDiv.style.marginTop = '0.5em';
-
-      if (night.snacks) {
-        const snackP = document.createElement('p');
-        snackP.textContent = `🥨 Snacks: ${night.snacks}`;
-        detailsDiv.appendChild(snackP);
-      }
-
-      detailsDiv.appendChild(renderRSVP(night, nights));
-      detailsDiv.appendChild(renderSuggestions(night, nights));
-      if (isAdmin) {
-        detailsDiv.appendChild(renderAdminTools(night, nights, ownedGames));
-      }
-      detailsDiv.appendChild(renderSelectedGames(night, ownedGames));
-
-      toggleBtn.onclick = () => {
-        const isOpen = detailsDiv.style.display === 'block';
-        detailsDiv.style.display = isOpen ? 'none' : 'block';
-        toggleBtn.textContent = isOpen ? 'Show Details ▾' : 'Hide Details ▴';
-      };
-
-      card.appendChild(summary);
-      card.appendChild(toggleBtn);
-      card.appendChild(detailsDiv);
-      gameNightList.appendChild(card);
-    });
+    card.appendChild(gameSection);
+    container.appendChild(card);
+  });
 }
