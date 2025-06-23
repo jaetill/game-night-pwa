@@ -1,4 +1,4 @@
-import { loadGameNights, syncGameNights } from '../data/index.js';
+import { loadGameNights, syncGameNights, currentUser } from '../data/index.js';
 import { renderGameNights } from '../components/render.js';
 
 export async function syncAndRender(nightsData) {
@@ -10,5 +10,5 @@ export async function syncAndRender(nightsData) {
   console.log("Loaded nights:", nights.map(n => n.selectedGames));
 
   syncGameNights(nights);
-  renderGameNights(nights);
+  renderGameNights(nights, currentUser);
 }

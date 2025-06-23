@@ -18,7 +18,7 @@ async function init() {
   console.log('🌟 Game Night Planner initialized!');
   const nights = await loadGameNights(); // handles cloud + fallback
   await fetchOwnedGames("jaetill"); // async, non-blocking
-  renderGameNights(nights);
+  renderGameNights(nights, currentUser);
 
   // ✅ Reveal scheduler if admin
   if (isAdmin) {
