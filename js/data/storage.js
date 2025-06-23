@@ -27,24 +27,37 @@ function mergeNights(cloudNights, localNights) {
 
 async function pushGameNightsToCloud(gameNights) {
   try {
+    // Step 1: Get signed POST fields and URL from your backend
     const res = await fetch(`${API_BASE}/upload-token`);
-    const { url } = await res.json();
+    if (!res.ok) throw new Error(`Failed to get upload URL: ${res.status}`);
+    const { url, fields } = await res.json();
 
+    // Step 2: Build FormData for S3 POST
+    const formData = new FormData();
+    for (const [key, value] of Object.entries(fields)) {
+      formData.append(key, value);
+    }
+    formData.append(
+      'file',
+      new Blob([JSON.stringify(gameNights)], { type: 'application/json' })
+    );
+
+    // Step 3: POST to S3
     const uploadRes = await fetch(url, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(gameNights)
+      method: 'POST',
+      body: formData
     });
 
     if (!uploadRes.ok) {
       throw new Error(`Upload failed: ${uploadRes.status}`);
     }
 
-    console.log('✅ Game nights successfully pushed to cloud.');
+    console.log('✅ Game nights successfully uploaded via POST.');
   } catch (err) {
-    console.warn('❌ Failed to push game nights to cloud:', err);
+    console.warn('❌ Failed to upload game nights via POST:', err);
   }
 }
+
 
 export async function loadGameNights() {
   try {
