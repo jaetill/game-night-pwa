@@ -1,41 +1,51 @@
-export function renderSelectedGames(night, ownedGames) {
+import { ownedGames } from '../data/state.js';
+import { signUpForGame, withdrawFromGame, isGameFull } from '../utils.js';
+import { syncGameNights } from '../storage.js';
+import { renderGameNights } from './renderGameNights.js';
+
+export function renderSelectedGames(night, currentUser, nights) {
   const container = document.createElement('div');
   container.className = 'selected-games';
 
-  if (!night || !Array.isArray(ownedGames)) {
-    console.warn("Invalid night or ownedGames data");
-    return container;
-  }
+  night.selectedGames.forEach(({ gameId, maxPlayers, signedUpPlayers }) => {
+    const game = ownedGames.find(g => g.id === gameId);
+    if (!game) return;
 
-  const selectedGames = night.selectedGames || [];
-  if (!selectedGames.length) return container;
+    const entry = document.createElement('div');
 
-  const titles = [];
-  const thumbContainer = document.createElement('div');
-  thumbContainer.className = 'thumbnail-list';
+    const info = document.createElement('p');
+    info.textContent = `${game.name} (${signedUpPlayers.length}/${maxPlayers}): ${signedUpPlayers.join(', ') || 'No one yet'}`;
+    entry.appendChild(info);
 
-  selectedGames.forEach(id => {
-    const selectedGame = ownedGames.find(g => g.id === id);
-    if (selectedGame) {
-      titles.push(selectedGame.title || `#${id}`);
+    const img = document.createElement('img');
+    img.src = game.thumbnail;
+    img.alt = game.name;
+    img.className = 'game-thumbnail';
+    entry.appendChild(img);
 
-      if (selectedGame.thumbnail) {
-        const img = document.createElement('img');
-        img.src = selectedGame.thumbnail;
-        img.alt = selectedGame.title || 'Game';
-        img.className = 'game-thumbnail';
-        thumbContainer.appendChild(img);
-      }
+    if (night.rsvps.includes(currentUser)) {
+      const isFull = isGameFull(night, gameId);
+      const isSignedUp = signedUpPlayers.includes(currentUser);
+
+      const button = document.createElement('button');
+      button.textContent = isSignedUp ? 'Leave' : isFull ? 'Full' : 'Join';
+      button.disabled = isFull && !isSignedUp;
+
+      button.onclick = () => {
+        if (isSignedUp) {
+          withdrawFromGame(night, gameId, currentUser);
+        } else {
+          signUpForGame(night, gameId, currentUser);
+        }
+        syncGameNights(nights);
+        renderGameNights(nights, currentUser);
+      };
+
+      entry.appendChild(button);
     }
+
+    container.appendChild(entry);
   });
-
-  const titleList = document.createElement('p');
-  titleList.textContent = `🎯 Playing: ${titles.join(', ')}`;
-
-  container.appendChild(titleList);
-  if (thumbContainer.children.length) {
-    container.appendChild(thumbContainer);
-  }
 
   return container;
 }
