@@ -22,6 +22,7 @@ export function renderSuggestions(night, nights) {
     if (title) {
       night.suggestions = night.suggestions || [];
       night.suggestions.push({ title, suggestedBy: currentUser.name });
+      night.lastModified = Date.now();
       syncAndRender(nights);
     }
   };

@@ -23,6 +23,7 @@ export function renderRSVP(night, nights) {
       const already = night.rsvps.find(r => r.userId === currentUser.userId);
       if (!already) {
         night.rsvps.push({ userId: currentUser.userId, name: name.trim() });
+        night.lastModified = Date.now();
         syncAndRender(nights);
       } else {
         alert("You've already RSVP'd.");
@@ -42,6 +43,7 @@ export function renderRSVP(night, nights) {
         cancelBtn.textContent = 'Cancel RSVP';
         cancelBtn.onclick = () => {
           night.rsvps.splice(i, 1);
+          night.lastModified = Date.now();
           syncAndRender(nights);
         };
         item.appendChild(cancelBtn);

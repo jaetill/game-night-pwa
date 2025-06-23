@@ -6,6 +6,7 @@ export function createGameNight({ date, time, snacks }) {
     snacks,
     rsvps: [],
     suggestions: [],
-    selectedGames: []
+    selectedGames: [],
+    lastModified: Date.now()
   };
 }

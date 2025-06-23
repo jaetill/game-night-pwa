@@ -64,6 +64,7 @@ export function openGameSelectionModal({ night }) {
             selected.push(game.id);
           }
           nights[index].selectedGames = selected;
+          nights[index].lastModified = Date.now();
           syncAndRender(nights);
         } else {
           console.warn("Could not find matching night to update.");
