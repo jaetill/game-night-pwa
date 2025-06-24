@@ -1,14 +1,5 @@
-import {
-  createGameNight,
-  syncAndRender
-} from '../utils/index.js';
-import {
-  currentUser,
-  loadGameNights,
-  syncGameNights,
-  isAdmin,
-  fetchOwnedGames
-} from '../data/index.js';
+import { syncAndRender } from '../utils/index.js';
+import { currentUser } from '../auth/auth.js';
 
 export function renderRSVP(night, nights) {
   const wrapper = document.createElement('div');

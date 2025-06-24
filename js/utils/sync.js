@@ -1,4 +1,5 @@
-import { loadGameNights, syncGameNights, currentUser } from '../data/index.js';
+import { loadGameNights, syncGameNights } from '../data/index.js';
+import { currentUser } from '../auth/auth.js';
 import { renderGameNights } from '../components/renderGameNights.js';
 
 export async function syncAndRender(nightsData) {
