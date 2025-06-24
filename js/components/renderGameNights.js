@@ -29,6 +29,12 @@ export function renderGameNights(nights, currentUser) {
       const selectedGamesUI = renderSelectedGames(night, currentUser, nights);
       li.appendChild(selectedGamesUI);
     }
+
+    if (isAdmin(currentUser)) {
+      container.appendChild(renderAdminGameControls(night));
+      container.appendChild(renderAdminActions(night, nights));
+    }
+    
     container.appendChild(li);
  }); 
 }
