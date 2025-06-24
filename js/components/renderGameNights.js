@@ -38,8 +38,8 @@ export function renderGameNights(nights, currentUser) {
     }
 
     if (isAdmin(currentUser)) {
-      container.appendChild(renderAdminGameControls(night));
-      container.appendChild(renderAdminActions(night, nights));
+      li.appendChild(renderAdminGameControls(night));
+      li.appendChild(renderAdminActions(night, nights));
     }
 
     container.appendChild(li);
