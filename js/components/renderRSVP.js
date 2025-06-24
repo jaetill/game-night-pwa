@@ -14,23 +14,22 @@ export function renderRSVP(night, nights) {
   const wrapper = document.createElement('div');
 
   // 📝 RSVP Button
-  const rsvpBtn = document.createElement('button');
-  rsvpBtn.textContent = 'RSVP';
-  rsvpBtn.onclick = () => {
-    const name = prompt(`RSVP name for ${night.date}?`, currentUser.name);
-    if (name) {
-      night.rsvps = night.rsvps || [];
-      const already = night.rsvps.find(r => r.userId === currentUser.userId);
-      if (!already) {
+  // ✅ Show RSVP button only if user hasn't RSVP'd
+  const alreadyRSVPd = night.rsvps?.some(r => r.userId === currentUser.userId);
+  if (!alreadyRSVPd) {
+    const rsvpBtn = document.createElement('button');
+    rsvpBtn.textContent = 'RSVP';
+    rsvpBtn.onclick = () => {
+      const name = prompt(`RSVP name for ${night.date}?`, currentUser.name);
+      if (name) {
+        night.rsvps = night.rsvps || [];
         night.rsvps.push({ userId: currentUser.userId, name: name.trim() });
         night.lastModified = Date.now();
         syncAndRender(nights);
-      } else {
-        alert("You've already RSVP'd.");
       }
-    }
-  };
-  wrapper.appendChild(rsvpBtn);
+    };
+    wrapper.appendChild(rsvpBtn);
+  }
 
   // 🧾 RSVP List
   if (night.rsvps?.length) {
