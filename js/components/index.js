@@ -6,4 +6,6 @@ export { renderGameNights } from './renderGameNights.js';
 export { openGameSelectionModal } from './gameSelectionModal.js';
 export { renderGameNightSummary } from './renderGameNightSummary.js';
 export { renderApp } from './render.js';
+export { renderGameNightAdminControls } from './renderGameNightAdminControls.js';
+export { renderGlobalAdminPanel } from './renderGlobalAdminPanel.js'; 
 
