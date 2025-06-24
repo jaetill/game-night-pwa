@@ -1,5 +1,5 @@
-import { renderAdminGameControls } from './renderAdminPartials.js';
-import { renderAdminActions } from './renderAdminPartials.js';
+import { renderAdminGameControls } from './renderGameNightAdminControls.js';
+import { renderAdminActions } from './renderGameNightAdminControls.js';
 
 export function renderAdminTools(night, nights) {
   const wrapper = document.createElement('div');

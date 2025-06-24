@@ -1,7 +1,6 @@
 import { renderSelectedGames } from './renderSelectedGames.js';
 import { renderRSVP } from './renderRSVP.js';
 import { renderSuggestions } from './renderSuggestions.js';
-import { renderGameNightSummary } from './renderGameNightSummary.js';
 
 
 export function renderGameNights(nights, currentUser) {

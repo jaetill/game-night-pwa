@@ -1,5 +1,5 @@
 import { renderGameNights } from './renderGameNights.js';
-import { renderAdminTools } from './renderAdminTools.js';
+import { renderGlobalAdminPanel } from './renderGlobalAdminPanel.js';
 
 export function renderApp({ nights, isAdmin, currentUser }) {
   const root = document.getElementById('app');
@@ -12,7 +12,11 @@ export function renderApp({ nights, isAdmin, currentUser }) {
   renderGameNights(nights, currentUser);
 
   if (isAdmin) {
-    const adminUI = renderAdminTools(null, nights);
+    const adminUI = renderGlobalAdminPanel();
+    if (!adminUI) {
+      console.warn('No admin UI rendered. Ensure the global admin panel is set up correctly.');
+      return;
+    }
     root.appendChild(adminUI);
 
     // Optionally reveal legacy admin sections
