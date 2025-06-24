@@ -5,3 +5,5 @@ export { renderSelectedGames } from './renderSelectedGames.js';
 export { renderGameNights } from './renderGameNights.js';
 export { openGameSelectionModal } from './gameSelectionModal.js';
 export { renderGameNightSummary } from './renderGameNightSummary.js';
+export { renderApp } from './render.js';
+

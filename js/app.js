@@ -1,30 +1,25 @@
-//Import statements
 import {
   currentUser,
   loadGameNights,
-  isAdmin,
+  isAdmin as getIsAdmin,
   fetchOwnedGames
 } from './data/index.js';
 
-
-import { renderGameNights } from './components/index.js';
-
+import { renderApp } from './components/render.js';
 import { setupEventListeners } from './events/events.js';
 
-//App initialization
 async function init() {
-  window.addEventListener('DOMContentLoaded', init);
-  console.log('🌟 Game Night Planner initialized!');
-  const nights = await loadGameNights(); // handles cloud + fallback
-  await fetchOwnedGames("jaetill"); // async, non-blocking
-  renderGameNights(nights, currentUser);
-
-  // ✅ Reveal scheduler if admin
-  if (isAdmin) {
-    document.getElementById('schedulerSection').style.display = 'block';
+  if (!currentUser) {
+    console.error('No current user found. Please log in.');
+    return;
   }
 
-  setupEventListeners(); // form buttons, date input, etc.
+  const isAdmin = await getIsAdmin(currentUser);
+  const nights = await loadGameNights();
+  await fetchOwnedGames("jaetill");
+
+  renderApp({ nights, isAdmin, currentUser });
+  setupEventListeners();
 }
 
-init();
+window.addEventListener('DOMContentLoaded', init);
