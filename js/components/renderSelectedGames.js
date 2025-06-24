@@ -1,6 +1,6 @@
 import { ownedGames, syncGameNights } from '../data/index.js';
 import { signUpForGame, withdrawFromGame, isGameFull } from '../utils/index.js';
-import { renderGameNights } from './render.js';
+import { renderGameNights } from './renderGameNights.js';
 
 export function renderSelectedGames(night, currentUser, nights) {
   const container = document.createElement('div');
@@ -18,7 +18,7 @@ export function renderSelectedGames(night, currentUser, nights) {
 
     const img = document.createElement('img');
     img.src = game.thumbnail;
-    img.alt = game.name;
+    img.alt = game.title;
     img.className = 'game-thumbnail';
     entry.appendChild(img);
 

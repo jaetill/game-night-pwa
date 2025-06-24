@@ -1,5 +1,5 @@
 import { loadGameNights, syncGameNights, currentUser } from '../data/index.js';
-import { renderGameNights } from '../components/render.js';
+import { renderGameNights } from '../components/renderGameNights.js';
 
 export async function syncAndRender(nightsData) {
   const nights = nightsData ?? await loadGameNights();

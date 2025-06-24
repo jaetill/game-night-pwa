@@ -1,4 +1,4 @@
-export function renderSummary(night) {
+export function renderGameNightSummary(night) {
   const summary = document.createElement('div');
   summary.innerHTML = `
     <strong>📅 ${night.date} @ ${night.time}</strong><br>

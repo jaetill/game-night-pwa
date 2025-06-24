@@ -1,6 +1,8 @@
 import { renderSelectedGames } from './renderSelectedGames.js';
 import { renderRSVP } from './renderRSVP.js';
 import { renderSuggestions } from './renderSuggestions.js';
+import { renderSummary } from './components/renderSummary.js';
+
 
 export function renderGameNights(nights, currentUser) {
   const container = document.getElementById('gameNightList');
