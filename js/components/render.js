@@ -1,8 +1,13 @@
-import { renderGameNights } from './renderGameNights.js';
+import { renderGameNights } from './components/index.js';
 import { renderGlobalAdminPanel } from './renderGlobalAdminPanel.js';
 
 export function renderApp({ nights, isAdmin, currentUser }) {
   const root = document.getElementById('app');
+  if (!root) {
+    console.error('No #app element found in DOM.');
+    return;
+  }
+
   root.innerHTML = '';
 
   const listContainer = document.createElement('ul');
@@ -12,18 +17,8 @@ export function renderApp({ nights, isAdmin, currentUser }) {
   renderGameNights(nights, currentUser);
 
   if (isAdmin) {
-    const adminUI = renderGlobalAdminPanel();
-    if (!adminUI) {
-      console.warn('No admin UI rendered. Ensure the global admin panel is set up correctly.');
-      return;
-    }
-    root.appendChild(adminUI);
-
-    // Optionally reveal legacy admin sections
-    const scheduler = document.getElementById('schedulerSection');
-    if (scheduler) scheduler.style.display = 'block';
+    renderGlobalAdminPanel();
   }
 }
-
-// This function initializes the app by rendering the game nights and admin tools if applicable
-// It uses the current user and game nights data to populate the UI
+// This function initializes the app by rendering the game nights and admin panel if applicable
+// It checks for the existence of the root element and appends the game night list to it
