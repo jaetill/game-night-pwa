@@ -12,7 +12,6 @@ export function renderApp({ nights, isAdmin, currentUser }) {
 
     renderRoleToggle(root);
 
-
   const listContainer = document.createElement('ul');
   listContainer.id = 'gameNightList';
   root.appendChild(listContainer);

@@ -22,7 +22,7 @@ export function renderSelectedGames(night, currentUser, nights) {
     img.className = 'game-thumbnail';
     entry.appendChild(img);
 
-    if (night.rsvps.includes(currentUser)) {
+    if (night.rsvps.some(u => u.userId === currentUser.userId)) {
       const isFull = isGameFull(night, gameId);
       const isSignedUp = signedUpPlayers.includes(currentUser);
 
