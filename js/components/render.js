@@ -1,4 +1,4 @@
-import { renderGameNights } from './components/index.js';
+import { renderGameNights } from './renderGameNights.js';
 import { renderGlobalAdminPanel } from './renderGlobalAdminPanel.js';
 
 export function renderApp({ nights, isAdmin, currentUser }) {
