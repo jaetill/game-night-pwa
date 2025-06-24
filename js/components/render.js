@@ -1,4 +1,5 @@
-import { renderSelectedGames } from './renderSelectedGames.js'; 
+import { renderSelectedGames } from './renderSelectedGames.js';
+import { renderRSVP } from './renderRSVP.js';
 
 export function renderGameNights(nights, currentUser) {
   const container = document.getElementById('gameNightList');
@@ -16,9 +17,12 @@ export function renderGameNights(nights, currentUser) {
     snacks.textContent = `Snacks: ${night.snacks || 'None'}`;
     li.appendChild(snacks);
 
-    const rsvp = document.createElement('p');
-    rsvp.textContent = `RSVPs: ${night.rsvps.join(', ') || 'None yet'}`;
-    li.appendChild(rsvp);
+    //const rsvp = document.createElement('p');
+    //rsvp.textContent = `RSVPs: ${night.rsvps.join(', ') || 'None yet'}`;
+    //li.appendChild(rsvp);
+    const rsvpUI = renderRSVP(night, nights);
+    li.appendChild(rsvpUI);
+
 
     if (night.selectedGames.length > 0) {
       const selectedGamesUI = renderSelectedGames(night, currentUser, nights);
