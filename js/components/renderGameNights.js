@@ -1,6 +1,14 @@
 import { renderSelectedGames } from './renderSelectedGames.js';
 import { renderRSVP } from './renderRSVP.js';
 import { renderSuggestions } from './renderSuggestions.js';
+import { renderAdminGameControls } from './renderAdminGameControls.js';
+import { renderAdminActions } from './renderAdminActions.js';
+import { isAdmin } from '../auth/auth.js';
+/**
+ * Renders a list of game nights with RSVP, suggestions, and admin controls.
+ * @param {Array} nights - Array of game night objects.
+ * @param {Object} currentUser - The current user object.
+ */
 
 
 export function renderGameNights(nights, currentUser) {
@@ -34,7 +42,7 @@ export function renderGameNights(nights, currentUser) {
       container.appendChild(renderAdminGameControls(night));
       container.appendChild(renderAdminActions(night, nights));
     }
-    
+
     container.appendChild(li);
  }); 
 }
