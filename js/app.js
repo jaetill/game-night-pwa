@@ -2,13 +2,12 @@
 import {
   currentUser,
   loadGameNights,
-  syncGameNights,
   isAdmin,
   fetchOwnedGames
 } from './data/index.js';
 
 
-import { renderGameNights } from './components/render.js';
+import { renderGameNights } from './components/index.js';
 
 import { setupEventListeners } from './events/events.js';
 
