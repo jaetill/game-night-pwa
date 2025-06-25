@@ -8,6 +8,7 @@ export function renderSelectedGames(night, currentUser, nights) {
 
   night.selectedGames.forEach(({ gameId, maxPlayers, signedUpPlayers }) => {
     const game = ownedGames.find(g => g.id === gameId);
+    console.log('Game lookup:', gameId, ownedGames.find(g => g.id === gameId));
     if (!game) return;
 
     const entry = document.createElement('div');
@@ -23,6 +24,11 @@ export function renderSelectedGames(night, currentUser, nights) {
     entry.appendChild(img);
 
     if (night.rsvps.some(u => u.userId === currentUser.userId)) {
+      console.log('RSVPs:', night.rsvps.map(u => u.userId));
+      console.log('Current user:', currentUser.userId);
+      console.log('Selected Games:', night.selectedGames);
+
+
       const isFull = isGameFull(night, gameId);
       const isSignedUp = signedUpPlayers.includes(currentUser);
 
