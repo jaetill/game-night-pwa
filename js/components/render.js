@@ -1,5 +1,6 @@
 import { renderGameNights } from './renderGameNights.js';
 import { renderGlobalAdminPanel } from './renderGlobalAdminPanel.js';
+import { getCurrentUser } from '../auth/auth.js';
 
 export function renderApp({ nights, isAdmin, currentUser }) {
   const root = document.getElementById('app');

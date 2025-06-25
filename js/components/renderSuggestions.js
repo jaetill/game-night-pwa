@@ -1,5 +1,5 @@
 import {  syncAndRender } from '../utils/index.js';
-import {  currentUser} from '../auth/auth.js';
+import { getCurrentUser } from '../auth/auth.js';
 
 export function renderSuggestions(night, nights) {
   const wrapper = document.createElement('div');
@@ -16,7 +16,7 @@ export function renderSuggestions(night, nights) {
     const title = input.value.trim();
     if (title) {
       night.suggestions = night.suggestions || [];
-      night.suggestions.push({ title, suggestedBy: currentUser.name });
+      night.suggestions.push({ title, suggestedBy: getCurrentUser().name });
       night.lastModified = Date.now();
       syncAndRender(nights);
     }

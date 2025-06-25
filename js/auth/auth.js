@@ -1,12 +1,14 @@
 // Temporary hardcoded user for testing
-export const currentUser = {
-  userId: 'jaetill',
-  name: 'Jason',
-  role: localStorage.getItem('devRole') || 'admin' // or 'guest'
-};
-// This object represents the current user with a hardcoded userId, name, and role
-// It retrieves the role from localStorage for development purposes
-// This file contains authentication-related functions and the current user object
+export function getCurrentUser() {
+  return {
+    userId: localStorage.getItem('userId') || 'jaetill',
+    name: localStorage.getItem('userName') || 'Jason',
+    role: localStorage.getItem('devRole') || 'admin'
+  };
+}
+// This module provides authentication-related functions and the current user object
+// It includes a function to get the current user and a check for admin status
+
 
 
 // Dev-friendly admin check
