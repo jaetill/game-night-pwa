@@ -14,7 +14,7 @@ async function init() {
   const nights = await loadGameNights();
   await fetchOwnedGames("jaetill");
 
-  renderApp({ nights, isAdmin: adminStatus, getCurrentUser() });
+  renderApp({ nights, isAdmin: adminStatus, currentUser: getCurrentUser() });
   // Initialize the app with game nights and admin tools if applicable
   // This will render the game nights and admin tools based on the current user and their role    
   setupEventListeners();
