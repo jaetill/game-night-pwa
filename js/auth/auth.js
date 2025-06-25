@@ -6,11 +6,12 @@
 // It includes a function to get the current user and a check for admin status
 export function getCurrentUser() {
   return {
-    userId: 'user-123', // 👈 match the stale RSVP entry
-    name: 'Jason',
-    role: localStorage.getItem('devRole') || 'admin'
+  userId: 'jaetill', // or your permanent test ID
+  name: 'Jason',
+  role: localStorage.getItem('devRole') || 'admin'
   };
 }
+
 // This function returns the current user object with a userId, name, and role 
 // The role is determined by a value stored in localStorage, defaulting to 'admin' if not set
 
