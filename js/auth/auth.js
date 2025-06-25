@@ -1,21 +1,15 @@
-// Temporary hardcoded user for testing
-//export function getCurrentUser() {
-  //return {
-    //userId: localStorage.getItem('userId') || 'jaetill',
-    //name: localStorage.getItem('userName') || 'Jason',
-    //role: localStorage.getItem('devRole') || 'admin'
-  //};
-//}
+// This module handles user authentication and role management
+// It provides a mock user object for development purposes and includes a function to check admin status
+
+
 // This module provides authentication-related functions and the current user object
 // It includes a function to get the current user and a check for admin status
+return {
+  userId: 'jaetill', // or your permanent test ID
+  name: 'Jason',
+  role: localStorage.getItem('devRole') || 'admin'
+};
 
-export function getCurrentUser() {
-  return {
-    userId: 'user-123', // 👈 match the stale RSVP entry
-    name: 'Jason',
-    role: localStorage.getItem('devRole') || 'admin'
-  };
-}
 
 
 // Dev-friendly admin check
