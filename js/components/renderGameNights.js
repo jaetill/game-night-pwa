@@ -38,7 +38,7 @@ export function renderGameNights(nights, currentUser) {
     }
 
     if (isAdmin(currentUser)) {
-      li.appendChild(renderAdminGameControls(night));
+      li.appendChild(renderAdminGameControls(night, nights));
       li.appendChild(renderAdminActions(night, nights));
     }
 
