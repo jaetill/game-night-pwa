@@ -35,6 +35,11 @@ export function setupEventListeners() {
     } else {
       const newNight = createGameNight({ date, time, snacks });
       nights.push(newNight);
+      const existing = nights.find(n => n.id === newNight.id);
+      if (!existing) {
+        nights.push(newNight);
+      }
+
     }
 
     syncAndRender(nights);

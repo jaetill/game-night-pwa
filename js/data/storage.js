@@ -19,6 +19,7 @@ export function sanitizeNight(night) {
     selectedGames,
     rsvps: Array.isArray(night.rsvps) ? night.rsvps : [],
     suggestions: Array.isArray(night.suggestions) ? night.suggestions : [],
+    hostUserId: night.hostUserId || getCurrentUser().userId,
     lastModified: typeof night.lastModified === 'number' ? night.lastModified : 0
   };
 }
@@ -27,15 +28,18 @@ export function sanitizeNight(night) {
 function mergeNights(cloudNights, localNights) {
   const byId = new Map();
 
-  [...cloudNights, ...localNights].forEach(night => {
+  const allNights = [...cloudNights, ...localNights].map(sanitizeNight);
+
+  allNights.forEach(night => {
     const existing = byId.get(night.id);
     if (!existing || night.lastModified > existing.lastModified) {
-      byId.set(night.id, sanitizeNight(night));
+      byId.set(night.id, night);
     }
   });
 
   return Array.from(byId.values());
 }
+
 
 async function pushGameNightsToCloud(gameNights) {
   try {
