@@ -38,6 +38,12 @@ export function signUpForGame(night, gameId, playerName) {
   }
 }
 
+export function withdrawFromAllGames(night, userId) {
+  night.selectedGames.forEach(game => {
+    game.signedUpPlayers = game.signedUpPlayers.filter(id => id !== userId);
+  });
+}
+
 export function isGameFull(night, gameId) {
   const game = night.selectedGames.find(g => g.gameId === gameId);
   if (!game) return false;

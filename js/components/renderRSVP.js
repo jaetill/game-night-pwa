@@ -1,4 +1,4 @@
-import { syncAndRender } from '../utils/index.js';
+import { withdrawFromAllGames, syncAndRender } from '../utils/index.js';
 import { getCurrentUser } from '../auth/auth.js';
 
 export function renderRSVP(night, nights) {
@@ -33,6 +33,7 @@ export function renderRSVP(night, nights) {
         cancelBtn.textContent = 'Cancel RSVP';
         cancelBtn.onclick = () => {
           night.rsvps.splice(i, 1);
+          withdrawFromAllGames(night, getCurrentUser().userId); // 👈 cleanup game signups
           night.lastModified = Date.now();
           syncAndRender(nights);
         };
