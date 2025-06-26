@@ -1,7 +1,11 @@
 import { filterGames, loadGameNights } from '../data/index.js';
 import { syncAndRender } from '../utils/index.js';
 
-export function openGameSelectionModal({ night }) {
+/**
+ * Opens the game selection modal for choosing games to add to a game night.
+ * Accepts a night object and optional onSelect callback.
+ */
+export function openGameSelectionModal({ night, onSelect }) {
   const modal = document.getElementById('gameModal');
   const searchInput = document.getElementById('gameSearch');
   const playerInput = document.getElementById('gamePlayerCount');
@@ -52,43 +56,42 @@ export function openGameSelectionModal({ night }) {
       li.textContent = `${game.title} (${game.minPlayers}–${game.maxPlayers})`;
 
       li.onclick = async () => {
-    modal.classList.add('hidden');
-    clearInputs();
+        modal.classList.add('hidden');
+        clearInputs();
 
-    if (onSelect) {
-      onSelect(game);
-      return;
-    }
+        if (onSelect) {
+          onSelect(game);
+          return;
+        }
 
-    // fallback default logic if no onSelect is provided
-    const nights = await loadGameNights();
-    const index = nights.findIndex(n => n.id === night.id);
+        // Fallback if no external handler is provided
+        const nights = await loadGameNights();
+        const index = nights.findIndex(n => n.id === night.id);
 
-    if (index !== -1) {
-      const selected = nights[index].selectedGames ?? [];
-      const alreadySelected = selected.some(g => g.gameId === game.id);
-      if (!alreadySelected) {
-        selected.push({
-          gameId: game.id,
-          maxPlayers: game.defaultMaxPlayers || 4,
-          signedUpPlayers: []
-        });
-      }
-      nights[index].selectedGames = selected;
-      nights[index].lastModified = Date.now();
-      syncAndRender(nights);
-    } else {
-      console.warn("Could not find matching night to update.");
-    }
-  };
+        if (index !== -1) {
+          const selected = nights[index].selectedGames ?? [];
+          const alreadySelected = selected.some(g => g.gameId === game.id);
 
+          if (!alreadySelected) {
+            selected.push({
+              gameId: game.id,
+              maxPlayers: game.defaultMaxPlayers || 4,
+              signedUpPlayers: []
+            });
+          }
 
-
+          nights[index].selectedGames = selected;
+          nights[index].lastModified = Date.now();
+          syncAndRender(nights);
+        } else {
+          console.warn('Could not find matching night to update.');
+        }
+      };
 
       gameSelectionList.appendChild(li);
     });
 
-    console.log("Rendered", matches.length, "games into", gameSelectionList);
+    console.log(`Rendered ${matches.length} games into the selection list.`);
   }
 
   searchInput.oninput = renderFilteredGames;
