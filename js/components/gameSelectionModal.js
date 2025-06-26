@@ -60,9 +60,16 @@ export function openGameSelectionModal({ night }) {
 
         if (index !== -1) {
           const selected = nights[index].selectedGames ?? [];
-          if (!selected.includes(game.id)) {
-            selected.push(game.id);
+
+          const alreadySelected = selected.some(g => g.gameId === game.id);
+          if (!alreadySelected) {
+            selected.push({
+              gameId: game.id,
+              maxPlayers: game.defaultMaxPlayers || 4,
+              signedUpPlayers: []
+            });
           }
+
           nights[index].selectedGames = selected;
           nights[index].lastModified = Date.now();
           syncAndRender(nights);
@@ -70,6 +77,7 @@ export function openGameSelectionModal({ night }) {
           console.warn("Could not find matching night to update.");
         }
       };
+
 
 
 
