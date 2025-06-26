@@ -40,9 +40,16 @@ export function signUpForGame(night, gameId, playerName) {
 
 export function withdrawFromAllGames(night, userId) {
   night.selectedGames.forEach(game => {
-    game.signedUpPlayers = game.signedUpPlayers.filter(id => id !== userId);
+    const before = game.signedUpPlayers.length;
+    game.signedUpPlayers = game.signedUpPlayers.filter(player => player.userId !== userId);
+    const after = game.signedUpPlayers.length;
+
+    if (before !== after) {
+      console.log(`🧹 Removed ${userId} from ${game.gameId} (${before} → ${after})`);
+    }
   });
 }
+
 
 export function isGameFull(night, gameId) {
   const game = night.selectedGames.find(g => g.gameId === gameId);
