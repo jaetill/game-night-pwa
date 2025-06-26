@@ -1,4 +1,5 @@
 // storage.js
+import { getCurrentUser } from '../auth/auth.js';
 
 const API_BASE = 'https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod';
 

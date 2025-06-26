@@ -1,3 +1,6 @@
+import { getCurrentUser } from '../auth/auth.js';
+
+
 export function createGameNight({ date, time, snacks }) {
   return {
     id: Date.now().toString(),
@@ -7,6 +10,7 @@ export function createGameNight({ date, time, snacks }) {
     rsvps: [],
     suggestions: [],
     selectedGames: [], // now an array of { gameId, maxPlayers, signedUpPlayers }
+    hostUserId: getCurrentUser().userId,
     lastModified: Date.now()
   };
 }
