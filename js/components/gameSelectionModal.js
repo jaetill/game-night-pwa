@@ -52,31 +52,35 @@ export function openGameSelectionModal({ night }) {
       li.textContent = `${game.title} (${game.minPlayers}–${game.maxPlayers})`;
 
       li.onclick = async () => {
-        modal.classList.add('hidden');
-        clearInputs();
+    modal.classList.add('hidden');
+    clearInputs();
 
-        const nights = await loadGameNights();
-        const index = nights.findIndex(n => n.id === night.id);
+    if (onSelect) {
+      onSelect(game);
+      return;
+    }
 
-        if (index !== -1) {
-          const selected = nights[index].selectedGames ?? [];
+    // fallback default logic if no onSelect is provided
+    const nights = await loadGameNights();
+    const index = nights.findIndex(n => n.id === night.id);
 
-          const alreadySelected = selected.some(g => g.gameId === game.id);
-          if (!alreadySelected) {
-            selected.push({
-              gameId: game.id,
-              maxPlayers: game.defaultMaxPlayers || 4,
-              signedUpPlayers: []
-            });
-          }
-
-          nights[index].selectedGames = selected;
-          nights[index].lastModified = Date.now();
-          syncAndRender(nights);
-        } else {
-          console.warn("Could not find matching night to update.");
-        }
-      };
+    if (index !== -1) {
+      const selected = nights[index].selectedGames ?? [];
+      const alreadySelected = selected.some(g => g.gameId === game.id);
+      if (!alreadySelected) {
+        selected.push({
+          gameId: game.id,
+          maxPlayers: game.defaultMaxPlayers || 4,
+          signedUpPlayers: []
+        });
+      }
+      nights[index].selectedGames = selected;
+      nights[index].lastModified = Date.now();
+      syncAndRender(nights);
+    } else {
+      console.warn("Could not find matching night to update.");
+    }
+  };
 
 
 
