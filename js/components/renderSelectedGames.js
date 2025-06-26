@@ -1,6 +1,7 @@
 import { ownedGames, syncGameNights } from '../data/index.js';
 import { signUpForGame, withdrawFromGame, isGameFull } from '../utils/index.js';
 import { renderGameNights } from './renderGameNights.js';
+import { getCurrentUser, isAdmin } from '../auth/auth.js';
 
 export function renderSelectedGames(night, currentUser, nights) {
   const container = document.createElement('div');
@@ -8,15 +9,33 @@ export function renderSelectedGames(night, currentUser, nights) {
 
   night.selectedGames.forEach(({ gameId, maxPlayers, signedUpPlayers }) => {
     const game = ownedGames.find(g => g.id === gameId);
-    console.log('Game lookup:', gameId, ownedGames.find(g => g.id === gameId));
     if (!game) return;
 
     const entry = document.createElement('div');
 
     const info = document.createElement('p');
-    //info.textContent = `${game.title} (${signedUpPlayers.length}/${maxPlayers}): ${signedUpPlayers.join(', ') || 'No one yet'}`;
     const playerNames = signedUpPlayers.map(p => p.name || p.userId);
     info.textContent = `${game.title} (${signedUpPlayers.length}/${maxPlayers}): ${playerNames.join(', ') || 'No one yet'}`;
+
+    // ✅ Admin-only inline remove
+    if (isAdmin(currentUser)) {
+      const removeBtn = document.createElement('button');
+      removeBtn.textContent = '×';
+      removeBtn.setAttribute('aria-label', `Remove ${game.title}`);
+      removeBtn.style.marginLeft = '0.5em';
+      removeBtn.style.background = 'transparent';
+      removeBtn.style.border = 'none';
+      removeBtn.style.cursor = 'pointer';
+      removeBtn.style.color = '#900';
+      removeBtn.style.fontWeight = 'bold';
+      removeBtn.onclick = () => {
+        night.selectedGames = night.selectedGames.filter(g => g.gameId !== gameId);
+        syncGameNights(nights);
+        renderGameNights(nights, currentUser);
+      };
+      info.appendChild(removeBtn);
+    }
+
     entry.appendChild(info);
 
     const img = document.createElement('img');
@@ -25,17 +44,11 @@ export function renderSelectedGames(night, currentUser, nights) {
     img.className = 'game-thumbnail';
     entry.appendChild(img);
 
-    if (night.rsvps.some(u => u.userId === currentUser.userId)) {
-      console.log('RSVPs:', night.rsvps.map(u => u.userId));
-      console.log('Current user:', currentUser.userId);
-      console.log('Selected Games:', night.selectedGames);
+    const isRSVPd = night.rsvps.some(u => u.userId === currentUser.userId);
+    const isSignedUp = signedUpPlayers.some(p => p.userId === currentUser.userId);
+    const isFull = isGameFull(night, gameId);
 
-
-      const isFull = isGameFull(night, gameId);
-      //const isSignedUp = signedUpPlayers.includes(currentUser);
-      const isSignedUp = signedUpPlayers.some(p => p.userId === currentUser.userId);
-
-
+    if (isRSVPd) {
       const button = document.createElement('button');
       button.textContent = isSignedUp ? 'Leave' : isFull ? 'Full' : 'Join';
       button.disabled = isFull && !isSignedUp;
@@ -58,3 +71,5 @@ export function renderSelectedGames(night, currentUser, nights) {
 
   return container;
 }
+// This function renders the selected games for a game night, allowing users to join or leave games,
+// and provides admin controls to remove games. It updates the game night list after any changes.
