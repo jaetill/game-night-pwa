@@ -2,6 +2,7 @@ import { ownedGames } from '../data/index.js';
 import { openGameSelectionModal } from './gameSelectionModal.js';
 import { syncAndRender } from '../utils/index.js';
 import { getCurrentUser } from '../auth/auth.js';
+import { saveGameNights } from '../data/index.js';
 
 /**
  * Renders admin controls for adding games to a game night.
@@ -56,8 +57,7 @@ export function renderAdminActions(night, nights) {
   const updated = nights.filter(n => n.id !== night.id);
   try {
     syncAndRender(updated);
-    const { pushGameNightsToCloud } = await import('../storage.js');
-    await pushGameNightsToCloud(updated);
+    await saveGameNights(updated);
   } catch (err) {
     console.error('❌ Failed to cancel event:', err);
   }
