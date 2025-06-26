@@ -14,7 +14,9 @@ export function renderSelectedGames(night, currentUser, nights) {
     const entry = document.createElement('div');
 
     const info = document.createElement('p');
-    info.textContent = `${game.title} (${signedUpPlayers.length}/${maxPlayers}): ${signedUpPlayers.join(', ') || 'No one yet'}`;
+    //info.textContent = `${game.title} (${signedUpPlayers.length}/${maxPlayers}): ${signedUpPlayers.join(', ') || 'No one yet'}`;
+    const playerNames = signedUpPlayers.map(p => p.name || p.userId);
+    info.textContent = `${game.title} (${signedUpPlayers.length}/${maxPlayers}): ${playerNames.join(', ') || 'No one yet'}`;
     entry.appendChild(info);
 
     const img = document.createElement('img');
@@ -30,7 +32,9 @@ export function renderSelectedGames(night, currentUser, nights) {
 
 
       const isFull = isGameFull(night, gameId);
-      const isSignedUp = signedUpPlayers.includes(currentUser);
+      //const isSignedUp = signedUpPlayers.includes(currentUser);
+      const isSignedUp = signedUpPlayers.some(p => p.userId === currentUser.userId);
+
 
       const button = document.createElement('button');
       button.textContent = isSignedUp ? 'Leave' : isFull ? 'Full' : 'Join';
