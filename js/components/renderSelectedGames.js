@@ -1,4 +1,4 @@
-import { ownedGames, syncGameNights } from '../data/index.js';
+import { ownedGames, saveGameNights } from '../data/index.js';
 import { signUpForGame, withdrawFromGame, isGameFull } from '../utils/index.js';
 import { renderGameNights } from './renderGameNights.js';
 import { getCurrentUser, isAdmin } from '../auth/auth.js';
@@ -30,9 +30,12 @@ export function renderSelectedGames(night, currentUser, nights) {
       removeBtn.style.fontWeight = 'bold';
       removeBtn.onclick = () => {
         night.selectedGames = night.selectedGames.filter(g => g.gameId !== gameId);
-        syncGameNights(nights);
-        renderGameNights(nights, currentUser);
+        (async () => {
+          await saveGameNights(nights);
+          renderGameNights(nights, currentUser);
+        })();
       };
+
       info.appendChild(removeBtn);
     }
 
@@ -59,9 +62,12 @@ export function renderSelectedGames(night, currentUser, nights) {
         } else {
           signUpForGame(night, gameId, currentUser);
         }
-        syncGameNights(nights);
-        renderGameNights(nights, currentUser);
+        (async () => {
+          await saveGameNights(nights);
+          renderGameNights(nights, currentUser);
+        })();
       };
+
 
       entry.appendChild(button);
     }
