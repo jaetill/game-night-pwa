@@ -3,6 +3,10 @@ import { openGameSelectionModal } from './gameSelectionModal.js';
 import { syncAndRender } from '../utils/index.js';
 import { getCurrentUser } from '../auth/auth.js';
 
+/**
+ * Renders the admin game controls section for a given game night.
+ * Allows adding or removing selected games.
+ */
 export function renderAdminGameControls(night, nights) {
   const container = document.createElement('div');
   container.style.marginTop = '0.5em';
@@ -59,5 +63,33 @@ export function renderAdminGameControls(night, nights) {
 
   container.appendChild(list);
   container.appendChild(addGameBtn);
+  return container;
+}
+
+/**
+ * Renders admin-level actions for a given game night,
+ * including editing or canceling the event.
+ */
+export function renderAdminActions(night, nights) {
+  const container = document.createElement('div');
+
+  const editBtn = document.createElement('button');
+  editBtn.textContent = 'Edit';
+  editBtn.onclick = () => {
+    document.getElementById('gameDate').value = night.date;
+    document.getElementById('gameTime').value = night.time;
+    localStorage.setItem('editingNightId', night.id);
+  };
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Cancel Event';
+  cancelBtn.onclick = () => {
+    const updated = nights.filter(n => n.id !== night.id);
+    syncAndRender(updated).catch(console.error);
+  };
+
+  container.appendChild(document.createElement('br'));
+  container.appendChild(editBtn);
+  container.appendChild(cancelBtn);
   return container;
 }
