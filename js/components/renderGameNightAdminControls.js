@@ -16,28 +16,44 @@ export function renderAdminGameControls(night, nights) {
   list.style.margin = '0.5em 0';
   list.style.paddingLeft = '1.2em';
 
-  function updateGameSelectionUI() {
-    list.innerHTML = '';
-    (night.selectedGames || []).forEach(gameObj => {
-      const game = ownedGames.find(g => g.id === gameObj.gameId);
-      if (!game) return;
+function updateGameSelectionUI() {
+  list.innerHTML = '';
+  (night.selectedGames || []).forEach(gameObj => {
+    const game = ownedGames.find(g => g.id === gameObj.gameId);
+    if (!game) return;
 
-      const li = document.createElement('li');
-      li.textContent = game.title;
+    const li = document.createElement('li');
+    li.style.display = 'flex';
+    li.style.alignItems = 'center';
+    li.style.justifyContent = 'space-between';
+    li.style.padding = '0.2em 0';
 
-      const removeBtn = document.createElement('button');
-      removeBtn.textContent = '×';
-      removeBtn.title = 'Remove';
-      removeBtn.style.marginLeft = '0.5em';
-      removeBtn.onclick = () => {
-        night.selectedGames = night.selectedGames.filter(g => g.gameId !== game.id);
-        syncAndRender(nights);
-      };
+    const titleSpan = document.createElement('span');
+    titleSpan.textContent = game.title;
+    titleSpan.style.flexGrow = '1';
 
-      li.appendChild(removeBtn);
-      list.appendChild(li);
-    });
-  }
+    const removeBtn = document.createElement('button');
+    removeBtn.textContent = '×';
+    removeBtn.setAttribute('aria-label', `Remove ${game.title}`);
+    removeBtn.style.background = 'transparent';
+    removeBtn.style.border = 'none';
+    removeBtn.style.color = '#900';
+    removeBtn.style.cursor = 'pointer';
+    removeBtn.style.fontSize = '1.1em';
+    removeBtn.style.padding = '0 0.3em';
+    removeBtn.style.lineHeight = '1';
+    removeBtn.title = 'Remove this game';
+    removeBtn.onclick = () => {
+      night.selectedGames = night.selectedGames.filter(g => g.gameId !== game.id);
+      syncAndRender(nights);
+    };
+
+    li.appendChild(titleSpan);
+    li.appendChild(removeBtn);
+    list.appendChild(li);
+  });
+}
+
 
   updateGameSelectionUI();
 
