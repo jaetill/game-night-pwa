@@ -4,58 +4,12 @@ import { syncAndRender } from '../utils/index.js';
 import { getCurrentUser } from '../auth/auth.js';
 
 /**
- * Renders the admin game controls section for a given game night.
- * Allows adding or removing selected games.
+ * Renders admin controls for adding games to a game night.
+ * Removes any separate UI for removing games (now handled inline).
  */
 export function renderAdminGameControls(night, nights) {
   const container = document.createElement('div');
   container.style.marginTop = '0.5em';
-  container.innerHTML = `<strong>🎯 Games:</strong>`;
-
-  const list = document.createElement('ul');
-  list.style.margin = '0.5em 0';
-  list.style.paddingLeft = '1.2em';
-
-function updateGameSelectionUI() {
-  list.innerHTML = '';
-  (night.selectedGames || []).forEach(gameObj => {
-    const game = ownedGames.find(g => g.id === gameObj.gameId);
-    if (!game) return;
-
-    const li = document.createElement('li');
-    li.style.display = 'flex';
-    li.style.alignItems = 'center';
-    li.style.justifyContent = 'space-between';
-    li.style.padding = '0.2em 0';
-
-    const titleSpan = document.createElement('span');
-    titleSpan.textContent = game.title;
-    titleSpan.style.flexGrow = '1';
-
-    const removeBtn = document.createElement('button');
-    removeBtn.textContent = '×';
-    removeBtn.setAttribute('aria-label', `Remove ${game.title}`);
-    removeBtn.style.background = 'transparent';
-    removeBtn.style.border = 'none';
-    removeBtn.style.color = '#900';
-    removeBtn.style.cursor = 'pointer';
-    removeBtn.style.fontSize = '1.1em';
-    removeBtn.style.padding = '0 0.3em';
-    removeBtn.style.lineHeight = '1';
-    removeBtn.title = 'Remove this game';
-    removeBtn.onclick = () => {
-      night.selectedGames = night.selectedGames.filter(g => g.gameId !== game.id);
-      syncAndRender(nights);
-    };
-
-    li.appendChild(titleSpan);
-    li.appendChild(removeBtn);
-    list.appendChild(li);
-  });
-}
-
-
-  updateGameSelectionUI();
 
   const addGameBtn = document.createElement('button');
   addGameBtn.textContent = 'Add Game';
@@ -77,7 +31,6 @@ function updateGameSelectionUI() {
     });
   };
 
-  container.appendChild(list);
   container.appendChild(addGameBtn);
   return container;
 }
