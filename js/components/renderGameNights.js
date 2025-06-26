@@ -22,6 +22,10 @@ export function renderGameNights(nights, currentUser) {
     header.textContent = `${night.date} @ ${night.time}`;
     li.appendChild(header);
 
+    const hostInfo = document.createElement('p');
+    hostInfo.textContent = `Host: ${night.hostUserId}`;
+    li.appendChild(hostInfo);
+
     const snacks = document.createElement('p');
     snacks.textContent = `Snacks: ${night.snacks || 'None'}`;
     li.appendChild(snacks);
