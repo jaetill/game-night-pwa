@@ -52,10 +52,17 @@ export function renderAdminActions(night, nights) {
 
   const cancelBtn = document.createElement('button');
   cancelBtn.textContent = 'Cancel Event';
-  cancelBtn.onclick = () => {
-    const updated = nights.filter(n => n.id !== night.id);
-    syncAndRender(updated).catch(console.error);
-  };
+  cancelBtn.onclick = async () => {
+  const updated = nights.filter(n => n.id !== night.id);
+  try {
+    syncAndRender(updated);
+    const { pushGameNightsToCloud } = await import('../storage.js');
+    await pushGameNightsToCloud(updated);
+  } catch (err) {
+    console.error('❌ Failed to cancel event:', err);
+  }
+};
+
 
   container.appendChild(document.createElement('br'));
   container.appendChild(editBtn);
