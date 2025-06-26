@@ -1,8 +1,10 @@
-// storage.js
 import { getCurrentUser } from '../auth/auth.js';
 
 const API_BASE = 'https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod';
 
+/**
+ * Ensures a game night object has full structure and valid fields.
+ */
 export function sanitizeNight(night) {
   const selectedGames =
     Array.isArray(night.selectedGames) && typeof night.selectedGames[0] === 'string'
@@ -21,17 +23,18 @@ export function sanitizeNight(night) {
     rsvps: Array.isArray(night.rsvps) ? night.rsvps : [],
     suggestions: Array.isArray(night.suggestions) ? night.suggestions : [],
     hostUserId: night.hostUserId || getCurrentUser().userId,
-    lastModified: typeof night.lastModified === 'number' ? night.lastModified : 0
+    lastModified: typeof night.lastModified === 'number' ? night.lastModified : Date.now()
   };
 }
 
-
+/**
+ * Merges cloud and local game night data using most recent `lastModified`.
+ */
 function mergeNights(cloudNights, localNights) {
   const byId = new Map();
+  const all = [...cloudNights, ...localNights].map(sanitizeNight);
 
-  const allNights = [...cloudNights, ...localNights].map(sanitizeNight);
-
-  allNights.forEach(night => {
+  all.forEach(night => {
     const existing = byId.get(night.id);
     if (!existing || night.lastModified > existing.lastModified) {
       byId.set(night.id, night);
@@ -41,41 +44,55 @@ function mergeNights(cloudNights, localNights) {
   return Array.from(byId.values());
 }
 
+/**
+ * Saves game nights to localStorage.
+ */
+function syncGameNights(nights) {
+  if (!Array.isArray(nights)) {
+    console.warn('⚠️ syncGameNights received non-array data:', nights);
+    return;
+  }
+  localStorage.setItem('gameNights', JSON.stringify(nights));
+}
 
-async function pushGameNightsToCloud(gameNights) {
+/**
+ * Uploads the game nights array to the cloud via S3 upload token.
+ */
+export async function pushGameNightsToCloud(nights) {
   try {
-    // Step 1: Get signed POST fields and URL from your backend
     const res = await fetch(`${API_BASE}/upload-token`);
     if (!res.ok) throw new Error(`Failed to get upload URL: ${res.status}`);
     const { url, fields } = await res.json();
 
-    // Step 2: Build FormData for S3 POST
     const formData = new FormData();
-    for (const [key, value] of Object.entries(fields)) {
-      formData.append(key, value);
-    }
-    formData.append(
-      'file',
-      new Blob([JSON.stringify(gameNights)], { type: 'application/json' })
-    );
+    Object.entries(fields).forEach(([k, v]) => formData.append(k, v));
+    formData.append('file', new Blob([JSON.stringify(nights)], { type: 'application/json' }));
 
-    // Step 3: POST to S3
-    const uploadRes = await fetch(url, {
-      method: 'POST',
-      body: formData
-    });
+    const uploadRes = await fetch(url, { method: 'POST', body: formData });
+    if (!uploadRes.ok) throw new Error(`Upload failed: ${uploadRes.status}`);
 
-    if (!uploadRes.ok) {
-      throw new Error(`Upload failed: ${uploadRes.status}`);
-    }
-
-    console.log('✅ Game nights successfully uploaded via POST.');
+    console.log('✅ Game nights uploaded to cloud.');
   } catch (err) {
-    console.warn('❌ Failed to upload game nights via POST:', err);
+    console.warn('❌ Failed to push to cloud:', err);
   }
 }
 
+/**
+ * Saves nights to both local and cloud, ensuring structure consistency.
+ */
+export async function saveGameNights(nights) {
+  const sanitized = nights.map(sanitizeNight);
+  try {
+    syncGameNights(sanitized);
+    await pushGameNightsToCloud(sanitized);
+  } catch (err) {
+    console.warn('💾 saveGameNights failed:', err);
+  }
+}
 
+/**
+ * Loads cloud and local data, merges, saves locally, and uploads merged set.
+ */
 export async function loadGameNights() {
   try {
     const tokenRes = await fetch(`${API_BASE}/get-token`);
@@ -83,34 +100,17 @@ export async function loadGameNights() {
     const dataRes = await fetch(url);
     const cloudData = await dataRes.json();
 
-    console.log('☁️ Fetched cloudData:', cloudData);
-
-    const localRaw = localStorage.getItem('gameNights') || '[]';
-    const localData = JSON.parse(localRaw);
-
+    const localData = JSON.parse(localStorage.getItem('gameNights') || '[]');
     const merged = mergeNights(cloudData, localData);
 
-    localStorage.setItem('gameNights', JSON.stringify(merged));
+    syncGameNights(merged);
     localStorage.setItem('gameNightsCloud', JSON.stringify(cloudData));
-
     await pushGameNightsToCloud(merged);
 
     return merged;
   } catch (err) {
-    console.warn('🪫 Cloud load failed, falling back to localStorage.', err);
-
-    const fallbackRaw = localStorage.getItem('gameNights') || '[]';
-    const fallbackData = JSON.parse(fallbackRaw);
-
+    console.warn('🪫 Cloud load failed. Using local data.', err);
+    const fallbackData = JSON.parse(localStorage.getItem('gameNights') || '[]');
     return fallbackData.map(sanitizeNight);
   }
-}
-
-export function syncGameNights(nights) {
-  if (!Array.isArray(nights)) {
-    console.warn('⚠️ syncGameNights received non-array data:', nights);
-    return;
-  }
-
-  localStorage.setItem('gameNights', JSON.stringify(nights));
 }
