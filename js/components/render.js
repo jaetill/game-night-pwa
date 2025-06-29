@@ -1,6 +1,6 @@
 import { renderGameNights } from './renderGameNights.js';
 import { renderGlobalHostPanel } from './renderGlobalHostPanel.js';
-import { getCurrentUser } from '../auth/auth.js';
+import { getCurrentUser, setCurrentUser } from '../auth/userStore.js';
 
 export function renderApp({ nights, currentUser }) {
   const root = document.getElementById('app');
@@ -10,7 +10,7 @@ export function renderApp({ nights, currentUser }) {
   }
 
   root.innerHTML = '';
-  renderRoleToggle(root);
+  renderUserSelector(root);
 
   const listContainer = document.createElement('ul');
   listContainer.id = 'gameNightList';
@@ -25,29 +25,33 @@ export function renderApp({ nights, currentUser }) {
 // This function initializes the app by rendering the game nights and admin panel if applicable
 // It checks for the existence of the root element and appends the game night list to it
 
-function renderRoleToggle(root) {
+// renderUserSelector.js
+
+
+export function renderUserSelector(root) {
   const wrapper = document.createElement('div');
   wrapper.style.marginBottom = '1em';
 
   const label = document.createElement('label');
-  label.textContent = 'Viewing as: ';
+  label.textContent = '👤 Active User: ';
 
-  const select = document.createElement('select');
-  ['user', 'admin'].forEach(role => {
-    const option = document.createElement('option');
-    option.value = role;
-    option.textContent = role;
-    select.appendChild(option);
-  });
+  const input = document.createElement('input');
+  input.placeholder = 'e.g. jaetill';
+  input.value = getCurrentUser()?.userId || '';
 
-  select.value = localStorage.getItem('devRole') || 'admin';
+  const saveBtn = document.createElement('button');
+  saveBtn.textContent = 'Switch';
 
-  select.addEventListener('change', () => {
-    localStorage.setItem('devRole', select.value);
-    location.reload(); // Reload to rehydrate currentUser with new role
-  });
+  saveBtn.onclick = () => {
+    const userId = input.value.trim();
+    if (userId) {
+      setCurrentUser({ userId, name: userId });
+      location.reload(); // refresh with new context
+    }
+  };
 
-  label.appendChild(select);
   wrapper.appendChild(label);
+  wrapper.appendChild(input);
+  wrapper.appendChild(saveBtn);
   root.prepend(wrapper);
 }

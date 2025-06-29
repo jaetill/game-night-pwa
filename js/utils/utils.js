@@ -1,4 +1,4 @@
-import { getCurrentUser } from '../auth/auth.js';
+import { getCurrentUser } from '../auth/userStore.js';
 
 
 export function createGameNight({ date, time, snacks }) {

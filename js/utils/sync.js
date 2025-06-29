@@ -1,5 +1,5 @@
 import { loadGameNights, saveGameNights } from '../data/index.js';
-import { getCurrentUser } from '../auth/auth.js';
+import { getCurrentUser } from '../auth/userStore.js';
 import { renderGameNights } from '../components/renderGameNights.js';
 
 /**
