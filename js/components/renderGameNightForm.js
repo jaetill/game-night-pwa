@@ -1,4 +1,4 @@
-import { getCurrentUser } from '../utils/getCurrentUser.js';
+import { getCurrentUser } from '../auth/getCurrentUser.js';
 
 export function renderGameNightForm({ night = null, onSave }) {
   const form = document.createElement('form');
