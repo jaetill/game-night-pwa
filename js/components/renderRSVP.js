@@ -1,46 +1,62 @@
-import { withdrawFromAllGames, syncAndRender } from '../utils/index.js';
+import { withdrawFromAllGames } from '../utils/index.js';
 import { getCurrentUser } from '../auth/auth.js';
+import { saveGameNights } from '../data/index.js';
+import { renderGameNights } from './renderGameNights.js';
+import { sanitizeNight } from '../data/storage.js';
 
 export function renderRSVP(night, nights) {
   const wrapper = document.createElement('div');
+  const currentUser = getCurrentUser();
 
-  // 📝 RSVP Button
-  // ✅ Show RSVP button only if user hasn't RSVP'd
-  const alreadyRSVPd = night.rsvps?.some(r => r.userId === getCurrentUser().userId);
+  if (!currentUser) return wrapper;
+
+  const alreadyRSVPd = night.rsvps?.some(r => r.userId === currentUser.userId);
+
+  // 📝 RSVP Button (only show if not RSVP'd yet)
   if (!alreadyRSVPd) {
     const rsvpBtn = document.createElement('button');
     rsvpBtn.textContent = 'RSVP';
-    rsvpBtn.onclick = () => {
-      const name = prompt(`RSVP name for ${night.date}?`, getCurrentUser().name);
-      if (name) {
-        night.rsvps = night.rsvps || [];
-        night.rsvps.push({ userId: getCurrentUser().userId, name: name.trim() });
+    rsvpBtn.onclick = async () => {
+      const name = prompt(`RSVP name for ${night.date}?`, currentUser.name || '');
+      if (name?.trim()) {
+        night.rsvps = Array.isArray(night.rsvps) ? night.rsvps : [];
+        night.rsvps.push({ userId: currentUser.userId, name: name.trim() });
         night.lastModified = Date.now();
-        syncAndRender(nights);
+        sanitizeNight(night); // ensure selectedGames are objects
+        await saveGameNights(nights);
+        renderGameNights(nights, currentUser);
       }
     };
     wrapper.appendChild(rsvpBtn);
   }
 
-  // 🧾 RSVP List
-  if (night.rsvps?.length) {
+  // 🧾 RSVP List with Cancel Option
+  if (Array.isArray(night.rsvps) && night.rsvps.length > 0) {
     const list = document.createElement('ul');
+
     night.rsvps.forEach((rsvp, i) => {
       const item = document.createElement('li');
       item.textContent = `🎟️ ${rsvp.name}`;
-      if (rsvp.userId === getCurrentUser().userId) {
+
+      if (rsvp.userId === currentUser.userId) {
         const cancelBtn = document.createElement('button');
         cancelBtn.textContent = 'Cancel RSVP';
-        cancelBtn.onclick = () => {
+
+        cancelBtn.onclick = async () => {
           night.rsvps.splice(i, 1);
-          withdrawFromAllGames(night, getCurrentUser().userId); // 👈 cleanup game signups
+          withdrawFromAllGames(night, currentUser);
           night.lastModified = Date.now();
-          syncAndRender(nights);
+          sanitizeNight(night);
+          await saveGameNights(nights);
+          renderGameNights(nights, currentUser);
         };
+
         item.appendChild(cancelBtn);
       }
+
       list.appendChild(item);
     });
+
     wrapper.appendChild(list);
   }
 
