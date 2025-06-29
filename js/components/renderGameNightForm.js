@@ -1,3 +1,5 @@
+import { getCurrentUser } from '../utils/getCurrentUser.js';
+
 export function renderGameNightForm({ night = null, onSave }) {
   const form = document.createElement('form');
   form.style.margin = '1em 0';
