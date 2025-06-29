@@ -56,6 +56,7 @@ export function renderHostActions(night, nights) {
   };
 
 
+
   const cancelBtn = document.createElement('button');
   cancelBtn.textContent = 'Cancel Event';
   cancelBtn.onclick = async () => {

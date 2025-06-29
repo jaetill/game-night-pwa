@@ -19,6 +19,12 @@ export function renderGlobalHostPanel() {
   const createBtn = document.createElement('button');
   createBtn.textContent = '🗓️ Create Game Night';
   createBtn.onclick = () => {
+    const existing = document.getElementById('createNightForm');
+    if (existing) {
+      existing.remove();
+      return;
+    }
+
     renderGameNightForm({
       onSave: async newNight => {
         const nights = await loadGameNights();
@@ -28,6 +34,7 @@ export function renderGlobalHostPanel() {
       }
     });
   };
+
 
 
   scheduler.appendChild(createBtn);
