@@ -1,5 +1,5 @@
 import { withdrawFromAllGames } from '../utils/index.js';
-import { getCurrentUser } from '../auth/auth.js';
+import { getCurrentUser } from '../auth/userStore.js';
 import { saveGameNights } from '../data/index.js';
 import { renderGameNights } from './renderGameNights.js';
 import { sanitizeNight } from '../data/storage.js';

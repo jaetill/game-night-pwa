@@ -1,7 +1,5 @@
-import { ownedGames } from '../data/index.js';
 import { openGameSelectionModal } from './gameSelectionModal.js';
 import { syncAndRender } from '../utils/index.js';
-import { getCurrentUser } from '../auth/auth.js';
 import { saveGameNights } from '../data/index.js';
 
 /**
