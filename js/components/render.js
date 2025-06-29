@@ -18,10 +18,8 @@ export function renderApp({ nights, currentUser }) {
 
   renderGameNights(nights, currentUser);
 
-  const devRole = localStorage.getItem('devRole');
-  if (devRole === 'admin') {
-    renderGlobalAdminPanel();
-  }
+  renderGlobalAdminPanel();
+
 }
 
 // This function initializes the app by rendering the game nights and admin panel if applicable
