@@ -8,7 +8,7 @@ import { saveGameNights } from '../data/index.js';
  * Renders admin controls for adding games to a game night.
  * Removes any separate UI for removing games (now handled inline).
  */
-export function renderAdminGameControls(night, nights) {
+export function renderHostGameControls(night, nights) {
   const container = document.createElement('div');
   container.style.marginTop = '0.5em';
 
@@ -40,7 +40,7 @@ export function renderAdminGameControls(night, nights) {
  * Renders admin-level actions for a given game night,
  * including editing or canceling the event.
  */
-export function renderAdminActions(night, nights) {
+export function renderHostActions(night, nights) {
   const container = document.createElement('div');
 
   const editBtn = document.createElement('button');

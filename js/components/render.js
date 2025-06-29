@@ -1,5 +1,5 @@
 import { renderGameNights } from './renderGameNights.js';
-import { renderGlobalAdminPanel } from './renderGlobalAdminPanel.js';
+import { renderGlobalHostPanel } from './renderGlobalHostPanel.js';
 import { getCurrentUser } from '../auth/auth.js';
 
 export function renderApp({ nights, currentUser }) {
@@ -18,7 +18,7 @@ export function renderApp({ nights, currentUser }) {
 
   renderGameNights(nights, currentUser);
 
-  renderGlobalAdminPanel();
+  renderGlobalHostPanel();
 
 }
 

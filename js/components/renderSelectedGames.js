@@ -17,7 +17,7 @@ export function renderSelectedGames(night, currentUser, nights) {
     const playerNames = signedUpPlayers.map(p => p.name || p.userId);
     info.textContent = `${game.title} (${signedUpPlayers.length}/${maxPlayers}): ${playerNames.join(', ') || 'No one yet'}`;
 
-    // ✅ Admin-only inline remove
+    // ✅ Host-only inline remove
     if (isHost(currentUser, night)) {
       const removeBtn = document.createElement('button');
       removeBtn.textContent = '×';
