@@ -1,5 +1,5 @@
 import {  syncAndRender } from '../utils/index.js';
-import { getCurrentUser } from '../auth/auth.js';
+import { getCurrentUser } from '../auth/userStore.js';
 
 export function renderSuggestions(night, nights) {
   const wrapper = document.createElement('div');

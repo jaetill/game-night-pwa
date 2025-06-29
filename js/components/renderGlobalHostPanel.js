@@ -12,8 +12,16 @@ export function renderGlobalHostPanel() {
   const createBtn = document.createElement('button');
   createBtn.textContent = '🗓️ Create Game Night';
   createBtn.onclick = () => {
-    // invoke your modal or form logic
+    renderGameNightForm({
+      onSave: async newNight => {
+        const nights = await loadGameNights();
+        nights.push(newNight);
+        await saveGameNights(nights);
+        renderGameNights(nights, getCurrentUser());
+      }
+    });
   };
+
 
   scheduler.appendChild(createBtn);
 }

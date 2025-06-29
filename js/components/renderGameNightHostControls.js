@@ -44,10 +44,17 @@ export function renderHostActions(night, nights) {
   const editBtn = document.createElement('button');
   editBtn.textContent = 'Edit';
   editBtn.onclick = () => {
-    document.getElementById('gameDate').value = night.date;
-    document.getElementById('gameTime').value = night.time;
-    localStorage.setItem('editingNightId', night.id);
+    renderGameNightForm({
+      night,
+      onSave: async updated => {
+        const idx = nights.findIndex(n => n.id === updated.id);
+        if (idx !== -1) nights[idx] = updated;
+        await saveGameNights(nights);
+        renderGameNights(nights, getCurrentUser());
+      }
+    });
   };
+
 
   const cancelBtn = document.createElement('button');
   cancelBtn.textContent = 'Cancel Event';
