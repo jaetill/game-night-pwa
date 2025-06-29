@@ -1,4 +1,9 @@
 import { renderGameNightForm } from './renderGameNightForm.js';
+import { renderGameNights } from './renderGameNights.js';
+import { getCurrentUser } from '../auth/userStore.js';
+import { loadGameNights } from '../data/index.js'; 
+import { saveGameNights } from '../data/index.js';
+
 
 export function renderGlobalHostPanel() {
   let scheduler = document.getElementById('schedulerSection');
