@@ -19,8 +19,9 @@ export function getCurrentUser() {
 
 
 // Dev-friendly admin check
-export function isAdmin(user) {
-  return user?.role === 'admin';
-}
+import { isHost } from './permissions.js';
+
+export const isAdmin = (...args) => isHost(...args); // temp alias for backwards compatibility
+
 // This function checks if the current user is an admin based on their role
 // It returns true if the user is an admin, otherwise false

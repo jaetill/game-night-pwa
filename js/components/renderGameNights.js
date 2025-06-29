@@ -2,7 +2,7 @@ import { renderSelectedGames } from './renderSelectedGames.js';
 import { renderRSVP } from './renderRSVP.js';
 import { renderSuggestions } from './renderSuggestions.js';
 import { renderAdminGameControls, renderAdminActions } from './renderGameNightAdminControls.js';
-import { isAdmin } from '../auth/auth.js';
+import { isHost } from '../auth/permissions.js';
 /**
  * Renders a list of game nights with RSVP, suggestions, and admin controls.
  * @param {Array} nights - Array of game night objects.
@@ -41,7 +41,7 @@ export function renderGameNights(nights, currentUser) {
       li.appendChild(selectedGamesUI);
     }
 
-    if (isAdmin(currentUser)) {
+    if (isHost(currentUser, night)) {
       li.appendChild(renderAdminGameControls(night, nights));
       li.appendChild(renderAdminActions(night, nights));
     }

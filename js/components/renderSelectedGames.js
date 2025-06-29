@@ -1,7 +1,7 @@
 import { ownedGames, saveGameNights } from '../data/index.js';
 import { signUpForGame, withdrawFromGame, isGameFull } from '../utils/index.js';
 import { renderGameNights } from './renderGameNights.js';
-import { getCurrentUser, isAdmin } from '../auth/auth.js';
+import { isHost } from '../auth/permissions.js';
 
 export function renderSelectedGames(night, currentUser, nights) {
   const container = document.createElement('div');
@@ -18,7 +18,7 @@ export function renderSelectedGames(night, currentUser, nights) {
     info.textContent = `${game.title} (${signedUpPlayers.length}/${maxPlayers}): ${playerNames.join(', ') || 'No one yet'}`;
 
     // ✅ Admin-only inline remove
-    if (isAdmin(currentUser)) {
+    if (isHost(currentUser, night)) {
       const removeBtn = document.createElement('button');
       removeBtn.textContent = '×';
       removeBtn.setAttribute('aria-label', `Remove ${game.title}`);

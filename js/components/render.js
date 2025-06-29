@@ -2,16 +2,15 @@ import { renderGameNights } from './renderGameNights.js';
 import { renderGlobalAdminPanel } from './renderGlobalAdminPanel.js';
 import { getCurrentUser } from '../auth/auth.js';
 
-export function renderApp({ nights, isAdmin, currentUser }) {
+export function renderApp({ nights, currentUser }) {
   const root = document.getElementById('app');
   if (!root) {
     console.error('No #app element found in DOM.');
     return;
   }
 
-    root.innerHTML = '';
-
-    renderRoleToggle(root);
+  root.innerHTML = '';
+  renderRoleToggle(root);
 
   const listContainer = document.createElement('ul');
   listContainer.id = 'gameNightList';
@@ -19,10 +18,12 @@ export function renderApp({ nights, isAdmin, currentUser }) {
 
   renderGameNights(nights, currentUser);
 
-  if (isAdmin) {
+  const devRole = localStorage.getItem('devRole');
+  if (devRole === 'admin') {
     renderGlobalAdminPanel();
   }
 }
+
 // This function initializes the app by rendering the game nights and admin panel if applicable
 // It checks for the existence of the root element and appends the game night list to it
 
