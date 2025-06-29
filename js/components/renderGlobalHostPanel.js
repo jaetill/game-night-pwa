@@ -1,3 +1,5 @@
+import { renderGameNightForm } from './renderGameNightForm.js';
+
 export function renderGlobalHostPanel() {
   let scheduler = document.getElementById('schedulerSection');
   if (!scheduler) {

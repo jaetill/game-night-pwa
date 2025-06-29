@@ -1,5 +1,6 @@
 export { renderRSVP } from './renderRSVP.js';
 export { renderSuggestions } from './renderSuggestions.js';
+export { renderGameNightForm } from './renderGameNightForm.js';
 //export { renderHostTools } from './renderAdminTools.js';
 export { renderSelectedGames } from './renderSelectedGames.js';
 export { renderGameNights } from './renderGameNights.js';
