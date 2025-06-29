@@ -45,14 +45,27 @@ export function signUpForGame(night, gameId, playerName) {
 export function withdrawFromAllGames(night, user) {
   if (!Array.isArray(night.selectedGames)) return;
 
-  night.selectedGames.forEach(game => {
-    if (Array.isArray(game.signedUpPlayers)) {
-      game.signedUpPlayers = game.signedUpPlayers.filter(p => p.userId !== user.userId);
+  night.selectedGames = night.selectedGames.map(g => {
+    if (typeof g === 'string') {
+      return {
+        gameId: g,
+        maxPlayers: 4,
+        signedUpPlayers: []
+      };
+    } else if (typeof g === 'object' && Array.isArray(g.signedUpPlayers)) {
+      return {
+        ...g,
+        signedUpPlayers: g.signedUpPlayers.filter(p => p.userId !== user.userId)
+      };
     } else {
-      game.signedUpPlayers = [];
+      return {
+        ...g,
+        signedUpPlayers: []
+      };
     }
   });
 }
+
 // This module provides utility functions for managing game nights and player signups
 // It includes functions to create game nights, add/remove games, and manage player signups
 
