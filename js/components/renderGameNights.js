@@ -11,6 +11,23 @@ import { isHost, getUserNightRole } from '../auth/permissions.js';
 
 
 export function renderGameNights(nights, currentUser) {
+  //Testing block until invites come online
+  //TODO: remove this block when invites are implemented
+  nights.forEach(night => {
+    night.invited = night.invited || [];
+
+    const isHostUser = night.hostUserId === currentUser.userId;
+    const isRsvpd = night.rsvps?.some(r => r.userId === currentUser.userId);
+    const alreadyInvited = night.invited.includes(currentUser.userId);
+
+    if (!isHostUser && !isRsvpd && !alreadyInvited) {
+      night.invited.push(currentUser.userId); // 🔧 stub: treat current user as invited
+    }
+  });
+
+
+
+
   const container = document.getElementById('gameNightList');
   container.innerHTML = '';
 
