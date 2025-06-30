@@ -2,7 +2,7 @@ import { loadGameNights, fetchOwnedGames } from './data/index.js';
 import { renderApp } from './components/render.js';
 import { setupEventListeners } from './events/events.js';
 import { Amplify } from 'aws-amplify';
-import * as Auth from 'aws-amplify/auth';
+import * as Auth from '@aws-amplify/auth';
 
 Amplify.configure({
   Auth: {
