@@ -36,7 +36,7 @@ export function renderGameNights(nights, currentUser) {
     const suggestionsUI = renderSuggestions(night, nights);
     li.appendChild(suggestionsUI);
 
-    if (night.selectedGames.length > 0) {
+    if (Object.keys(night.selectedGames).length > 0) {
       const selectedGamesUI = renderSelectedGames(night, currentUser, nights);
       li.appendChild(selectedGamesUI);
     }
