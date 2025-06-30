@@ -3,6 +3,7 @@ import { getCurrentUser } from '../auth/userStore.js';
 import { saveGameNights } from '../data/index.js';
 import { renderGameNights } from './renderGameNights.js';
 import { sanitizeNight } from '../data/storage.js';
+import { DEBUG_MODE } from '../config.js';
 
 export function renderRSVP(night, nights) {
   const wrapper = document.createElement('div');
@@ -71,9 +72,26 @@ export function renderRSVP(night, nights) {
     label.textContent = 'Invited (awaiting RSVP): ';
     inviteesBlock.appendChild(label);
 
-    const list = document.createElement('span');
-    list.textContent = pendingInvites.join(', ');
-    inviteesBlock.appendChild(list);
+
+
+    pendingInvites.forEach(invitedUserId => {
+      const item = document.createElement('div');
+      item.textContent = invitedUserId;
+
+      if (DEBUG_MODE) {
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = 'Remove';
+        removeBtn.onclick = () => {
+          night.invited = night.invited.filter(uid => uid !== invitedUserId);
+          night.lastModified = Date.now();
+          renderGameNights(nights, currentUser);
+        };
+        item.appendChild(removeBtn);
+      }
+
+      inviteesBlock.appendChild(item);
+    });
+
 
     wrapper.appendChild(inviteesBlock);
   }
