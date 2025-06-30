@@ -2,6 +2,7 @@ import { ownedGames, saveGameNights } from '../data/index.js';
 import { joinGame, withdrawFromGame, isGameFull } from '../utils/index.js';
 import { renderGameNights } from './renderGameNights.js';
 import { isHost } from '../auth/permissions.js';
+import { getDisplayName } from '../utils/userDirectory.js';
 
 export function renderSelectedGames(night, currentUser, nights) {
   const container = document.createElement('div');
@@ -17,7 +18,7 @@ export function renderSelectedGames(night, currentUser, nights) {
 
     // Game info line
     const info = document.createElement('p');
-    const playerNames = signedUpPlayers.map(p => p.name || p.userId);
+    const playerNames = signedUpPlayers.map(p => p.name || getDisplayName(p.userId));
     info.textContent = `${game.title} (${signedUpPlayers.length}/${maxPlayers}): ${playerNames.join(', ') || 'No one yet'}`;
 
     // Host-only remove button
