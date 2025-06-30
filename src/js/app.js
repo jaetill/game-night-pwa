@@ -1,12 +1,11 @@
-import { Amplify } from 'aws-amplify';
-//import { Auth } from 'aws-amplify/auth'; // ✅ correct subpath import
-
-
-
-
 import { loadGameNights, fetchOwnedGames } from './data/index.js';
 import { renderApp } from './components/render.js';
 import { setupEventListeners } from './events/events.js';
+import { Amplify } from 'aws-amplify';
+//import  Auth  from '@aws-amplify/auth';
+
+
+//Amplify.addPluggable(Auth);
 
 // 🔧 Configure Amplify Auth (you can also hardcode config inline if not using aws-exports.js)
 Amplify.configure({
