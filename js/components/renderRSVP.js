@@ -22,7 +22,7 @@ export function renderRSVP(night, nights) {
         night.rsvps = Array.isArray(night.rsvps) ? night.rsvps : [];
         night.rsvps.push({ userId: currentUser.userId, name: name.trim() });
         night.lastModified = Date.now();
-        sanitizeNight(night); // ensure selectedGames are objects
+        sanitizeNight(night);
         await saveGameNights(nights);
         renderGameNights(nights, currentUser);
       }
@@ -41,7 +41,6 @@ export function renderRSVP(night, nights) {
       if (rsvp.userId === currentUser.userId) {
         const cancelBtn = document.createElement('button');
         cancelBtn.textContent = 'Cancel RSVP';
-
         cancelBtn.onclick = async () => {
           night.rsvps.splice(i, 1);
           withdrawFromAllGames(night, currentUser);
@@ -50,7 +49,6 @@ export function renderRSVP(night, nights) {
           await saveGameNights(nights);
           renderGameNights(nights, currentUser);
         };
-
         item.appendChild(cancelBtn);
       }
 
@@ -58,6 +56,26 @@ export function renderRSVP(night, nights) {
     });
 
     wrapper.appendChild(list);
+  }
+
+  // ✉️ Invitee Display (only if any pending invites exist)
+  const pendingInvites = (night.invited || []).filter(
+    invitedUserId => !night.rsvps?.some(r => r.userId === invitedUserId)
+  );
+
+  if (pendingInvites.length > 0) {
+    const inviteesBlock = document.createElement('div');
+    inviteesBlock.className = 'invited-users';
+
+    const label = document.createElement('strong');
+    label.textContent = 'Invited (awaiting RSVP): ';
+    inviteesBlock.appendChild(label);
+
+    const list = document.createElement('span');
+    list.textContent = pendingInvites.join(', ');
+    inviteesBlock.appendChild(list);
+
+    wrapper.appendChild(inviteesBlock);
   }
 
   return wrapper;

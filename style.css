@@ -120,3 +120,11 @@ ul {
   color: #92400e;
 }
 
+.invited-users {
+  font-size: 0.85em;
+  color: #666;
+  margin-top: 0.5em;
+}
+.invited-users strong {
+  color: #444;
+}
