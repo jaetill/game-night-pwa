@@ -29,18 +29,23 @@ const handleLogin = () => {
 
 async function init() {
   try {
-    const user = await Auth.currentAuthenticatedUser();
+    const session = await fetchAuthSession();
+    const user = session.tokens?.idToken?.payload?.username
+      ? { username: session.tokens.idToken.payload.username }
+      : null;
+
     document.getElementById('login-button').addEventListener('click', handleLogin);
 
-    const username = user.username || 'default';
+    if (!user) throw new Error('No user');
+
     const nights = await loadGameNights();
-    await fetchOwnedGames(username);
+    await fetchOwnedGames(user.username);
 
     renderApp({ nights, currentUser: user });
     setupEventListeners();
   } catch (err) {
     console.warn('User not signed in. Redirecting to login...');
-    Auth.federatedSignIn(); // Redirect to Cognito Hosted UI
+    Auth.federatedSignIn();
   }
 }
 
