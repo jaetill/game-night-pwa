@@ -16,15 +16,14 @@ export function renderHostGameControls(night, nights) {
     openGameSelectionModal({
       night,
       onSelect: game => {
-        night.selectedGames = night.selectedGames || [];
-        const alreadySelected = night.selectedGames.some(g => g.gameId === game.id);
-        if (!alreadySelected) {
-          night.selectedGames.push({
-            gameId: game.id,
+        night.selectedGames = night.selectedGames || {};
+        if (!night.selectedGames[game.id]) {
+          night.selectedGames[game.id] = {
             maxPlayers: game.defaultMaxPlayers || 4,
             signedUpPlayers: []
-          });
+          };
         }
+
         syncAndRender(nights);
       }
     });

@@ -44,7 +44,7 @@ export function joinGame(night, gameId) {
     return false;
   }
 
-  const game = night.selectedGames.find(g => g.gameId === gameId);
+ const game = night.selectedGames[gameId];
   if (!game) {
     console.warn('Game not found in this night.');
     return false;
@@ -75,13 +75,13 @@ export function withdrawFromAllGames(night, user) {
 
 
 export function isGameFull(night, gameId) {
-  const game = night.selectedGames.find(g => g.gameId === gameId);
+  const game = night.selectedGames[gameId];
   if (!game) return false;
   return game.signedUpPlayers.length >= game.maxPlayers;
 }
 
 export function withdrawFromGame(night, gameId, user) {
-  const game = night.selectedGames.find(g => g.gameId === gameId);
+  const game = night.selectedGames[gameId];
   if (!game) return;
 
   game.signedUpPlayers = game.signedUpPlayers.filter(

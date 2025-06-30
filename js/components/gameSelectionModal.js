@@ -78,18 +78,14 @@ export function openGameSelectionModal({ night, onSelect }) {
         const index = nights.findIndex(n => n.id === night.id);
 
         if (index !== -1) {
-          const selected = nights[index].selectedGames ?? [];
-          const alreadySelected = selected.some(g => g.gameId === game.id);
-
-          if (!alreadySelected) {
-            selected.push({
-              gameId: game.id,
+          nights[index].selectedGames = nights[index].selectedGames || {};
+          if (!nights[index].selectedGames[game.id]) {
+            nights[index].selectedGames[game.id] = {
               maxPlayers: game.defaultMaxPlayers || 4,
               signedUpPlayers: []
-            });
+            };
           }
 
-          nights[index].selectedGames = selected;
           nights[index].lastModified = Date.now();
           syncAndRender(nights);
         } else {

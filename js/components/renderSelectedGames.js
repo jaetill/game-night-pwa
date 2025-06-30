@@ -7,17 +7,20 @@ export function renderSelectedGames(night, currentUser, nights) {
   const container = document.createElement('div');
   container.className = 'selected-games';
 
-  night.selectedGames.forEach(({ gameId, maxPlayers, signedUpPlayers }) => {
+  Object.entries(night.selectedGames).forEach(([gameId, gameData]) => {
+    const { maxPlayers, signedUpPlayers } = gameData;
     const game = ownedGames.find(g => g.id === gameId);
     if (!game) return;
 
     const entry = document.createElement('div');
+    entry.className = 'game-entry';
 
+    // Game info line
     const info = document.createElement('p');
     const playerNames = signedUpPlayers.map(p => p.name || p.userId);
     info.textContent = `${game.title} (${signedUpPlayers.length}/${maxPlayers}): ${playerNames.join(', ') || 'No one yet'}`;
 
-    // ✅ Host-only inline remove
+    // Host-only remove button
     if (isHost(currentUser, night)) {
       const removeBtn = document.createElement('button');
       removeBtn.textContent = '×';
@@ -28,12 +31,11 @@ export function renderSelectedGames(night, currentUser, nights) {
       removeBtn.style.cursor = 'pointer';
       removeBtn.style.color = '#900';
       removeBtn.style.fontWeight = 'bold';
-      removeBtn.onclick = () => {
-        night.selectedGames = night.selectedGames.filter(g => g.gameId !== gameId);
-        (async () => {
-          await saveGameNights(nights);
-          renderGameNights(nights, currentUser);
-        })();
+
+      removeBtn.onclick = async () => {
+        delete night.selectedGames[gameId];
+        await saveGameNights(nights);
+        renderGameNights(nights, currentUser);
       };
 
       info.appendChild(removeBtn);
@@ -41,12 +43,14 @@ export function renderSelectedGames(night, currentUser, nights) {
 
     entry.appendChild(info);
 
+    // Thumbnail
     const img = document.createElement('img');
     img.src = game.thumbnail;
     img.alt = game.title;
     img.className = 'game-thumbnail';
     entry.appendChild(img);
 
+    // Join/Leave Button
     const isRSVPd = night.rsvps.some(u => u.userId === currentUser.userId);
     const isSignedUp = signedUpPlayers.some(p => p.userId === currentUser.userId);
     const isFull = isGameFull(night, gameId);
@@ -56,18 +60,15 @@ export function renderSelectedGames(night, currentUser, nights) {
       button.textContent = isSignedUp ? 'Leave' : isFull ? 'Full' : 'Join';
       button.disabled = isFull && !isSignedUp;
 
-      button.onclick = () => {
+      button.onclick = async () => {
         if (isSignedUp) {
           withdrawFromGame(night, gameId, currentUser);
         } else {
-          joinGame(night, gameId)
+          joinGame(night, gameId);
         }
-        (async () => {
-          await saveGameNights(nights);
-          renderGameNights(nights, currentUser);
-        })();
+        await saveGameNights(nights);
+        renderGameNights(nights, currentUser);
       };
-
 
       entry.appendChild(button);
     }
@@ -77,5 +78,3 @@ export function renderSelectedGames(night, currentUser, nights) {
 
   return container;
 }
-// This function renders the selected games for a game night, allowing users to join or leave games,
-// and provides admin controls to remove games. It updates the game night list after any changes.

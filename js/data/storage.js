@@ -6,16 +6,22 @@ const API_BASE = 'https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod';
  * Ensures a game night object has full structure and valid fields.
  */
 export function sanitizeNight(night) {
-  const selectedGames =
-    Array.isArray(night.selectedGames) && typeof night.selectedGames[0] === 'string'
-      ? night.selectedGames.map(gameId => ({
-          gameId,
-          maxPlayers: 4,
-          signedUpPlayers: []
-        }))
-      : Array.isArray(night.selectedGames)
-        ? night.selectedGames
-        : [];
+  let selectedGames = {};
+
+  if (Array.isArray(night.selectedGames)) {
+    night.selectedGames.forEach(g => {
+      if (typeof g === 'string') {
+        selectedGames[g] = { maxPlayers: 4, signedUpPlayers: [] };
+      } else if (g.gameId) {
+        selectedGames[g.gameId] = {
+          maxPlayers: g.maxPlayers || 4,
+          signedUpPlayers: Array.isArray(g.signedUpPlayers) ? g.signedUpPlayers : []
+        };
+      }
+    });
+  } else if (typeof night.selectedGames === 'object' && night.selectedGames !== null) {
+    selectedGames = night.selectedGames;
+  }
 
   return {
     ...night,
@@ -26,6 +32,7 @@ export function sanitizeNight(night) {
     lastModified: typeof night.lastModified === 'number' ? night.lastModified : Date.now()
   };
 }
+
 
 /**
  * Merges cloud and local game night data using most recent `lastModified`.

@@ -1,6 +1,4 @@
 import { getCurrentUser } from '../auth/userStore.js';
-import { loadGameNights, saveGameNights } from '../data/index.js';
-import { renderGameNights } from './renderGameNights.js';
 
 export function renderGameNightForm({ night = null, onSave }) {
   const scheduler = document.getElementById('schedulerSection');
