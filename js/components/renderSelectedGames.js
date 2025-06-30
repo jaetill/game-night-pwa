@@ -1,5 +1,5 @@
 import { ownedGames, saveGameNights } from '../data/index.js';
-import { signUpForGame, withdrawFromGame, isGameFull } from '../utils/index.js';
+import { joinGame, withdrawFromGame, isGameFull } from '../utils/index.js';
 import { renderGameNights } from './renderGameNights.js';
 import { isHost } from '../auth/permissions.js';
 
@@ -60,7 +60,7 @@ export function renderSelectedGames(night, currentUser, nights) {
         if (isSignedUp) {
           withdrawFromGame(night, gameId, currentUser);
         } else {
-          signUpForGame(night, gameId, currentUser);
+          joinGame(night, gameId)
         }
         (async () => {
           await saveGameNights(nights);

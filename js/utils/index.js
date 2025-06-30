@@ -1,2 +1,2 @@
-export { withdrawFromAllGames, createGameNight, addSelectedGame, removeSelectedGame, signUpForGame, isGameFull, withdrawFromGame } from './utils.js';
+export { withdrawFromAllGames, createGameNight, addSelectedGame, removeSelectedGame, joinGame, isGameFull, withdrawFromGame } from './utils.js';
 export { syncAndRender } from './sync.js';
