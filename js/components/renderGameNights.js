@@ -33,13 +33,13 @@ export function renderGameNights(nights, currentUser, expandedNightIds = new Set
       if (night.location) {
         const locationLine = document.createElement('div');
         locationLine.textContent = `📍 Location: ${night.location}`;
-        wrapper.appendChild(locationLine);
+        li.appendChild(locationLine);
       }
 
       if (night.description) {
         const descLine = document.createElement('div');
         descLine.textContent = `📝 ${night.description}`;
-        wrapper.appendChild(descLine);
+        li.appendChild(descLine);
       }
 
 
