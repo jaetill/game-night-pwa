@@ -10,6 +10,7 @@ export function renderHostGameControls(night, nights) {
   const container = document.createElement('div');
   container.style.marginTop = '0.5em';
 
+  // --- Add Game Button (already exists) ---
   const addGameBtn = document.createElement('button');
   addGameBtn.textContent = 'Add Game';
   addGameBtn.onclick = () => {
@@ -23,13 +24,47 @@ export function renderHostGameControls(night, nights) {
             signedUpPlayers: []
           };
         }
-
         syncAndRender(nights);
       }
     });
   };
-
   container.appendChild(addGameBtn);
+
+  // --- Invite User UI ---
+  const inviteLabel = document.createElement('label');
+  inviteLabel.textContent = 'Invite user by ID: ';
+  inviteLabel.style.marginLeft = '1em';
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = 'e.g. eli456';
+  input.style.marginRight = '0.5em';
+
+  const inviteBtn = document.createElement('button');
+  inviteBtn.textContent = '+';
+  inviteBtn.onclick = () => {
+    const userId = input.value.trim();
+    if (!userId) return;
+
+    night.invited = night.invited || [];
+    const alreadyThere =
+      night.rsvps.some(r => r.userId === userId) ||
+      night.invited.includes(userId);
+
+    if (!alreadyThere) {
+      night.invited.push(userId);
+      night.lastModified = Date.now();
+      syncAndRender(nights);
+    }
+
+    input.value = ''; // reset after invite
+  };
+
+  inviteLabel.appendChild(input);
+  inviteLabel.appendChild(inviteBtn);
+  container.appendChild(document.createElement('br'));
+  container.appendChild(inviteLabel);
+
   return container;
 }
 
