@@ -6,6 +6,11 @@ import { Amplify } from 'aws-amplify';
 import * as Auth from '@aws-amplify/auth';
 import { Hub } from 'aws-amplify/utils';
 
+console.log('🔧 Amplify versions:',
+  (await import('aws-amplify/package.json')).version,
+  (await import('@aws-amplify/auth/package.json')).version
+);
+
 console.log('🔍 Auth module keys:', Object.keys(Auth)); // Show available methods
 
 // 🔊 Listen to Amplify Auth events
