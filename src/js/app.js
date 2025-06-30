@@ -1,13 +1,19 @@
 import { loadGameNights, fetchOwnedGames } from './data/index.js';
 import { renderApp } from './components/render.js';
 import { setupEventListeners } from './events/events.js';
+
 import { Amplify } from 'aws-amplify';
-import * as Auth from '@aws-amplify/auth'; // 👈 Crucial for initializing the Auth module
+import * as Auth from '@aws-amplify/auth';
+import { Hub } from 'aws-amplify/utils';
 
+console.log('🔍 Auth module keys:', Object.keys(Auth)); // Show available methods
 
-console.log('Auth module:', Auth);
+// 🔊 Listen to Amplify Auth events
+Hub.listen('auth', ({ payload }) => {
+  console.log(`[📡 Hub] Auth event: ${payload.event}`, payload);
+});
 
-// Configure Amplify (includes Auth + OAuth)
+// 🔧 Configure Amplify
 Amplify.configure({
   Auth: {
     region: 'us-east-2',
@@ -24,28 +30,33 @@ Amplify.configure({
 });
 
 const handleLogin = () => {
-  Auth.federatedSignIn();
+  console.log('📤 Initiating federated sign-in...');
+  Auth.federatedSignIn({ provider: 'COGNITO' }).catch(err =>
+    console.error('❌ Federated sign-in failed:', err)
+  );
 };
 
 async function init() {
+  console.log('🚀 App initializing...');
+
   try {
-    const session = await fetchAuthSession();
-    const user = session.tokens?.idToken?.payload?.username
-      ? { username: session.tokens.idToken.payload.username }
-      : null;
+    console.log('🔄 Attempting to complete OAuth redirect...');
+    await Auth.handleRedirect();
+
+    const user = await Auth.currentAuthenticatedUser();
+    console.log('✅ User authenticated:', user);
 
     document.getElementById('login-button').addEventListener('click', handleLogin);
 
-    if (!user) throw new Error('No user');
-
+    const username = user.username || 'default';
     const nights = await loadGameNights();
-    await fetchOwnedGames(user.username);
+    await fetchOwnedGames(username);
 
     renderApp({ nights, currentUser: user });
     setupEventListeners();
   } catch (err) {
-    console.warn('User not signed in. Redirecting to login...');
-    Auth.federatedSignIn();
+    console.warn('⚠️ No active user found or redirect failed:', err);
+    Auth.federatedSignIn(); // Start login flow again
   }
 }
 
