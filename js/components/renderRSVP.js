@@ -12,9 +12,11 @@ export function renderRSVP(night, nights) {
   if (!currentUser) return wrapper;
 
   const alreadyRSVPd = night.rsvps?.some(r => r.userId === currentUser.userId);
+  const alreadyDeclined = night.declined?.includes(currentUser.userId);
+  const isInvited = night.invited?.includes(currentUser.userId);
 
-  // 📝 RSVP Button (only show if not RSVP'd yet)
-  if (!alreadyRSVPd) {
+  // 📝 RSVP Button
+  if (!alreadyRSVPd && !alreadyDeclined && isInvited) {
     const rsvpBtn = document.createElement('button');
     rsvpBtn.textContent = 'RSVP';
     rsvpBtn.onclick = async () => {
@@ -29,6 +31,21 @@ export function renderRSVP(night, nights) {
       }
     };
     wrapper.appendChild(rsvpBtn);
+  }
+
+  // ❌ Not Attending Button
+  if (!alreadyRSVPd && isInvited && !alreadyDeclined) {
+    const declineBtn = document.createElement('button');
+    declineBtn.textContent = 'Not Attending';
+    declineBtn.onclick = async () => {
+      night.declined = Array.isArray(night.declined) ? night.declined : [];
+      night.declined.push(currentUser.userId);
+      night.lastModified = Date.now();
+      sanitizeNight(night);
+      await saveGameNights(nights);
+      renderGameNights(nights, currentUser);
+    };
+    wrapper.appendChild(declineBtn);
   }
 
   // 🧾 RSVP List with Cancel Option
@@ -59,9 +76,11 @@ export function renderRSVP(night, nights) {
     wrapper.appendChild(list);
   }
 
-  // ✉️ Invitee Display (only if any pending invites exist)
+  // ✉️ Pending Invites (excluding RSVP'd and Declined)
   const pendingInvites = (night.invited || []).filter(
-    invitedUserId => !night.rsvps?.some(r => r.userId === invitedUserId)
+    invitedUserId =>
+      !night.rsvps?.some(r => r.userId === invitedUserId) &&
+      !night.declined?.includes(invitedUserId)
   );
 
   if (pendingInvites.length > 0) {
@@ -69,15 +88,14 @@ export function renderRSVP(night, nights) {
     inviteesBlock.className = 'invited-users';
 
     const label = document.createElement('strong');
-    label.textContent = 'Invited (awaiting RSVP): ';
+    label.textContent = 'Invited (awaiting RSVP):';
     inviteesBlock.appendChild(label);
-
-
 
     pendingInvites.forEach(invitedUserId => {
       const item = document.createElement('div');
-      item.textContent = invitedUserId;
+      item.textContent = ` ${invitedUserId}`;
 
+      // 🚧 Dev-only: Remove Invitee (cleanup before real deployment)
       if (DEBUG_MODE) {
         const removeBtn = document.createElement('button');
         removeBtn.textContent = 'Remove';
@@ -91,7 +109,6 @@ export function renderRSVP(night, nights) {
 
       inviteesBlock.appendChild(item);
     });
-
 
     wrapper.appendChild(inviteesBlock);
   }

@@ -7,9 +7,11 @@ export function createGameNight({ date, time, snacks }) {
     date,
     time,
     snacks,
+    invited: [],
     rsvps: [],
+    declined: [],
     suggestions: [],
-    selectedGames: [], // now an array of { gameId, maxPlayers, signedUpPlayers }
+    selectedGames: [], // now an map of { gameId: maxPlayers, signedUpPlayers }
     hostUserId: getCurrentUser().userId,
     lastModified: Date.now()
   };

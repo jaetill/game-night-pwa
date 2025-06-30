@@ -26,7 +26,9 @@ export function sanitizeNight(night) {
   return {
     ...night,
     selectedGames,
+    invited: Array.isArray(night.invited) ? night.invited : [],
     rsvps: Array.isArray(night.rsvps) ? night.rsvps : [],
+    declined: Array.isArray(night.declined) ? night.declined : [],
     suggestions: Array.isArray(night.suggestions) ? night.suggestions : [],
     hostUserId: night.hostUserId || getCurrentUser().userId,
     lastModified: typeof night.lastModified === 'number' ? night.lastModified : Date.now()
