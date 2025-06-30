@@ -7,6 +7,8 @@ export function createGameNight({ date, time, snacks }) {
     date,
     time,
     snacks,
+    description: '',        // Optional
+    location: '',           // Required
     invited: [],
     rsvps: [],
     declined: [],

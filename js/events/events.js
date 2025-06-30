@@ -16,8 +16,15 @@ export function setupEventListeners() {
     const date = document.getElementById('gameDate')?.value;
     const time = document.getElementById('gameTime')?.value;
     const snacks = document.getElementById('snackNotes')?.value;
+    const location = document.getElementById('location')?.value.trim();
+    const description = document.getElementById('description')?.value.trim();
 
-    const nights = await loadGameNights(); // ✅ Await the async function
+    if (!location) {
+      alert('Please provide a location for the game night.');
+      return;
+    }
+
+    const nights = await loadGameNights();
 
     const editingId = localStorage.getItem('editingNightId');
 
@@ -28,18 +35,18 @@ export function setupEventListeners() {
           ...nights[index],
           date,
           time,
-          snacks
+          snacks,
+          location,
+          description
         };
       }
       localStorage.removeItem('editingNightId');
     } else {
-      const newNight = createGameNight({ date, time, snacks });
-      nights.push(newNight);
+      const newNight = createGameNight({ date, time, snacks, location, description });
       const existing = nights.find(n => n.id === newNight.id);
       if (!existing) {
         nights.push(newNight);
       }
-
     }
 
     syncAndRender(nights);

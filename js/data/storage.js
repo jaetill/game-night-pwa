@@ -26,6 +26,8 @@ export function sanitizeNight(night) {
   return {
     ...night,
     selectedGames,
+    description: night.description || '',
+    location: night.location || '', // Enforce this later via UI
     invited: Array.isArray(night.invited) ? night.invited : [],
     rsvps: Array.isArray(night.rsvps) ? night.rsvps : [],
     declined: Array.isArray(night.declined) ? night.declined : [],

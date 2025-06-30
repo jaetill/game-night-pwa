@@ -30,6 +30,19 @@ export function renderGameNights(nights, currentUser, expandedNightIds) {
 
     // Summary or Detail content
     if (isExpanded) {
+      if (night.location) {
+        const locationLine = document.createElement('div');
+        locationLine.textContent = `📍 Location: ${night.location}`;
+        wrapper.appendChild(locationLine);
+      }
+
+      if (night.description) {
+        const descLine = document.createElement('div');
+        descLine.textContent = `📝 ${night.description}`;
+        wrapper.appendChild(descLine);
+      }
+
+
       const rsvpUI = renderRSVP(night, nights);
       li.appendChild(rsvpUI);
 
