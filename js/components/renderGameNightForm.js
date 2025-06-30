@@ -42,6 +42,20 @@ export function renderGameNightForm({ night = null, onSave }) {
   timeInput.style.marginBottom = '0.5em';
   timeInput.style.display = 'block';
 
+  const locationInput = document.createElement('input');
+  locationInput.type = 'text';
+  locationInput.required = true;
+  locationInput.placeholder = '123 Maple Lane or Zoom link';
+  locationInput.value = night?.location || '';
+  locationInput.style.marginBottom = '0.5em';
+  locationInput.style.display = 'block';
+
+  const descriptionInput = document.createElement('textarea');
+  descriptionInput.placeholder = 'Casual night, bring your favorites!';
+  descriptionInput.value = night?.description || '';
+  descriptionInput.style.marginBottom = '0.5em';
+  descriptionInput.style.display = 'block';
+
   const submitBtn = document.createElement('button');
   submitBtn.type = 'submit';
   submitBtn.textContent = night ? 'Update Night' : 'Create Night';
@@ -53,7 +67,16 @@ export function renderGameNightForm({ night = null, onSave }) {
   cancelBtn.style.marginLeft = '0.5em';
   cancelBtn.onclick = () => form.remove();
 
-  form.append(heading, dateInput, timeInput, submitBtn, cancelBtn);
+  form.append(
+  heading,
+  dateInput,
+  timeInput,
+  locationInput,
+  descriptionInput,
+  submitBtn,
+  cancelBtn
+);
+
   scheduler.appendChild(form);
 
   form.onsubmit = async e => {
@@ -64,6 +87,8 @@ export function renderGameNightForm({ night = null, onSave }) {
       id: night?.id || crypto.randomUUID(),
       date: dateInput.value,
       time: timeInput.value,
+      location: locationInput.value.trim(),
+      description: descriptionInput.value.trim(),
       hostUserId: night?.hostUserId || currentUser.userId,
       selectedGames: night?.selectedGames || [],
       rsvps: night?.rsvps || [],
