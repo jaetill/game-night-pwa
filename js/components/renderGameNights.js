@@ -2,7 +2,7 @@ import { renderSelectedGames } from './renderSelectedGames.js';
 import { renderRSVP } from './renderRSVP.js';
 import { renderSuggestions } from './renderSuggestions.js';
 import { renderHostGameControls, renderHostActions } from './renderGameNightHostControls.js';
-import { isHost } from '../auth/permissions.js';
+import { isHost, getUserNightRole } from '../auth/permissions.js';
 /**
  * Renders a list of game nights with RSVP, suggestions, and admin controls.
  * @param {Array} nights - Array of game night objects.
@@ -28,7 +28,7 @@ export function renderGameNights(nights, currentUser) {
     const badgeText = getUserNightRole(night, currentUser);
     if (badgeText) {
       const badge = document.createElement('span');
-      badge.className = 'user-role-badge';
+      badge.className = `user-role-badge ${badgeText}`; // Note: adds class for per-role styling
       badge.textContent = badgeText;
       hostInfo.appendChild(badge);
     }
