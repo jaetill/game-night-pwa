@@ -5,7 +5,7 @@ import { renderSelectedGames } from './renderSelectedGames.js';
 import { renderHostGameControls, renderHostActions } from './renderGameNightHostControls.js';
 import { isHost } from '../auth/permissions.js';
 
-export function renderGameNights(nights, currentUser, expandedNightIds) {
+export function renderGameNights(nights, currentUser, expandedNightIds = new Set()) {
   const container = document.getElementById('gameNightList');
   container.innerHTML = '';
 
