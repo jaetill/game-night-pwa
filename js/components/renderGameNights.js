@@ -24,7 +24,18 @@ export function renderGameNights(nights, currentUser) {
 
     const hostInfo = document.createElement('p');
     hostInfo.textContent = `Host: ${night.hostUserId}`;
+
+    const badgeText = getUserNightRole(night, currentUser);
+    if (badgeText) {
+      const badge = document.createElement('span');
+      badge.className = 'user-role-badge';
+      badge.textContent = badgeText;
+      hostInfo.appendChild(badge);
+    }
+
     li.appendChild(hostInfo);
+
+
 
     const snacks = document.createElement('p');
     snacks.textContent = `Snacks: ${night.snacks || 'None'}`;
