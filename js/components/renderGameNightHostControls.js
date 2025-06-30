@@ -1,6 +1,9 @@
 import { openGameSelectionModal } from './gameSelectionModal.js';
 import { syncAndRender } from '../utils/index.js';
 import { saveGameNights } from '../data/index.js';
+import { renderGameNightForm } from './renderGameNightForm.js';
+import { getCurrentUser } from '../auth/index.js';
+import { renderGameNights } from './renderGameNights.js';
 
 /**
  * Renders admin controls for adding games to a game night.
