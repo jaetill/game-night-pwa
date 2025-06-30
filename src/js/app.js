@@ -4,15 +4,14 @@ import { setupEventListeners } from './events/events.js';
 
 import { Amplify, Auth, Hub } from 'aws-amplify';
 
+console.log('🔍 Starting app…', { search: window.location.search });
 
-
-
-// 🔊 Log all auth-related events from Amplify
+// Hub logger
 Hub.listen('auth', ({ payload }) => {
-  console.log(`[📡 Hub] Auth event: ${payload.event}`, payload);
+  console.log(`[Hub]`, payload.event, payload);
 });
 
-// 🔧 Configure Amplify
+// Amplify config
 Amplify.configure({
   Auth: {
     region: 'us-east-2',
@@ -20,38 +19,54 @@ Amplify.configure({
     userPoolWebClientId: '7rk583gdoculg0fupv594s53r9',
     oauth: {
       domain: 'us-east-2xneejzadj.auth.us-east-2.amazoncognito.com',
-      scope: ['openid', 'email', 'profile'],
+      scope: ['openid','email','profile'],
       redirectSignIn: 'https://jaetill.github.io/game-night-pwa/',
-      redirectSignOut: 'https://jaetill.github.io/game-night-pwa/',
+      redirectSignOut:'https://jaetill.github.io/game-night-pwa/',
       responseType: 'code'
     }
   }
 });
 
-// 🌐 Trigger hosted UI login
+const isCallback = /[?&]code=/.test(window.location.search);
+
 const handleLogin = () => {
-  console.log('📤 Federated sign-in triggered');
+  console.log('📤 federatedSignIn() → redirecting to Cognito Hosted UI');
   Auth.federatedSignIn();
 };
 
-// 🚀 App initialization
 async function init() {
-  console.log('🚦 App loaded, checking authentication...');
-  document.getElementById('login-button').addEventListener('click', handleLogin);
+  console.log('🚦 init()', { isCallback });
+  document.getElementById('login-button')
+          .addEventListener('click', handleLogin);
 
+  // 1) If we’re on a code=… callback URL, try to settle the session
+  if (isCallback) {
+    console.log('⏳ Detected OAuth callback – exchanging code for tokens…');
+    try {
+      const user = await Auth.currentAuthenticatedUser();
+      console.log('✅ Session restored from callback:', user);
+    } catch (err) {
+      console.error('❌ Callback handling failed, redirecting again:', err);
+      handleLogin();
+      return;
+    }
+  }
+
+  // 2) Regular path: check if already signed in
   try {
     const user = await Auth.currentAuthenticatedUser();
-    console.log('✅ User authenticated:', user);
+    console.log('✅ Already authenticated:', user);
 
-    const username = user.username || 'default';
     const nights = await loadGameNights();
-    await fetchOwnedGames(username);
-
+    await fetchOwnedGames(user.username);
     renderApp({ nights, currentUser: user });
     setupEventListeners();
   } catch (err) {
-    console.warn('⚠️ Not signed in—redirecting to login:', err);
-    handleLogin();
+    console.warn('⚠️ Not authenticated yet:', err);
+    // Only redirect if we’re not in a callback
+    if (!isCallback) {
+      handleLogin();
+    }
   }
 }
 
