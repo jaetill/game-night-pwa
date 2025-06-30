@@ -2,8 +2,12 @@ import { loadGameNights, fetchOwnedGames } from './data/index.js';
 import { renderApp } from './components/render.js';
 import { setupEventListeners } from './events/events.js';
 import { Amplify } from 'aws-amplify';
-import * as Auth from '@aws-amplify/auth';
+import * as Auth from '@aws-amplify/auth'; // 👈 Crucial for initializing the Auth module
 
+
+console.log('Auth module:', Auth);
+
+// Configure Amplify (includes Auth + OAuth)
 Amplify.configure({
   Auth: {
     region: 'us-east-2',
@@ -14,9 +18,9 @@ Amplify.configure({
       scope: ['openid', 'email', 'profile'],
       redirectSignIn: 'https://jaetill.github.io/game-night-pwa/',
       redirectSignOut: 'https://jaetill.github.io/game-night-pwa/',
-      responseType: 'code',
-    },
-  },
+      responseType: 'code'
+    }
+  }
 });
 
 const handleLogin = () => {
@@ -36,7 +40,7 @@ async function init() {
     setupEventListeners();
   } catch (err) {
     console.warn('User not signed in. Redirecting to login...');
-    Auth.federatedSignIn();
+    Auth.federatedSignIn(); // Redirect to Cognito Hosted UI
   }
 }
 
