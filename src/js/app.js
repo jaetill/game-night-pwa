@@ -13,14 +13,19 @@ Amplify.configure({
     userPoolId: 'us-east-2_xneeJzaDJ',
     userPoolWebClientId: '7rk583gdoculg0fupv594s53r9',
     oauth: {
-      domain: 'yourapp.auth.us-east-2.amazoncognito.com', // Replace with your domain
-      scope: ['email', 'openid', 'profile'],
+      domain: 'us-east-2xneejzadj.auth.us-east-2.amazoncognito.com',
+      scope: ['openid', 'email', 'profile'],
       redirectSignIn: 'https://jaetill.github.io/game-night-pwa/',
       redirectSignOut: 'https://jaetill.github.io/game-night-pwa/',
       responseType: 'code',
-    }
-  }
+    },
+  },
 });
+// This configuration sets up Amplify Auth with the necessary parameters for your Cognito User Pool and OAuth settings.
+// This function handles the login process by redirecting to the hosted UI
+// and is called when the user clicks the login button.
+// If you are using aws-exports.js, you can import it directly
+// and pass it to Amplify.configure() instead of hardcoding the config.
 
 const handleLogin = () => {
   Auth.federatedSignIn(); // This takes the user to the hosted UI
