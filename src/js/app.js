@@ -1,6 +1,8 @@
 import { Amplify } from 'aws-amplify';
-import { Auth } from 'aws-amplify';
-import awsconfig from './aws-exports.js'; // Optional: if using Amplify CLI-generated config
+//import { Auth } from 'aws-amplify/auth'; // ✅ correct subpath import
+
+
+
 
 import { loadGameNights, fetchOwnedGames } from './data/index.js';
 import { renderApp } from './components/render.js';

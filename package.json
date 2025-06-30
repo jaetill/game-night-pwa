@@ -10,5 +10,9 @@
   },
   "devDependencies": {
     "vite": "^7.0.0"
+  },
+  "dependencies": {
+    "@aws-amplify/auth": "^6.13.1",
+    "aws-amplify": "^6.15.1"
   }
 }
