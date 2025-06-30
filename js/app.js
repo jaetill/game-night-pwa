@@ -1,28 +1,47 @@
-import { loadGameNights, fetchOwnedGames } from './data/index.js';
-import { getCurrentUser } from './auth/auth.js';
+import { Amplify } from 'aws-amplify';
+import { Auth } from 'aws-amplify';
+import awsconfig from './aws-exports.js'; // Optional: if using Amplify CLI-generated config
 
+import { loadGameNights, fetchOwnedGames } from './data/index.js';
 import { renderApp } from './components/render.js';
 import { setupEventListeners } from './events/events.js';
 
-async function init() {
-  const currentUser = getCurrentUser();
-  if (!currentUser) {
-    console.error('No current user found. Please log in.');
-    return;
+// 🔧 Configure Amplify Auth (you can also hardcode config inline if not using aws-exports.js)
+Amplify.configure({
+  Auth: {
+    region: 'us-east-2',
+    userPoolId: 'us-east-2_xneeJzaDJ',
+    userPoolWebClientId: '7rk583gdoculg0fupv594s53r9',
+    oauth: {
+      domain: 'yourapp.auth.us-east-2.amazoncognito.com', // Replace with your domain
+      scope: ['email', 'openid', 'profile'],
+      redirectSignIn: 'https://jaetill.github.io/game-night-pwa/',
+      redirectSignOut: 'https://jaetill.github.io/game-night-pwa/',
+      responseType: 'code',
+    }
   }
+});
 
-  const nights = await loadGameNights();
-  await fetchOwnedGames(currentUser.username || 'default');
+const handleLogin = () => {
+  Auth.federatedSignIn(); // This takes the user to the hosted UI
+};
 
-  renderApp({ nights, currentUser });
+async function init() {
+  try {
+    const user = await Auth.currentAuthenticatedUser();
+    document.getElementById('login-button').addEventListener('click', handleLogin);
 
-  setupEventListeners();
+    const username = user.username || 'default';
+    const nights = await loadGameNights();
+    await fetchOwnedGames(username);
+
+    renderApp({ nights, currentUser: user });
+    setupEventListeners();
+
+  } catch (err) {
+    console.warn('User not signed in. Redirecting to login...');
+    Auth.federatedSignIn(); // Redirects to hosted UI
+  }
 }
 
 window.addEventListener('DOMContentLoaded', init);
-// Ensure the app initializes after the DOM is fully loaded
-// This function fetches game nights and owned games, then renders the app
-// It also sets up event listeners for user interactions
-// The init function is called when the DOM content is fully loaded 
-// This ensures that the app is ready to interact with the user
-// and that all necessary data is available before rendering the UI
