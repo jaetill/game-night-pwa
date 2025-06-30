@@ -3,6 +3,9 @@ import { renderGlobalHostPanel } from './renderGlobalHostPanel.js';
 import { getCurrentUser, setCurrentUser } from '../auth/userStore.js';
 
 export function renderApp({ nights, currentUser }) {
+  // render.js
+  const expandedNightIds = new Set(); // Tracks expanded game nights across renders
+
   const root = document.getElementById('app');
   if (!root) {
     console.error('No #app element found in DOM.');
@@ -16,7 +19,7 @@ export function renderApp({ nights, currentUser }) {
   listContainer.id = 'gameNightList';
   root.appendChild(listContainer);
 
-  renderGameNights(nights, currentUser);
+  renderGameNights(nights, currentUser, expandedNightIds);
 
   renderGlobalHostPanel();
 

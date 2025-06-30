@@ -1,16 +1,11 @@
-import { renderSelectedGames } from './renderSelectedGames.js';
+import { renderGameNightSummary } from './renderGameNightSummary.js';
 import { renderRSVP } from './renderRSVP.js';
 import { renderSuggestions } from './renderSuggestions.js';
+import { renderSelectedGames } from './renderSelectedGames.js';
 import { renderHostGameControls, renderHostActions } from './renderGameNightHostControls.js';
-import { isHost, getUserNightRole } from '../auth/permissions.js';
-/**
- * Renders a list of game nights with RSVP, suggestions, and admin controls.
- * @param {Array} nights - Array of game night objects.
- * @param {Object} currentUser - The current user object.
- */
+import { isHost } from '../auth/permissions.js';
 
-
-export function renderGameNights(nights, currentUser) {
+export function renderGameNights(nights, currentUser, expandedNightIds) {
   const container = document.getElementById('gameNightList');
   container.innerHTML = '';
 
@@ -18,45 +13,44 @@ export function renderGameNights(nights, currentUser) {
     const li = document.createElement('li');
     li.className = 'game-card';
 
-    const header = document.createElement('h3');
-    header.textContent = `${night.date} @ ${night.time}`;
-    li.appendChild(header);
+    const isExpanded = expandedNightIds.has(night.id);
 
-    const hostInfo = document.createElement('p');
-    hostInfo.textContent = `Host: ${night.hostUserId}`;
+    // Toggle button
+    const toggleBtn = document.createElement('button');
+    toggleBtn.textContent = isExpanded ? 'Collapse' : 'Expand';
+    toggleBtn.onclick = () => {
+      if (isExpanded) {
+        expandedNightIds.delete(night.id);
+      } else {
+        expandedNightIds.add(night.id);
+      }
+      renderGameNights(nights, currentUser, expandedNightIds);
+    };
+    li.appendChild(toggleBtn);
 
-    const badgeText = getUserNightRole(night, currentUser);
-    if (badgeText) {
-      const badge = document.createElement('span');
-      badge.className = `user-role-badge ${badgeText}`; // Note: adds class for per-role styling
-      badge.textContent = badgeText;
-      hostInfo.appendChild(badge);
-    }
+    // Summary or Detail content
+    if (isExpanded) {
+      const rsvpUI = renderRSVP(night, nights);
+      li.appendChild(rsvpUI);
 
-    li.appendChild(hostInfo);
+      const suggestionsUI = renderSuggestions(night, nights);
+      li.appendChild(suggestionsUI);
 
+      if (Object.keys(night.selectedGames).length > 0) {
+        const selectedGamesUI = renderSelectedGames(night, currentUser, nights);
+        li.appendChild(selectedGamesUI);
+      }
 
+      if (isHost(currentUser, night)) {
+        li.appendChild(renderHostGameControls(night, nights));
+        li.appendChild(renderHostActions(night, nights));
+      }
 
-    const snacks = document.createElement('p');
-    snacks.textContent = `Snacks: ${night.snacks || 'None'}`;
-    li.appendChild(snacks);
-
-    const rsvpUI = renderRSVP(night, nights);
-    li.appendChild(rsvpUI);
-
-    const suggestionsUI = renderSuggestions(night, nights);
-    li.appendChild(suggestionsUI);
-
-    if (Object.keys(night.selectedGames).length > 0) {
-      const selectedGamesUI = renderSelectedGames(night, currentUser, nights);
-      li.appendChild(selectedGamesUI);
-    }
-
-    if (isHost(currentUser, night)) {
-      li.appendChild(renderHostGameControls(night, nights));
-      li.appendChild(renderHostActions(night, nights));
+    } else {
+      const summary = renderGameNightSummary(night);
+      li.appendChild(summary);
     }
 
     container.appendChild(li);
- }); 
+  });
 }
