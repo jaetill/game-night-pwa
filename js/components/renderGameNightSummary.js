@@ -1,3 +1,5 @@
+  import { getDisplayName } from '../utils/userDirectory.js';
+
 export function renderGameNightSummary(night) {
   const summary = document.createElement('div');
   summary.className = 'night-summary';
@@ -9,7 +11,7 @@ export function renderGameNightSummary(night) {
 
   // 🙋 Host Info
   const hostLine = document.createElement('div');
-  hostLine.textContent = `Host: ${night.hostUserId}`;
+  hostLine.textContent = `Host: ${getDisplayName(night.hostUserId)}`;
   summary.appendChild(hostLine);
 
   // 📊 RSVP Breakdown
