@@ -6,8 +6,7 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: {
-        main: resolve(__dirname, 'index.html'),
-        login: resolve(__dirname, 'launch-login.html'),
+        main: resolve(__dirname, 'index.html')
       },
     },
   },
