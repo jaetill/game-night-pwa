@@ -1,13 +1,14 @@
-// vite.config.js
 import { defineConfig } from 'vite';
+import { resolve } from 'path';
 
 export default defineConfig({
   base: '/game-night-pwa/',
   build: {
     rollupOptions: {
-      input: 'index.html',
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        login: resolve(__dirname, 'launch-login.html'),
+      },
     },
   },
 });
-// This configuration sets the base path for the PWA to '/game-night-pwa/'
-// and specifies the input file for the build process.
