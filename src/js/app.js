@@ -31,6 +31,14 @@ const isCallback = /[?&]code=/.test(window.location.search);
 
 const handleLogin = () => {
   console.log('📤 federatedSignIn() → redirecting to Cognito Hosted UI');
+
+  // Remove framework-specific query params before redirect
+  if (window.location.search.includes('_data=')) {
+    const cleanUrl = window.location.origin + window.location.pathname;
+    window.history.replaceState({}, document.title, cleanUrl);
+  }
+
+
   Auth.federatedSignIn();
 };
 
