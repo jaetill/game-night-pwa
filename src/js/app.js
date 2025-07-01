@@ -20,8 +20,8 @@ Amplify.configure({
     oauth: {
       domain: 'us-east-2xneejzadj.auth.us-east-2.amazoncognito.com',
       scope: ['openid','email','profile'],
-      redirectSignIn: 'https://jaetill.github.io/game-night-pwa/',
-      redirectSignOut:'https://jaetill.github.io/game-night-pwa/',
+      redirectSignIn: 'https://jaetill.github.io/game-night-pwa/login',
+      redirectSignOut: 'https://jaetill.github.io/game-night-pwa/logout',
       responseType: 'code'
     }
   }
@@ -44,7 +44,9 @@ async function init() {
     console.log('⏳ Detected OAuth callback – exchanging code for tokens…');
     try {
       const user = await Auth.currentAuthenticatedUser();
+      window.location.href = '/game-night-pwa/';
       console.log('✅ Session restored from callback:', user);
+
     } catch (err) {
       console.error('❌ Callback handling failed, redirecting again:', err);
       handleLogin();
