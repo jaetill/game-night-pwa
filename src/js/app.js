@@ -30,18 +30,24 @@ Amplify.configure({
 const isCallback = /[?&]code=/.test(window.location.search);
 const hasError  = /[?&]error=/.test(window.location.search);
 
-const handleLogin = () => {
-  console.log('📤 federatedSignIn() → redirecting to Cognito Hosted UI');
+//const handleLogin = () => {
+  //console.log('📤 federatedSignIn() → redirecting to Cognito Hosted UI');
 
   // 🧼 Clean up framework query params (e.g. Remix)
-  const url = new URL(window.location.href);
-  if (url.searchParams.has('_data')) {
-    url.searchParams.delete('_data');
-    window.history.replaceState({}, document.title, url.pathname);
-  }
+  //const url = new URL(window.location.href);
+  //if (url.searchParams.has('_data')) {
+    //url.searchParams.delete('_data');
+    //window.history.replaceState({}, document.title, url.pathname);
+  //}
 
-  Auth.federatedSignIn();
+  //Auth.federatedSignIn();
+//};
+const handleLogin = () => {
+  console.log('🔁 Redirecting to launch-login.html to sanitize context');
+  window.location.href = '/game-night-pwa/launch-login.html';
 };
+
+
 
 async function init() {
   console.log('🚦 init()', { isCallback });
