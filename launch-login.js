@@ -10,13 +10,12 @@ Amplify.configure({
       scope: ['openid', 'email', 'profile'],
       redirectSignIn: 'https://jaetill.github.io/game-night-pwa/login.html',
       redirectSignOut: 'https://jaetill.github.io/game-night-pwa/logout.html',
-      responseType: 'code'
-    }
-  }
+      responseType: 'code',
+    },
+  },
 });
 
-// Force a clean redirect by explicitly passing the redirect URI
+// 🎯 Redirect to Cognito Hosted UI with a clean PKCE flow
 Auth.federatedSignIn({
   customState: 'launch',
-  redirectSignIn: 'https://jaetill.github.io/game-night-pwa/login.html'
 });
