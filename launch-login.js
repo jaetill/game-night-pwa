@@ -15,13 +15,8 @@ Amplify.configure({
   }
 });
 
-const url = new URL(window.location.href);
-if (url.search) {
-  // Strip all query params on first visit
-  url.search = '';
-  window.location.replace(url.toString());
-} else {
-  // Now clean, initiate login
-  Auth.federatedSignIn();
-}
-//   const error = params.get('error');
+// Force a clean redirect by explicitly passing the redirect URI
+Auth.federatedSignIn({
+  customState: 'launch',
+  redirectSignIn: 'https://jaetill.github.io/game-night-pwa/login'
+});
