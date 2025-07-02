@@ -8,8 +8,8 @@ Amplify.configure({
     oauth: {
       domain: 'us-east-2xneejzadj.auth.us-east-2.amazoncognito.com',
       scope: ['openid', 'email', 'profile'],
-      redirectSignIn: 'https://jaetill.github.io/game-night-pwa/login',
-      redirectSignOut: 'https://jaetill.github.io/game-night-pwa/logout',
+      redirectSignIn: 'https://jaetill.github.io/game-night-pwa/login.html',
+      redirectSignOut: 'https://jaetill.github.io/game-night-pwa/logout.html',
       responseType: 'code'
     }
   }
