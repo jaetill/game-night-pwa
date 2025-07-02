@@ -18,4 +18,7 @@ Amplify.configure({
 // 🎯 Redirect to Cognito Hosted UI with a clean PKCE flow
 Auth.federatedSignIn({
   customState: 'launch',
+}).catch(err => {
+  console.error('❌ federatedSignIn failed:', err);
 });
+
