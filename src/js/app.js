@@ -50,6 +50,8 @@ const handleLogin = () => {
 
 
 async function init() {
+  console.log('🧼 Checking for _data in URL...', window.location.href);
+
   const url = new URL(window.location.href);
   if (url.searchParams.has('_data')) {
     url.searchParams.delete('_data');
