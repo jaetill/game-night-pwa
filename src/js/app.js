@@ -50,6 +50,12 @@ const handleLogin = () => {
 
 
 async function init() {
+  const url = new URL(window.location.href);
+  if (url.searchParams.has('_data')) {
+    url.searchParams.delete('_data');
+    window.history.replaceState({}, document.title, url.pathname + url.search);
+  }
+
   console.log('🚦 init()', { isCallback });
 
   const loginBtn = document.getElementById('login-button');
