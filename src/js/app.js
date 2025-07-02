@@ -53,8 +53,10 @@ async function init() {
   const url = new URL(window.location.href);
   if (url.searchParams.has('_data')) {
     url.searchParams.delete('_data');
-    window.history.replaceState({}, document.title, url.pathname + url.search);
+    window.location.replace(url.toString());
+    return;
   }
+
 
   console.log('🚦 init()', { isCallback });
 
