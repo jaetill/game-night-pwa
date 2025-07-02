@@ -1,5 +1,11 @@
 import { Amplify, Auth } from 'aws-amplify';
 
+console.log('🧼 Resetting and reapplying Amplify config');
+
+// Step 1: Clear previous config (just in case)
+Amplify.configure({});
+
+// Step 2: Apply fresh config
 Amplify.configure({
   Auth: {
     region: 'us-east-2',
@@ -15,31 +21,12 @@ Amplify.configure({
   },
 });
 
-// 🎯 Redirect to Cognito Hosted UI with a clean PKCE flow
-//Auth.federatedSignIn({
-  //customState: 'launch',
-//}).catch(err => {
-  //console.error('❌ federatedSignIn failed:', err);
-//});
+console.log('🚀 Calling Auth.federatedSignIn()…');
 
-const domain = 'us-east-2xneejzadj.auth.us-east-2.amazoncognito.com';
-const clientId = '34et7dk67ngqep1oqef49te0ic';
-const redirectUri = encodeURIComponent('https://jaetill.github.io/game-night-pwa/login.html');
-const scope = encodeURIComponent('openid email profile');
-const state = encodeURIComponent('launch');
-
-const codeVerifier = crypto.randomUUID(); // Store this for token exchange
-const encoder = new TextEncoder();
-const data = encoder.encode(codeVerifier);
-const hash = await crypto.subtle.digest('SHA-256', data);
-const base64Url = btoa(String.fromCharCode(...new Uint8Array(hash)))
-  .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-
-const loginUrl = `https://${domain}/oauth2/authorize?` +
-  `client_id=${clientId}&redirect_uri=${redirectUri}` +
-  `&response_type=code&scope=${scope}` +
-  `&state=${state}&code_challenge=${base64Url}&code_challenge_method=S256`;
-
-window.sessionStorage.setItem('pkce_code_verifier', codeVerifier);
-window.location.href = loginUrl;
-
+Auth.federatedSignIn({ customState: 'launch' })
+  .then(() => {
+    console.log('✅ federatedSignIn() triggered successfully');
+  })
+  .catch(err => {
+    console.error('❌ federatedSignIn() threw an error:', err);
+  });
