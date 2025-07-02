@@ -15,5 +15,13 @@ Amplify.configure({
   }
 });
 
-Auth.federatedSignIn();
-
+const url = new URL(window.location.href);
+if (url.search) {
+  // Strip all query params on first visit
+  url.search = '';
+  window.location.replace(url.toString());
+} else {
+  // Now clean, initiate login
+  Auth.federatedSignIn();
+}
+//   const error = params.get('error');
