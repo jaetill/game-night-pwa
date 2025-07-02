@@ -18,5 +18,5 @@ Amplify.configure({
 // Force a clean redirect by explicitly passing the redirect URI
 Auth.federatedSignIn({
   customState: 'launch',
-  redirectSignIn: 'https://jaetill.github.io/game-night-pwa/login'
+  redirectSignIn: 'https://jaetill.github.io/game-night-pwa/login.html'
 });
