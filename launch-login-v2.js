@@ -1,32 +1,30 @@
-import { Amplify, Auth } from 'aws-amplify';
+const domain = 'us-east-2xneejzadj.auth.us-east-2.amazoncognito.com';
+const clientId = '34et7dk67ngqep1oqef49te0ic';
+const redirectUri = encodeURIComponent('https://jaetill.github.io/game-night-pwa/login.html');
+const scope = encodeURIComponent('openid email profile');
+const state = encodeURIComponent('launch');
 
-console.log('🧼 Resetting and reapplying Amplify config');
+// Generate a PKCE code verifier and challenge
+const codeVerifier = crypto.randomUUID();
+const encoder = new TextEncoder();
+const data = encoder.encode(codeVerifier);
+const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+const hashArray = Array.from(new Uint8Array(hashBuffer));
+const base64Url = btoa(String.fromCharCode(...hashArray))
+  .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
-// Step 1: Clear previous config (just in case)
-Amplify.configure({});
+// Store the verifier for token exchange
+sessionStorage.setItem('pkce_code_verifier', codeVerifier);
 
-// Step 2: Apply fresh config
-Amplify.configure({
-  Auth: {
-    region: 'us-east-2',
-    userPoolId: 'us-east-2_xneeJzaDJ',
-    userPoolWebClientId: '34et7dk67ngqep1oqef49te0ic',
-    oauth: {
-      domain: 'us-east-2xneejzadj.auth.us-east-2.amazoncognito.com',
-      scope: ['openid', 'email', 'profile'],
-      redirectSignIn: 'https://jaetill.github.io/game-night-pwa/login.html',
-      redirectSignOut: 'https://jaetill.github.io/game-night-pwa/logout.html',
-      responseType: 'code',
-    },
-  },
-});
+// Build the login URL manually
+const loginUrl = `https://${domain}/oauth2/authorize?` +
+  `client_id=${clientId}` +
+  `&redirect_uri=${redirectUri}` +
+  `&response_type=code` +
+  `&scope=${scope}` +
+  `&state=${state}` +
+  `&code_challenge=${base64Url}` +
+  `&code_challenge_method=S256`;
 
-console.log('🚀 Calling Auth.federatedSignIn()…');
-
-Auth.federatedSignIn({ customState: 'launch' })
-  .then(() => {
-    console.log('✅ federatedSignIn() triggered successfully');
-  })
-  .catch(err => {
-    console.error('❌ federatedSignIn() threw an error:', err);
-  });
+console.log('🔗 Redirecting to:', loginUrl);
+window.location.href = loginUrl;
