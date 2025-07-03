@@ -12,58 +12,82 @@
 </head>
 <body>
   <h1>🎲 Game Night Planner</h1>
-	<button id="login-button">Login</button>
+  <button id="auth-button">Log Out</button>
+
+
   <!-- Visibile to everyone  -->
   <h2>📅 Upcoming Game Nights</h2>
   <div id="app"></div>
-  
+
   <!-- Only visible to admin -->
   <section id="schedulerSection" style="display: none;">
-  <h2>📅 Schedule a Game Night</h2>
-	<form id="scheduleForm">
-	<label for="gameDate">Date:</label>
-	<input type="date" id="gameDate" required />
+    <h2>📅 Schedule a Game Night</h2>
+    <form id="scheduleForm">
+      <label for="gameDate">Date:</label>
+      <input type="date" id="gameDate" required />
 
-	<label for="gameTime">Time:</label>
-	<input type="time" id="gameTime" required />
+      <label for="gameTime">Time:</label>
+      <input type="time" id="gameTime" required />
 
-	<label for="location">Location (required):</label>
-	<input type="text" id="location" placeholder="123 Maple Lane or Zoom link" required />
+      <label for="location">Location (required):</label>
+      <input type="text" id="location" placeholder="123 Maple Lane or Zoom link" required />
 
-	<label for="description">Description (optional):</label>
-	<textarea id="description" placeholder="Casual night, bring your favorites!"></textarea>
+      <label for="description">Description (optional):</label>
+      <textarea id="description" placeholder="Casual night, bring your favorites!"></textarea>
 
-	<input type="text" id="snackNotes" placeholder="Snacks (optional)" />
+      <input type="text" id="snackNotes" placeholder="Snacks (optional)" />
 
-	<button type="submit">Add Game Night</button>
-	</form>
+      <button type="submit">Add Game Night</button>
+    </form>
+  </section>
 
-    </section>
-
-	<div id="nextGame"></div>
+  <div id="nextGame"></div>
   <ul id="guestList"></ul>
 
-	<div id="gameModal" class="modal hidden">
-	  <div class="modal-content">
-		<h2>Select a Game</h2>
+  <div id="gameModal" class="modal hidden">
+    <div class="modal-content">
+      <h2>Select a Game</h2>
 
-		<label>
-		  Search:
-		  <input type="text" id="gameSearch" placeholder="e.g. space, wings, catan" />
-		</label>
+      <label>
+        Search:
+        <input type="text" id="gameSearch" placeholder="e.g. space, wings, catan" />
+      </label>
 
-		<label>
-		  Players:
-		  <input type="number" id="gamePlayerCount" min="1" value="4" />
-		</label>
+      <label>
+        Players:
+        <input type="number" id="gamePlayerCount" min="1" value="4" />
+      </label>
 
-		<ul id="gameSelectionList" class="game-list"></ul>
+      <ul id="gameSelectionList" class="game-list"></ul>
 
-		<button id="closeModal">Cancel</button>
-	  </div>
-	</div>
-  
-  
-<script type="module" src="./src/js/app.js"></script>
+      <button id="closeModal">Cancel</button>
+    </div>
+  </div>
+
+  <!-- 🧠 Auth gate: redirect to login if not signed in -->
+  <script type="module">
+	const authButton = document.getElementById('auth-button');
+
+	try {
+	await Auth.currentAuthenticatedUser();
+	// ✅ User is signed in — show "Log Out"
+	authButton.textContent = 'Log Out';
+	authButton.onclick = async () => {
+		try {
+		await Auth.signOut();
+		window.location.href = 'login.html';
+		} catch (error) {
+		console.error('❌ Sign-out error:', error);
+		}
+	};
+	} catch {
+	// ❌ No session — send to login page
+	window.location.href = 'login.html';
+	}
+
+  </script>
+
+  <!-- Main app logic -->
+  <script type="module" src="./src/js/app.js"></script>
 </body>
 </html>
