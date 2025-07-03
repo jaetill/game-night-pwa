@@ -65,29 +65,14 @@
   </div>
 
   <!-- 🧠 Auth gate: redirect to login if not signed in -->
-  <script type="module">
-	const authButton = document.getElementById('auth-button');
+	<script type="module" src="./src/js/auth/session-check.js"></script>
+	<script type="module" src="./src/js/app.js"></script>
 
-	try {
-	await Auth.currentAuthenticatedUser();
-	// ✅ User is signed in — show "Log Out"
-	authButton.textContent = 'Log Out';
-	authButton.onclick = async () => {
-		try {
-		await Auth.signOut();
-		window.location.href = 'login.html';
-		} catch (error) {
-		console.error('❌ Sign-out error:', error);
-		}
-	};
-	} catch {
-	// ❌ No session — send to login page
-	window.location.href = 'login.html';
-	}
-
-  </script>
-
-  <!-- Main app logic -->
-  <script type="module" src="./src/js/app.js"></script>
 </body>
 </html>
+<!-- 
+  This HTML file serves as the main entry point for the Game Night Planner app.
+  It includes the necessary meta tags, styles, and scripts to run the application.
+  The app features a game night scheduler, guest list management, and game selection.
+  The auth gate ensures users are logged in before accessing the app's features.
+  --->

@@ -1,12 +1,6 @@
 import { Amplify, Auth } from 'aws-amplify';
-
-Amplify.configure({
-  Auth: {
-    region: 'us-east-2',
-    userPoolId: 'us-east-2_xneeJzaDJ',
-    userPoolWebClientId: '34et7dk67ngqep1oqef49te0ic',
-  }
-});
+import amplifyConfig from './config.js';
+Amplify.configure(amplifyConfig);
 
 document.getElementById('login-form').addEventListener('submit', async (event) => {
   event.preventDefault();
