@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Game Night – Login</title>
-  <script type="module" src="./src/js/app.js"></script>
+  <script type="module" src="./src/js/custom-login.js"></script>
   <style>
     body {
       font-family: sans-serif;
@@ -20,6 +20,17 @@
 <body>
   <h1>Welcome to Game Night</h1>
   <p>Sign in to RSVP, plan games, and connect with your crew.</p>
-  <button id="login-button">Login with Cognito</button>
+  <form id="login-form">
+    <label for="username">Username:</label><br>
+    <input id="username" type="text" required><br><br>
+
+    <label for="password">Password:</label><br>
+    <input id="password" type="password" required><br><br>
+
+    <button type="submit">Log In</button>
+
+    <div id="error" style="color: red; margin-top: 1rem;"></div>
+  </form>
+
 </body>
 </html>
