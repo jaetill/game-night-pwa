@@ -79,33 +79,45 @@ export function renderGameNightForm({ night = null, onSave }) {
 
   scheduler.appendChild(form);
 
-  form.onsubmit = async e => {
-    e.preventDefault();
+form.onsubmit = async e => {
+  e.preventDefault();
 
-    const updatedNight = {
-      ...(night || {}),
-      id: night?.id || crypto.randomUUID(),
-      date: dateInput.value,
-      time: timeInput.value,
-      location: locationInput.value.trim(),
-      description: descriptionInput.value.trim(),
-      hostUserId: night?.hostUserId || currentUser.userId,
-      selectedGames: night?.selectedGames || [],
-      rsvps: night?.rsvps || [],
-      lastModified: Date.now(),
-    };
-
-    await onSave(updatedNight);
-
-    form.remove();
-
-    const confirmation = document.createElement('div');
-    confirmation.textContent = night ? '✅ Game Night updated!' : '✅ Game Night created!';
-    confirmation.style.marginTop = '0.5em';
-    confirmation.style.fontSize = '0.9em';
-    confirmation.style.color = 'green';
-    scheduler.appendChild(confirmation);
-
-    setTimeout(() => confirmation.remove(), 2500);
+  const updatedNight = {
+    ...(night || {}),
+    id: night?.id || crypto.randomUUID(),
+    date: dateInput.value,
+    time: timeInput.value,
+    location: locationInput.value.trim(),
+    description: descriptionInput.value.trim(),
+    hostUserId: night?.hostUserId || currentUser.userId,
+    selectedGames: night?.selectedGames || [],
+    rsvps: (() => {
+      // Start with existing RSVPs if editing
+      const existing = night?.rsvps ? [...night.rsvps] : [];
+      // Ensure host is included
+      if (!existing.some(r => r.userId === currentUser.userId)) {
+        existing.push({
+          userId: currentUser.userId,
+          timestamp: Date.now()
+        });
+      }
+      return existing;
+    })(),
+    lastModified: Date.now(),
   };
+
+  await onSave(updatedNight);
+
+  form.remove();
+
+  const confirmation = document.createElement('div');
+  confirmation.textContent = night ? '✅ Game Night updated!' : '✅ Game Night created!';
+  confirmation.style.marginTop = '0.5em';
+  confirmation.style.fontSize = '0.9em';
+  confirmation.style.color = 'green';
+  scheduler.appendChild(confirmation);
+
+  setTimeout(() => confirmation.remove(), 2500);
+};
+
 }
