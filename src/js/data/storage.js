@@ -27,7 +27,7 @@ export function sanitizeNight(night) {
     ...night,
     selectedGames,
     description: night.description || '',
-    location: night.location || '', // Enforce this later via UI
+    location: night.location || '',
     invited: Array.isArray(night.invited) ? night.invited : [],
     rsvps: Array.isArray(night.rsvps) ? night.rsvps : [],
     declined: Array.isArray(night.declined) ? night.declined : [],
@@ -36,7 +36,6 @@ export function sanitizeNight(night) {
     lastModified: typeof night.lastModified === 'number' ? night.lastModified : Date.now()
   };
 }
-
 
 /**
  * Merges cloud and local game night data using most recent `lastModified`.
@@ -68,6 +67,7 @@ function syncGameNights(nights) {
 
 /**
  * Uploads the game nights array to the cloud via S3 upload token.
+ * Always requests a fresh presigned URL.
  */
 export async function pushGameNightsToCloud(nights) {
   try {
@@ -79,9 +79,20 @@ export async function pushGameNightsToCloud(nights) {
     Object.entries(fields).forEach(([k, v]) => formData.append(k, v));
     formData.append('file', new Blob([JSON.stringify(nights)], { type: 'application/json' }));
 
-    const uploadRes = await fetch(url, { method: 'POST', body: formData });
-    if (!uploadRes.ok) throw new Error(`Upload failed: ${uploadRes.status}`);
+    let uploadRes = await fetch(url, { method: 'POST', body: formData });
 
+    // Retry if URL expired
+    if (uploadRes.status === 403) {
+      console.warn("Upload URL expired, retrying...");
+      const retryRes = await fetch(`${API_BASE}/upload-token`);
+      const { url: retryUrl, fields: retryFields } = await retryRes.json();
+      const retryForm = new FormData();
+      Object.entries(retryFields).forEach(([k, v]) => retryForm.append(k, v));
+      retryForm.append('file', new Blob([JSON.stringify(nights)], { type: 'application/json' }));
+      uploadRes = await fetch(retryUrl, { method: 'POST', body: retryForm });
+    }
+
+    if (!uploadRes.ok) throw new Error(`Upload failed: ${uploadRes.status}`);
     console.log('✅ Game nights uploaded to cloud.');
   } catch (err) {
     console.warn('❌ Failed to push to cloud:', err);
@@ -103,12 +114,25 @@ export async function saveGameNights(nights) {
 
 /**
  * Loads cloud and local data, merges, saves locally, and uploads merged set.
+ * Always requests a fresh presigned URL and retries if expired.
  */
 export async function loadGameNights() {
   try {
     const tokenRes = await fetch(`${API_BASE}/get-token`);
+    if (!tokenRes.ok) throw new Error(`Failed to get download URL: ${tokenRes.status}`);
     const { url } = await tokenRes.json();
-    const dataRes = await fetch(url);
+
+    let dataRes = await fetch(url);
+
+    // Retry if URL expired
+    if (dataRes.status === 403) {
+      console.warn("Download URL expired, retrying...");
+      const retryTokenRes = await fetch(`${API_BASE}/get-token`);
+      const { url: retryUrl } = await retryTokenRes.json();
+      dataRes = await fetch(retryUrl);
+    }
+
+    if (!dataRes.ok) throw new Error(`Download failed: ${dataRes.status}`);
     const cloudData = await dataRes.json();
 
     const localData = JSON.parse(localStorage.getItem('gameNights') || '[]');
