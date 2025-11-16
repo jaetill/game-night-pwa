@@ -18,7 +18,8 @@ export async function fetchOwnedGames(username) {
 async function tryFetch() {
   tries++;
 
-  const res = await fetch(`https://boardgamegeek.com/xmlapi2/collection?username=${username}&own=1`);
+  //const res = await fetch(`https://boardgamegeek.com/xmlapi2/collection?username=${username}&own=1`);
+  const res = await fetch(`https://boardgamegeek.com/collection/user/Jaetill?objecttype=thing&ff=1&subtype=boardgame`);
   const text = await res.text();
   const xml = new DOMParser().parseFromString(text, "text/xml");
 
