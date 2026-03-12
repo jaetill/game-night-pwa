@@ -18,10 +18,14 @@
       <h1 class="text-lg font-bold text-gray-900 flex items-center gap-2">
         🎲 <span>Game Night</span>
       </h1>
-      <button id="auth-button"
-              class="btn btn-ghost text-sm">
-        Log out
-      </button>
+      <div class="flex items-center gap-2">
+        <button id="profile-button" class="btn btn-ghost text-sm" title="Profile settings">
+          ⚙ Profile
+        </button>
+        <button id="auth-button" class="btn btn-ghost text-sm">
+          Log out
+        </button>
+      </div>
     </div>
   </header>
 
@@ -47,6 +51,79 @@
       <ul id="gameSelectionList" class="space-y-1 mb-4"></ul>
 
       <button id="closeModal" class="btn btn-secondary w-full">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ── Import collection modal ──────────────────────── -->
+  <div id="importModal" class="modal hidden">
+    <div class="modal-content">
+      <h2 class="text-lg font-bold text-gray-900 mb-1">Import BGG Collection</h2>
+      <p class="text-sm text-gray-500 mb-4">Imports your owned games from BoardGameGeek.</p>
+
+      <div id="importNoUsername" class="hidden bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm text-amber-800">
+        Set your BGG username in Profile Settings first.
+      </div>
+
+      <ol class="text-sm text-gray-700 space-y-3 mb-4">
+        <li>
+          <span class="font-medium">1. Open this URL while logged into BGG:</span><br>
+          <a id="importBggLink" href="#" target="_blank" rel="noopener"
+             class="text-amber-600 hover:underline break-all text-xs mt-1 block"></a>
+        </li>
+        <li>
+          <span class="font-medium">2. Save the page (File → Save As) or select-all and copy the text.</span>
+        </li>
+        <li class="space-y-2">
+          <span class="font-medium">3. Upload or paste the XML below:</span>
+          <input type="file" id="importFileInput" accept=".xml,text/xml" class="block text-sm text-gray-600
+            file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0
+            file:text-sm file:font-medium file:bg-amber-50 file:text-amber-700
+            hover:file:bg-amber-100 cursor-pointer">
+          <textarea id="importXmlText" rows="5"
+            class="field w-full text-xs font-mono resize-y"
+            placeholder="…or paste XML here"></textarea>
+        </li>
+      </ol>
+
+      <p id="importStatus" class="text-sm text-gray-500 mt-2"></p>
+
+      <div class="flex gap-2 mt-3">
+        <button id="importBtn" class="btn btn-primary flex-1">Import Games</button>
+        <button id="closeImportModal" class="btn btn-secondary flex-1">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Profile modal ─────────────────────────────────── -->
+  <div id="profileModal" class="modal hidden">
+    <div class="modal-content">
+      <h2 class="text-lg font-bold text-gray-900 mb-4">Profile Settings</h2>
+      <div class="space-y-3 mb-4">
+        <div>
+          <label class="text-sm font-medium text-gray-700 block mb-1" for="profileDisplayName">Display Name</label>
+          <input type="text" id="profileDisplayName" class="field" placeholder="Your name">
+        </div>
+        <div>
+          <label class="text-sm font-medium text-gray-700 block mb-1" for="profileBggUsername">BGG Username</label>
+          <input type="text" id="profileBggUsername" class="field" placeholder="BoardGameGeek username">
+          <p class="text-xs text-gray-400 mt-1">Used to load your game collection when you host</p>
+        </div>
+        <div>
+          <label class="text-sm font-medium text-gray-700 block mb-1" for="profileContactEmail">Contact Email</label>
+          <input type="email" id="profileContactEmail" class="field" placeholder="For event notifications">
+        </div>
+        <div>
+          <label class="text-sm font-medium text-gray-700 block mb-1" for="profilePhone">Phone (optional)</label>
+          <input type="tel" id="profilePhone" class="field" placeholder="For SMS reminders">
+        </div>
+      </div>
+      <div class="flex gap-2 mb-2">
+        <button id="saveProfile" class="btn btn-primary flex-1">Save</button>
+        <button id="closeProfileModal" class="btn btn-secondary flex-1">Cancel</button>
+      </div>
+      <button id="openImportModal" class="btn btn-ghost w-full text-sm">
+        📦 Import BGG Collection…
+      </button>
     </div>
   </div>
 

@@ -1,103 +1,120 @@
-import { ownedGames } from '../data/state.js';
+import { ownedGames } from './state.js';
 
-const CORS_PROXY = 'https://corsproxy.io/?url=';
-const CACHE_KEY  = 'bggOwnedGames';
-const CACHE_VER  = 'bggCacheVersion';
-const CURRENT_VER = '3'; // bump this to force a refresh after breaking changes
+const API_BASE   = 'https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod';
+const CACHE_VER  = '4'; // bump to invalidate old caches
 
-export async function fetchOwnedGames(username) {
-  // Ignore cache if it's empty or from an older version
-  const cachedVer  = localStorage.getItem(CACHE_VER);
-  const cachedData = localStorage.getItem(CACHE_KEY);
+function cacheKey(userId)    { return `bggGames_${userId}`; }
+function cacheVerKey(userId) { return `bggGamesVer_${userId}`; }
 
-  if (cachedVer === CURRENT_VER && cachedData) {
+/**
+ * Loads the user's game collection from S3 (uploaded via importCollection).
+ * Falls back to localStorage cache if the network request fails.
+ */
+export async function fetchOwnedGames(userId) {
+  if (!userId) return;
+
+  // Try localStorage cache first
+  const cachedVer  = localStorage.getItem(cacheVerKey(userId));
+  const cachedData = localStorage.getItem(cacheKey(userId));
+
+  if (cachedVer === CACHE_VER && cachedData) {
     try {
       const parsed = JSON.parse(cachedData);
       if (parsed.length > 0) {
         ownedGames.length = 0;
         ownedGames.push(...parsed);
         console.log(`BGG: loaded ${parsed.length} games from cache.`);
+        // Refresh from S3 in the background without blocking render
+        refreshFromS3(userId).catch(() => {});
         return;
       }
     } catch {
-      console.warn('BGG: corrupt cache, refetching.');
+      console.warn('BGG: corrupt cache, fetching from S3.');
     }
   }
 
-  console.log(`BGG: fetching collection for "${username}"…`);
-  let tries = 0;
-
-  async function tryFetch() {
-    tries++;
-
-    let text, xml;
-    try {
-      const url = `${CORS_PROXY}${encodeURIComponent(`https://boardgamegeek.com/xmlapi2/collection?username=${username}&own=1`)}`;
-      const res = await fetch(url);
-      text = await res.text();
-      xml  = new DOMParser().parseFromString(text, 'text/xml');
-    } catch (err) {
-      console.warn('BGG: collection fetch failed.', err);
-      return;
-    }
-
-    // BGG returns a <message> while it queues the request — retry
-    if (xml.querySelector('message')) {
-      console.log(`BGG: response queued, retrying (${tries}/5)…`);
-      if (tries < 5) return setTimeout(tryFetch, 3000);
-      console.warn('BGG: gave up after 5 tries.');
-      return;
-    }
-
-    const baseGames = [...xml.querySelectorAll('item')].map(item => ({
-      id:    item.getAttribute('objectid'),
-      title: item.querySelector('name')?.textContent || 'Untitled',
-    }));
-
-    console.log(`BGG: found ${baseGames.length} games, enriching…`);
-
-    // Enrich in chunks of 20 to get player counts + thumbnails
-    const enriched = [];
-    for (let i = 0; i < baseGames.length; i += 20) {
-      const chunk = baseGames.slice(i, i + 20);
-      const ids   = chunk.map(g => g.id).join(',');
-      const detailUrl = `${CORS_PROXY}${encodeURIComponent(`https://boardgamegeek.com/xmlapi2/thing?id=${ids}&stats=1`)}`;
-
-      try {
-        const detailRes  = await fetch(detailUrl);
-        const detailText = await detailRes.text();
-        const detailXml  = new DOMParser().parseFromString(detailText, 'text/xml');
-
-        chunk.forEach(game => {
-          const detail = detailXml.querySelector(`item[id="${game.id}"]`);
-          if (!detail) return;
-
-          enriched.push({
-            ...game,
-            minPlayers: Number(detail.querySelector('minplayers')?.getAttribute('value')) || 1,
-            maxPlayers: Number(detail.querySelector('maxplayers')?.getAttribute('value')) || 99,
-            thumbnail:  detail.querySelector('thumbnail')?.textContent || '',
-          });
-        });
-      } catch (err) {
-        console.warn(`BGG: failed to enrich chunk ${ids}`, err);
-        // Still include games without enrichment rather than silently dropping them
-        chunk.forEach(game => enriched.push({ ...game, minPlayers: 1, maxPlayers: 99, thumbnail: '' }));
-      }
-    }
-
-    ownedGames.length = 0;
-    ownedGames.push(...enriched);
-
-    localStorage.setItem(CACHE_KEY,  JSON.stringify(enriched));
-    localStorage.setItem(CACHE_VER,  CURRENT_VER);
-    console.log(`BGG: cached ${enriched.length} games.`);
-  }
-
-  tryFetch();
+  await refreshFromS3(userId);
 }
 
-export function clearBggCache() {
-  localStorage.removeItem(CACHE_KEY);
-  localStorage.removeItem(CACHE_VER);
+async function refreshFromS3(userId) {
+  try {
+    const tokenRes = await fetch(`${API_BASE}/get-token?key=collections/${userId}.json`);
+    if (!tokenRes.ok) throw new Error(`Token fetch failed: ${tokenRes.status}`);
+    const { url } = await tokenRes.json();
+
+    const dataRes = await fetch(url);
+    if (dataRes.status === 403 || dataRes.status === 404) {
+      console.log('BGG: no collection stored yet. Use Profile → Import Collection.');
+      return;
+    }
+    if (!dataRes.ok) throw new Error(`S3 fetch failed: ${dataRes.status}`);
+
+    const games = await dataRes.json();
+    if (!Array.isArray(games) || games.length === 0) return;
+
+    ownedGames.length = 0;
+    ownedGames.push(...games);
+
+    localStorage.setItem(cacheKey(userId),    JSON.stringify(games));
+    localStorage.setItem(cacheVerKey(userId), CACHE_VER);
+    console.log(`BGG: loaded ${games.length} games from S3.`);
+  } catch (err) {
+    console.warn('BGG: could not load collection from S3:', err.message);
+  }
+}
+
+/**
+ * Saves a parsed game collection to S3 and updates local state + cache.
+ * Called by the import modal after parsing BGG XML.
+ */
+export async function saveCollection(userId, games) {
+  const tokenRes = await fetch(`${API_BASE}/upload-token?key=collections/${userId}.json`);
+  if (!tokenRes.ok) throw new Error(`Upload token failed: ${tokenRes.status}`);
+  const { url, fields } = await tokenRes.json();
+
+  const form = new FormData();
+  Object.entries(fields).forEach(([k, v]) => form.append(k, v));
+  form.append('file', new Blob([JSON.stringify(games)], { type: 'application/json' }));
+
+  const uploadRes = await fetch(url, { method: 'POST', body: form });
+  if (!uploadRes.ok) throw new Error(`S3 upload failed: ${uploadRes.status}`);
+
+  ownedGames.length = 0;
+  ownedGames.push(...games);
+
+  localStorage.setItem(cacheKey(userId),    JSON.stringify(games));
+  localStorage.setItem(cacheVerKey(userId), CACHE_VER);
+  console.log(`BGG: saved ${games.length} games to S3.`);
+}
+
+/**
+ * Parses a BGG collection XML string into a normalised game array.
+ * The collection XML already contains thumbnails and player counts,
+ * so no second API call is needed.
+ */
+export function parseBggCollectionXml(xmlText) {
+  const xml   = new DOMParser().parseFromString(xmlText, 'text/xml');
+  const error = xml.querySelector('parsererror');
+  if (error) throw new Error('Invalid XML');
+
+  const message = xml.querySelector('message');
+  if (message) throw new Error('BGG is still processing your collection. Wait a moment and try again.');
+
+  return [...xml.querySelectorAll('item')].map(item => {
+    const stats = item.querySelector('stats');
+    return {
+      id:         item.getAttribute('objectid'),
+      title:      item.querySelector('name')?.textContent?.trim() || 'Untitled',
+      thumbnail:  item.querySelector('thumbnail')?.textContent?.trim() || '',
+      minPlayers: Number(stats?.getAttribute('minplayers')) || 1,
+      maxPlayers: Number(stats?.getAttribute('maxplayers')) || 99,
+    };
+  }).filter(g => g.id && g.title !== 'Untitled');
+}
+
+export function clearBggCache(userId) {
+  if (userId) {
+    localStorage.removeItem(cacheKey(userId));
+    localStorage.removeItem(cacheVerKey(userId));
+  }
 }

@@ -2,6 +2,7 @@ import { loadGameNights, fetchOwnedGames } from './data/index.js';
 import { renderApp } from './components/render.js';
 import { setupEventListeners } from './events/events.js';
 import { setCurrentUser } from './auth/userStore.js';
+import { loadProfile } from './auth/profile.js';
 import { toastError } from './ui/toast.js';
 
 import { Amplify, Auth, Hub } from 'aws-amplify';
@@ -19,14 +20,18 @@ async function init() {
 
     // Store identity so all components can call getCurrentUser()
     setCurrentUser({
-      userId:   cognitoUser.username,
-      name:     cognitoUser.attributes?.name || cognitoUser.username,
-      email:    cognitoUser.attributes?.email || '',
+      userId:      cognitoUser.username,
+      name:        cognitoUser.attributes?.name || cognitoUser.username,
+      email:       cognitoUser.attributes?.email || '',
+      bggUsername: '',
     });
+
+    // Load profile (BGG username, contact info) — may sync from Cognito attributes
+    await loadProfile();
 
     const [nights] = await Promise.all([
       loadGameNights(),
-      fetchOwnedGames(cognitoUser.username)
+      fetchOwnedGames(cognitoUser.username),
     ]);
 
     renderApp({ nights, currentUser: { userId: cognitoUser.username, name: cognitoUser.attributes?.name || cognitoUser.username } });
