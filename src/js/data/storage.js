@@ -1,4 +1,5 @@
 import { getCurrentUser } from '../auth/userStore.js';
+import { authFetch } from '../utils/authFetch.js';
 
 const API_BASE = 'https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod';
 
@@ -71,7 +72,7 @@ function syncGameNights(nights) {
  */
 export async function pushGameNightsToCloud(nights) {
   try {
-    const res = await fetch(`${API_BASE}/upload-token`);
+    const res = await authFetch(`${API_BASE}/upload-token`);
     if (!res.ok) throw new Error(`Failed to get upload URL: ${res.status}`);
     const { url, fields } = await res.json();
 
@@ -84,7 +85,7 @@ export async function pushGameNightsToCloud(nights) {
     // Retry if URL expired
     if (uploadRes.status === 403) {
       console.warn("Upload URL expired, retrying...");
-      const retryRes = await fetch(`${API_BASE}/upload-token`);
+      const retryRes = await authFetch(`${API_BASE}/upload-token`);
       const { url: retryUrl, fields: retryFields } = await retryRes.json();
       const retryForm = new FormData();
       Object.entries(retryFields).forEach(([k, v]) => retryForm.append(k, v));
@@ -118,7 +119,7 @@ export async function saveGameNights(nights) {
  */
 export async function loadGameNights() {
   try {
-    const tokenRes = await fetch(`${API_BASE}/get-token`);
+    const tokenRes = await authFetch(`${API_BASE}/get-token`);
     if (!tokenRes.ok) throw new Error(`Failed to get download URL: ${tokenRes.status}`);
     const { url } = await tokenRes.json();
 
@@ -127,7 +128,7 @@ export async function loadGameNights() {
     // Retry if URL expired
     if (dataRes.status === 403) {
       console.warn("Download URL expired, retrying...");
-      const retryTokenRes = await fetch(`${API_BASE}/get-token`);
+      const retryTokenRes = await authFetch(`${API_BASE}/get-token`);
       const { url: retryUrl } = await retryTokenRes.json();
       dataRes = await fetch(retryUrl);
     }

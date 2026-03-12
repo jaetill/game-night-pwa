@@ -1,4 +1,5 @@
 import { ownedGames } from './state.js';
+import { authFetch } from '../utils/authFetch.js';
 
 const API_BASE   = 'https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod';
 const CACHE_VER  = '4'; // bump to invalidate old caches
@@ -38,7 +39,7 @@ export async function fetchOwnedGames(userId) {
 
 async function refreshFromS3(userId) {
   try {
-    const res = await fetch(`${API_BASE}/bgg?userId=${encodeURIComponent(userId)}`);
+    const res = await authFetch(`${API_BASE}/bgg?userId=${encodeURIComponent(userId)}`);
     if (res.status === 404) {
       console.log('BGG: no collection stored yet. Use Profile → Import Collection.');
       return;
@@ -64,7 +65,7 @@ async function refreshFromS3(userId) {
  * Called by the import modal after parsing BGG XML.
  */
 export async function saveCollection(userId, games) {
-  const res = await fetch(`${API_BASE}/bgg`, {
+  const res = await authFetch(`${API_BASE}/bgg`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ userId, games }),
