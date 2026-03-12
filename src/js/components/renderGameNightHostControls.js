@@ -20,8 +20,9 @@ export function renderHostGameControls(night, nights) {
         night.selectedGames = night.selectedGames || {};
         if (!night.selectedGames[game.id]) {
           night.selectedGames[game.id] = {
-            maxPlayers: game.defaultMaxPlayers || 4,
-            signedUpPlayers: []
+            maxPlayers: game.maxPlayers || 4,
+            signedUpPlayers: [],
+            interestedPlayers: [],
           };
           toastSuccess(`${game.title} added!`);
         }
