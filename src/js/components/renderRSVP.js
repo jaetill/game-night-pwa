@@ -82,59 +82,61 @@ export function renderRSVP(night, nights, currentUser) {
 
   // ── Attendee list ────────────────────────────────────────
   if (Array.isArray(night.rsvps) && night.rsvps.length > 0) {
-    const label = document.createElement('span');
-    label.className = 'section-label';
-    label.textContent = 'Attending';
-    section.appendChild(label);
+    const groups = [
+      { type: 'playing',    heading: 'Reserved a seat' },
+      { type: 'flexible',   heading: 'Filling in gaps' },
+      { type: 'spectating', heading: 'Just hanging out' },
+    ];
 
-    const legend = document.createElement('p');
-    legend.className = 'text-xs text-gray-400 -mt-1 mb-1';
-    legend.textContent = '🎮 playing · ↔ flexible · 👋 just hanging out';
-    section.appendChild(legend);
+    function makeCancelBtn() {
+      const cancelBtn = btn('Cancel RSVP', 'danger');
+      cancelBtn.className += ' text-xs py-0.5 px-2';
+      cancelBtn.onclick = async () => {
+        cancelBtn.disabled = true;
+        try {
+          night.rsvps = night.rsvps.filter(r => r.userId !== userId);
+          withdrawFromAllGames(night, currentUser);
+          night.lastModified = Date.now();
+          sanitizeNight(night);
+          await saveGameNights(nights);
+          renderGameNights(nights, currentUser);
+          toastInfo('RSVP cancelled.');
+        } catch {
+          toastError('Could not cancel. Try again.');
+          cancelBtn.disabled = false;
+        }
+      };
+      return cancelBtn;
+    }
 
-    const typeOrder = { playing: 0, flexible: 1, spectating: 2 };
-    const sorted = [...night.rsvps].sort((a, b) =>
-      (typeOrder[a.type] ?? 3) - (typeOrder[b.type] ?? 3)
-    );
+    for (const { type, heading } of groups) {
+      const members = night.rsvps.filter(r => (r.type ?? 'playing') === type);
+      if (members.length === 0) continue;
 
-    const list = document.createElement('ul');
-    list.className = 'space-y-1';
+      const groupLabel = document.createElement('span');
+      groupLabel.className = 'section-label';
+      groupLabel.textContent = heading;
+      section.appendChild(groupLabel);
 
-    sorted.forEach((rsvp, i) => {
-      const item = document.createElement('li');
-      item.className = 'flex items-center justify-between text-sm';
+      const list = document.createElement('ul');
+      list.className = 'space-y-1';
 
-      const typeIcon = { playing: '🎮', flexible: '↔', spectating: '👋' }[rsvp.type] ?? '🎟';
-      const name = document.createElement('span');
-      name.className = 'text-gray-700';
-      name.textContent = `${typeIcon} ${rsvp.name || getDisplayName(rsvp.userId)}`;
-      item.appendChild(name);
+      members.forEach(rsvp => {
+        const item = document.createElement('li');
+        item.className = 'flex items-center justify-between text-sm';
 
-      if (rsvp.userId === userId) {
-        const cancelBtn = btn('Cancel RSVP', 'danger');
-        cancelBtn.className += ' text-xs py-0.5 px-2';
-        cancelBtn.onclick = async () => {
-          cancelBtn.disabled = true;
-          try {
-            night.rsvps = night.rsvps.filter(r => r.userId !== userId);
-            withdrawFromAllGames(night, currentUser);
-            night.lastModified = Date.now();
-            sanitizeNight(night);
-            await saveGameNights(nights);
-            renderGameNights(nights, currentUser);
-            toastInfo('RSVP cancelled.');
-          } catch {
-            toastError('Could not cancel. Try again.');
-            cancelBtn.disabled = false;
-          }
-        };
-        item.appendChild(cancelBtn);
-      }
+        const name = document.createElement('span');
+        name.className = 'text-gray-700';
+        name.textContent = rsvp.name || getDisplayName(rsvp.userId);
+        item.appendChild(name);
 
-      list.appendChild(item);
-    });
+        if (rsvp.userId === userId) item.appendChild(makeCancelBtn());
 
-    section.appendChild(list);
+        list.appendChild(item);
+      });
+
+      section.appendChild(list);
+    }
   }
 
   // ── Pending invites ──────────────────────────────────────
