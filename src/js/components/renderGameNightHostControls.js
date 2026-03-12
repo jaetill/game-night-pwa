@@ -6,6 +6,8 @@ import { getCurrentUser } from '../auth/userStore.js';
 import { renderGameNights } from './renderGameNights.js';
 import { btn, input } from '../ui/elements.js';
 import { toastSuccess, toastError, toastInfo } from '../ui/toast.js';
+import { DEBUG_MODE } from '../config.js';
+import { injectPreviewData, clearPreviewData, hasPreviewData } from '../utils/previewData.js';
 
 export function renderHostGameControls(night, nights) {
   const container = document.createElement('div');
@@ -75,7 +77,7 @@ export function renderHostGameControls(night, nights) {
 
 export function renderHostActions(night, nights) {
   const container = document.createElement('div');
-  container.className = 'flex gap-2 pt-2';
+  container.className = 'flex flex-wrap gap-2 pt-2';
 
   const editBtn = btn('Edit event', 'secondary');
   editBtn.onclick = () => {
@@ -108,5 +110,25 @@ export function renderHostActions(night, nights) {
 
   container.appendChild(editBtn);
   container.appendChild(cancelBtn);
+
+  if (DEBUG_MODE) {
+    const previewBtn = btn(
+      hasPreviewData(night) ? '🧹 Clear preview' : '👥 Preview with fake guests',
+      'ghost'
+    );
+    previewBtn.className += ' text-xs w-full';
+    previewBtn.onclick = () => {
+      if (hasPreviewData(night)) {
+        clearPreviewData(night);
+        toastInfo('Preview data cleared.');
+      } else {
+        injectPreviewData(night);
+        toastSuccess('Preview data injected — not saved to cloud.');
+      }
+      syncAndRender(nights);
+    };
+    container.appendChild(previewBtn);
+  }
+
   return container;
 }
