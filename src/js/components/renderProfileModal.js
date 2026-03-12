@@ -11,6 +11,7 @@ export function openProfileModal() {
   document.getElementById('profileBggUsername').value  = profile.bggUsername  || '';
   document.getElementById('profileContactEmail').value = profile.contactEmail || '';
   document.getElementById('profilePhone').value        = profile.phone        || '';
+  document.getElementById('profileAddress').value      = profile.address      || '';
 
   modal.classList.remove('hidden');
 
@@ -20,6 +21,7 @@ export function openProfileModal() {
       bggUsername:  document.getElementById('profileBggUsername').value.trim(),
       contactEmail: document.getElementById('profileContactEmail').value.trim(),
       phone:        document.getElementById('profilePhone').value.trim(),
+      address:      document.getElementById('profileAddress').value.trim(),
     });
     modal.classList.add('hidden');
     toastSuccess('Profile saved.');

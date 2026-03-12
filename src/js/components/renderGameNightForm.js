@@ -1,4 +1,5 @@
 import { getCurrentUser } from '../auth/userStore.js';
+import { getProfile } from '../auth/profile.js';
 import { toastSuccess, toastError } from '../ui/toast.js';
 import { btn } from '../ui/elements.js';
 
@@ -54,7 +55,7 @@ export function renderGameNightForm({ night = null, onSave }) {
   locationInput.type = 'text';
   locationInput.required = true;
   locationInput.placeholder = '123 Maple Lane or Zoom link';
-  locationInput.value = night?.location || '';
+  locationInput.value = night?.location || (!night ? getProfile().address || '' : '');
   locationInput.className = 'field';
 
   const descInput = document.createElement('textarea');

@@ -19,9 +19,14 @@ export function renderGameNightSummary(night, currentUser) {
   const dateRow = document.createElement('div');
   dateRow.className = 'flex items-start justify-between gap-2';
 
+  const canSeeLocation = currentUser && (
+    night.hostUserId === currentUser.userId ||
+    rsvps.some(r => r.userId === currentUser.userId)
+  );
+
   const dateText = document.createElement('div');
   dateText.innerHTML = `<p class="font-semibold text-gray-900">${day}</p>
-    <p class="text-sm text-gray-500">${time}${night.location ? ` · ${night.location}` : ''}</p>`;
+    <p class="text-sm text-gray-500">${time}${canSeeLocation && night.location ? ` · ${night.location}` : ''}</p>`;
   dateRow.appendChild(dateText);
 
   // Current user's own status badge
