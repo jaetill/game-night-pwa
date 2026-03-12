@@ -1,6 +1,5 @@
 import { filterGames, loadGameNights } from '../data/index.js';
 import { syncAndRender } from '../utils/index.js';
-import { getCurrentUser } from '../auth/userStore.js';
 
 
 /**
@@ -60,14 +59,6 @@ export function openGameSelectionModal({ night, onSelect }) {
       li.onclick = async () => {
         modal.classList.add('hidden');
         clearInputs();
-        const currentUser = getCurrentUser();
-        const isRSVPd = night.rsvps?.some(r => r.userId === currentUser.userId);
-
-        if (!isRSVPd) {
-          alert('Please RSVP before signing up for games.');
-          return;
-        }
-
         if (onSelect) {
           onSelect(game);
           return;
