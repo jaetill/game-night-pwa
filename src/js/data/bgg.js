@@ -38,18 +38,14 @@ export async function fetchOwnedGames(userId) {
 
 async function refreshFromS3(userId) {
   try {
-    const tokenRes = await fetch(`${API_BASE}/get-token?key=collections/${userId}.json`);
-    if (!tokenRes.ok) throw new Error(`Token fetch failed: ${tokenRes.status}`);
-    const { url } = await tokenRes.json();
-
-    const dataRes = await fetch(url);
-    if (dataRes.status === 403 || dataRes.status === 404) {
+    const res = await fetch(`${API_BASE}/bgg?userId=${encodeURIComponent(userId)}`);
+    if (res.status === 404) {
       console.log('BGG: no collection stored yet. Use Profile → Import Collection.');
       return;
     }
-    if (!dataRes.ok) throw new Error(`S3 fetch failed: ${dataRes.status}`);
+    if (!res.ok) throw new Error(`BGG API failed: ${res.status}`);
 
-    const games = await dataRes.json();
+    const games = await res.json();
     if (!Array.isArray(games) || games.length === 0) return;
 
     ownedGames.length = 0;
@@ -68,16 +64,12 @@ async function refreshFromS3(userId) {
  * Called by the import modal after parsing BGG XML.
  */
 export async function saveCollection(userId, games) {
-  const tokenRes = await fetch(`${API_BASE}/upload-token?key=collections/${userId}.json`);
-  if (!tokenRes.ok) throw new Error(`Upload token failed: ${tokenRes.status}`);
-  const { url, fields } = await tokenRes.json();
-
-  const form = new FormData();
-  Object.entries(fields).forEach(([k, v]) => form.append(k, v));
-  form.append('file', new Blob([JSON.stringify(games)], { type: 'application/json' }));
-
-  const uploadRes = await fetch(url, { method: 'POST', body: form });
-  if (!uploadRes.ok) throw new Error(`S3 upload failed: ${uploadRes.status}`);
+  const res = await fetch(`${API_BASE}/bgg`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId, games }),
+  });
+  if (!res.ok) throw new Error(`Save failed: ${res.status}`);
 
   ownedGames.length = 0;
   ownedGames.push(...games);

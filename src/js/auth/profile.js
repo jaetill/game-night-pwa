@@ -42,10 +42,13 @@ export async function saveProfile(profile) {
   try {
     const cognitoUser = await Auth.currentAuthenticatedUser();
     const updates = {};
-    if (profile.displayName)  updates.name         = profile.displayName;
-    if (profile.contactEmail) updates.email        = profile.contactEmail;
-    if (profile.phone)        updates.phone_number = profile.phone;
-    if (profile.bggUsername) updates['custom:bggUsername'] = profile.bggUsername;
+    if (profile.displayName)  updates.name                    = profile.displayName;
+    if (profile.contactEmail) updates.email                   = profile.contactEmail;
+    if (profile.bggUsername)  updates['custom:bggUsername']   = profile.bggUsername;
+    // Cognito requires E.164 format (e.g. +15551234567) — skip if not valid
+    if (profile.phone && /^\+\d{7,15}$/.test(profile.phone)) {
+      updates.phone_number = profile.phone;
+    }
     if (Object.keys(updates).length) {
       await Auth.updateUserAttributes(cognitoUser, updates);
     }
