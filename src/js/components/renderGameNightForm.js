@@ -65,12 +65,32 @@ export function renderGameNightForm({ night = null, onSave }) {
   descInput.rows = 3;
   descInput.className = 'field resize-none';
 
+  const foodInput = document.createElement('input');
+  foodInput.type = 'text';
+  foodInput.placeholder = 'Making chili, ordering pizza…';
+  foodInput.value = night?.food || '';
+  foodInput.className = 'field';
+
+  const sidesLabel = document.createElement('label');
+  sidesLabel.className = 'flex items-center gap-2 text-sm text-gray-600 mt-2 cursor-pointer select-none';
+  const sidesCheck = document.createElement('input');
+  sidesCheck.type = 'checkbox';
+  sidesCheck.className = 'rounded accent-amber-500';
+  sidesCheck.checked = night?.allowSides ?? false;
+  sidesLabel.appendChild(sidesCheck);
+  sidesLabel.appendChild(Object.assign(document.createElement('span'), { textContent: 'Guests can offer to bring a side dish' }));
+
+  const foodWrap = document.createElement('div');
+  foodWrap.appendChild(foodInput);
+  foodWrap.appendChild(sidesLabel);
+
   const fields = document.createElement('div');
   fields.className = 'space-y-4 mb-6';
   fields.appendChild(field('Date', dateInput));
   fields.appendChild(field('Time', timeInput));
   fields.appendChild(field('Location', locationInput));
   fields.appendChild(field('Description (optional)', descInput));
+  fields.appendChild(field('Food plan (optional)', foodWrap));
   box.appendChild(fields);
 
   // ── Buttons ───────────────────────────────────────────────
@@ -113,8 +133,10 @@ export function renderGameNightForm({ night = null, onSave }) {
         id: night?.id || crypto.randomUUID(),
         date: dateInput.value,
         time: timeInput.value,
-        location: locationInput.value.trim(),
+        location:   locationInput.value.trim(),
         description: descInput.value.trim(),
+        food:        foodInput.value.trim() || null,
+        allowSides:  sidesCheck.checked,
         hostUserId: night?.hostUserId || currentUser.userId,
         selectedGames: night?.selectedGames || {},
         rsvps: existing,

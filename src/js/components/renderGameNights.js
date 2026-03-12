@@ -3,6 +3,7 @@ import { renderRSVP } from './renderRSVP.js';
 import { renderSuggestions } from './renderSuggestions.js';
 import { renderSelectedGames } from './renderSelectedGames.js';
 import { renderHostGameControls, renderHostActions } from './renderGameNightHostControls.js';
+import { renderFood } from './renderFood.js';
 import { isHost } from '../auth/permissions.js';
 import { btn } from '../ui/elements.js';
 
@@ -69,6 +70,10 @@ export function renderGameNights(nights, currentUser) {
       }
 
       details.appendChild(renderRSVP(night, nights, currentUser));
+
+      const foodEl = renderFood(night, nights, currentUser);
+      if (foodEl) details.appendChild(foodEl);
+
       details.appendChild(renderSuggestions(night, nights));
 
       if (Object.keys(night.selectedGames || {}).length > 0) {
