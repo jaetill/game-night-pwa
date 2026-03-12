@@ -20,12 +20,21 @@ function initialsCircle(name) {
     : name.slice(0, 2);
   const hue = nameHue(name);
 
+  const wrapper = document.createElement('div');
+  wrapper.className = 'relative group shrink-0';
+
   const el = document.createElement('div');
-  el.title     = name;
-  el.className = 'flex items-center justify-center rounded-full text-white font-semibold shrink-0';
+  el.className = 'flex items-center justify-center rounded-full text-white font-semibold cursor-default';
   el.style.cssText = `width:1.75rem;height:1.75rem;font-size:0.6rem;background:hsl(${hue},55%,52%)`;
   el.textContent = initials.toUpperCase();
-  return el;
+
+  const tooltip = document.createElement('div');
+  tooltip.className = 'absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-10 transition-opacity duration-150';
+  tooltip.textContent = name;
+
+  wrapper.appendChild(el);
+  wrapper.appendChild(tooltip);
+  return wrapper;
 }
 
 export function renderSelectedGames(night, currentUser, nights) {
