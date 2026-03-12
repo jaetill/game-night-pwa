@@ -87,10 +87,20 @@ export function renderRSVP(night, nights, currentUser) {
     label.textContent = 'Attending';
     section.appendChild(label);
 
+    const legend = document.createElement('p');
+    legend.className = 'text-xs text-gray-400 -mt-1 mb-1';
+    legend.textContent = '🎮 playing · ↔ flexible · 👋 just hanging out';
+    section.appendChild(legend);
+
+    const typeOrder = { playing: 0, flexible: 1, spectating: 2 };
+    const sorted = [...night.rsvps].sort((a, b) =>
+      (typeOrder[a.type] ?? 3) - (typeOrder[b.type] ?? 3)
+    );
+
     const list = document.createElement('ul');
     list.className = 'space-y-1';
 
-    night.rsvps.forEach((rsvp, i) => {
+    sorted.forEach((rsvp, i) => {
       const item = document.createElement('li');
       item.className = 'flex items-center justify-between text-sm';
 
@@ -106,7 +116,7 @@ export function renderRSVP(night, nights, currentUser) {
         cancelBtn.onclick = async () => {
           cancelBtn.disabled = true;
           try {
-            night.rsvps.splice(i, 1);
+            night.rsvps = night.rsvps.filter(r => r.userId !== userId);
             withdrawFromAllGames(night, currentUser);
             night.lastModified = Date.now();
             sanitizeNight(night);
