@@ -1,33 +1,39 @@
 import { loadGameNights, fetchOwnedGames } from './data/index.js';
 import { renderApp } from './components/render.js';
 import { setupEventListeners } from './events/events.js';
+import { setCurrentUser } from './auth/userStore.js';
+import { toastError } from './ui/toast.js';
 
 import { Amplify, Auth, Hub } from 'aws-amplify';
 import amplifyConfig from './config.js';
 
-console.log('🔍 Bootstrapping app…');
-
-// Initialize Amplify
 Amplify.configure(amplifyConfig);
 
-// Optional: listen for auth events
 Hub.listen('auth', ({ payload }) => {
-  console.log(`[Hub] Auth event: ${payload.event}`, payload);
+  console.log(`[Auth] ${payload.event}`);
 });
 
 async function init() {
   try {
-    const user = await Auth.currentAuthenticatedUser();
-    console.log('✅ Authenticated user:', user);
+    const cognitoUser = await Auth.currentAuthenticatedUser();
 
-    const nights = await loadGameNights();
-    await fetchOwnedGames(user.username);
+    // Store identity so all components can call getCurrentUser()
+    setCurrentUser({
+      userId:   cognitoUser.username,
+      name:     cognitoUser.attributes?.name || cognitoUser.username,
+      email:    cognitoUser.attributes?.email || '',
+    });
 
-    renderApp({ nights, currentUser: user });
+    const [nights] = await Promise.all([
+      loadGameNights(),
+      fetchOwnedGames(cognitoUser.username)
+    ]);
+
+    renderApp({ nights, currentUser: { userId: cognitoUser.username, name: cognitoUser.attributes?.name || cognitoUser.username } });
     setupEventListeners();
   } catch (err) {
-    console.error('❌ Failed to initialize app:', err);
-    // If something went wrong here, session-check.js should’ve already redirected
+    console.error('Init failed:', err);
+    toastError('Something went wrong loading the app.');
   }
 }
 

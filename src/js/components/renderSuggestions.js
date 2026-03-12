@@ -1,37 +1,59 @@
-import {  syncAndRender } from '../utils/index.js';
+import { syncAndRender } from '../utils/index.js';
 import { getCurrentUser } from '../auth/userStore.js';
+import { btn, input } from '../ui/elements.js';
 
 export function renderSuggestions(night, nights) {
   const wrapper = document.createElement('div');
 
-  // 📝 Input for suggesting a game
-  const input = document.createElement('input');
-  input.placeholder = 'Suggest a game';
-  input.style.marginRight = '0.5em';
+  const label = document.createElement('span');
+  label.className = 'section-label';
+  label.textContent = 'Game Suggestions';
+  wrapper.appendChild(label);
 
-  const suggestBtn = document.createElement('button');
-  suggestBtn.textContent = 'Suggest';
+  // ── Input row ────────────────────────────────────────────
+  const row = document.createElement('div');
+  row.className = 'flex gap-2';
 
+  const inputEl = input('Suggest a game…');
+  inputEl.className = 'field flex-1';
+
+  const suggestBtn = btn('Suggest', 'secondary');
   suggestBtn.onclick = () => {
-    const title = input.value.trim();
-    if (title) {
-      night.suggestions = night.suggestions || [];
-      night.suggestions.push({ title, suggestedBy: getCurrentUser().name });
-      night.lastModified = Date.now();
-      syncAndRender(nights);
-    }
+    const title = inputEl.value.trim();
+    if (!title) return;
+    night.suggestions = night.suggestions || [];
+    night.suggestions.push({ title, suggestedBy: getCurrentUser()?.name || 'Someone' });
+    night.lastModified = Date.now();
+    inputEl.value = '';
+    syncAndRender(nights);
   };
 
-  wrapper.appendChild(document.createElement('br'));
-  wrapper.appendChild(input);
-  wrapper.appendChild(suggestBtn);
+  // Allow Enter key to submit
+  inputEl.addEventListener('keydown', e => { if (e.key === 'Enter') suggestBtn.click(); });
 
-  // 📃 Show existing suggestions
+  row.appendChild(inputEl);
+  row.appendChild(suggestBtn);
+  wrapper.appendChild(row);
+
+  // ── Suggestions list ─────────────────────────────────────
   if (night.suggestions?.length) {
     const list = document.createElement('ul');
-    night.suggestions.forEach(s =>
-      list.innerHTML += `<li>🎲 ${s.title} <em>(suggested by ${s.suggestedBy})</em></li>`
-    );
+    list.className = 'mt-2 space-y-1';
+    night.suggestions.forEach(s => {
+      const li = document.createElement('li');
+      li.className = 'text-sm text-gray-700 flex items-center gap-1';
+
+      const title = document.createElement('span');
+      title.textContent = `🎲 ${s.title}`;
+
+      const by = document.createElement('em');
+      by.className = 'text-xs text-gray-400 ml-1';
+      by.textContent = `by ${s.suggestedBy}`;
+
+      li.appendChild(title);
+      li.appendChild(by);
+      list.appendChild(li);
+    });
     wrapper.appendChild(list);
   }
 

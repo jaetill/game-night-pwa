@@ -4,66 +4,80 @@ import { renderSuggestions } from './renderSuggestions.js';
 import { renderSelectedGames } from './renderSelectedGames.js';
 import { renderHostGameControls, renderHostActions } from './renderGameNightHostControls.js';
 import { isHost } from '../auth/permissions.js';
+import { btn } from '../ui/elements.js';
 
 export function renderGameNights(nights, currentUser, expandedNightIds = new Set()) {
   const container = document.getElementById('gameNightList');
+  if (!container) return;
   container.innerHTML = '';
 
-  nights.forEach(night => {
-    const li = document.createElement('li');
-    li.className = 'game-card';
+  if (!nights.length) {
+    container.innerHTML = `
+      <div class="text-center py-12 text-gray-400">
+        <div class="text-4xl mb-2">🎲</div>
+        <p class="font-medium">No game nights yet</p>
+        <p class="text-sm">Create one below to get started!</p>
+      </div>`;
+    return;
+  }
 
+  const sorted = [...nights].sort(
+    (a, b) => new Date(`${a.date}T${a.time}`) - new Date(`${b.date}T${b.time}`)
+  );
+
+  sorted.forEach(night => {
     const isExpanded = expandedNightIds.has(night.id);
 
-    // Toggle button
-    const toggleBtn = document.createElement('button');
-    toggleBtn.textContent = isExpanded ? 'Collapse' : 'Expand';
+    const card = document.createElement('li');
+    card.className = 'card list-none';
+
+    // Summary row (always visible)
+    const summaryRow = document.createElement('div');
+    summaryRow.className = 'flex items-start justify-between gap-3';
+
+    const summaryLeft = renderGameNightSummary(night, currentUser);
+    summaryLeft.className = 'flex-1 min-w-0';
+
+    const toggleBtn = btn(isExpanded ? 'Close ▴' : 'Details ▾', 'ghost');
+    toggleBtn.className += ' shrink-0 text-xs';
     toggleBtn.onclick = () => {
-      if (isExpanded) {
-        expandedNightIds.delete(night.id);
-      } else {
-        expandedNightIds.add(night.id);
-      }
+      isExpanded ? expandedNightIds.delete(night.id) : expandedNightIds.add(night.id);
       renderGameNights(nights, currentUser, expandedNightIds);
     };
-    li.appendChild(toggleBtn);
 
-    // Summary or Detail content
+    summaryRow.appendChild(summaryLeft);
+    summaryRow.appendChild(toggleBtn);
+    card.appendChild(summaryRow);
+
     if (isExpanded) {
-      if (night.location) {
-        const locationLine = document.createElement('div');
-        locationLine.textContent = `📍 Location: ${night.location}`;
-        li.appendChild(locationLine);
-      }
+      const details = document.createElement('div');
+      details.className = 'card-section space-y-4';
 
       if (night.description) {
-        const descLine = document.createElement('div');
-        descLine.textContent = `📝 ${night.description}`;
-        li.appendChild(descLine);
+        const desc = document.createElement('p');
+        desc.className = 'text-sm text-gray-600 italic';
+        desc.textContent = night.description;
+        details.appendChild(desc);
       }
 
+      details.appendChild(renderRSVP(night, nights, currentUser));
+      details.appendChild(renderSuggestions(night, nights));
 
-      const rsvpUI = renderRSVP(night, nights);
-      li.appendChild(rsvpUI);
-
-      const suggestionsUI = renderSuggestions(night, nights);
-      li.appendChild(suggestionsUI);
-
-      if (Object.keys(night.selectedGames).length > 0) {
-        const selectedGamesUI = renderSelectedGames(night, currentUser, nights);
-        li.appendChild(selectedGamesUI);
+      if (Object.keys(night.selectedGames || {}).length > 0) {
+        details.appendChild(renderSelectedGames(night, currentUser, nights));
       }
 
       if (isHost(currentUser, night)) {
-        li.appendChild(renderHostGameControls(night, nights));
-        li.appendChild(renderHostActions(night, nights));
+        const hostSection = document.createElement('div');
+        hostSection.className = 'card-section';
+        hostSection.appendChild(renderHostGameControls(night, nights));
+        hostSection.appendChild(renderHostActions(night, nights));
+        details.appendChild(hostSection);
       }
 
-    } else {
-      const summary = renderGameNightSummary(night);
-      li.appendChild(summary);
+      card.appendChild(details);
     }
 
-    container.appendChild(li);
+    container.appendChild(card);
   });
 }

@@ -1,20 +1,30 @@
 import { Amplify, Auth } from 'aws-amplify';
 import amplifyConfig from './config.js';
+
 Amplify.configure(amplifyConfig);
 
-document.getElementById('login-form').addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const username = document.getElementById('username').value;
+const form    = document.getElementById('login-form');
+const submitBtn = document.getElementById('login-btn');
+const errorEl = document.getElementById('error');
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const username = document.getElementById('username').value.trim();
   const password = document.getElementById('password').value;
-  const errorDiv = document.getElementById('error');
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Signing in…';
+  errorEl.classList.add('hidden');
+  errorEl.textContent = '';
 
   try {
-    const user = await Auth.signIn(username, password);
-    console.log('✅ Logged in as:', user);
-    errorDiv.textContent = '';
-    window.location.href = 'index.html'; // or wherever you'd like to redirect
-  } catch (error) {
-    console.error('❌ Login failed:', error);
-    errorDiv.textContent = error.message || 'Login failed. Please try again.';
+    await Auth.signIn(username, password);
+    window.location.href = 'index.html';
+  } catch (err) {
+    errorEl.textContent = err.message || 'Sign in failed. Please try again.';
+    errorEl.classList.remove('hidden');
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Sign In';
   }
 });

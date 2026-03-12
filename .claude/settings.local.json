@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"C:/Users/tille/Documents/Source Code/game-night-pwa\" && npm install 2>&1)",
+      "Bash(cd \"C:/Users/tille/Documents/Source Code/game-night-pwa\" && npm test 2>&1)",
+      "Bash(cd \"C:/Users/tille/Documents/Source Code/game-night-pwa\" && npm run build 2>&1)",
+      "Bash(cd \"C:/Users/tille/Documents/Source Code/game-night-pwa\" && gh repo view jaetill/game-night-pwa --json name,defaultBranchRef,hasIssuesEnabled,url 2>&1)",
+      "Bash(cd \"C:/Users/tille/Documents/Source Code/game-night-pwa\" && curl -s \"https://api.github.com/repos/jaetill/game-night-pwa/actions/runs?per_page=3\" | python -c \"import sys,json; runs=json.load\\(sys.stdin\\)['workflow_runs']; [print\\(r['name'], r['status'], r['conclusion'], r['html_url']\\) for r in runs]\" 2>&1)",
+      "Bash(aws --version 2>&1 && aws sts get-caller-identity 2>&1)",
+      "Bash(aws lambda:*)",
+      "Bash(cd \"C:/Users/tille/Documents/Source Code/game-night-pwa\" && npm install -D tailwindcss @tailwindcss/vite 2>&1 | tail -5)"
+    ]
+  }
+}

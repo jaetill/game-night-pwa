@@ -1,123 +1,131 @@
 import { getCurrentUser } from '../auth/userStore.js';
+import { toastSuccess, toastError } from '../ui/toast.js';
+import { btn } from '../ui/elements.js';
 
 export function renderGameNightForm({ night = null, onSave }) {
-  const scheduler = document.getElementById('schedulerSection');
-  if (!scheduler) {
-    console.warn('No #schedulerSection found.');
-    return;
-  }
-
-  // Prevent duplicates
-  if (scheduler.querySelector('#createNightForm')) return;
+  // Remove any existing form
+  document.getElementById('createNightForm')?.remove();
 
   const currentUser = getCurrentUser();
-  if (!currentUser) {
-    console.warn('No user session found.');
-    return;
+  if (!currentUser) return;
+
+  // ── Build modal backdrop ─────────────────────────────────
+  const backdrop = document.createElement('div');
+  backdrop.id = 'createNightForm';
+  backdrop.className = 'modal-backdrop';
+  backdrop.onclick = e => { if (e.target === backdrop) backdrop.remove(); };
+
+  const box = document.createElement('div');
+  box.className = 'modal-box';
+  backdrop.appendChild(box);
+
+  // Header
+  const heading = document.createElement('h3');
+  heading.className = 'text-lg font-bold text-gray-900 mb-5';
+  heading.textContent = night ? 'Edit Game Night' : 'Create a Game Night';
+  box.appendChild(heading);
+
+  // ── Fields ────────────────────────────────────────────────
+  const today = new Date().toISOString().split('T')[0];
+
+  function field(labelText, el) {
+    const wrap = document.createElement('div');
+    const label = document.createElement('label');
+    label.className = 'block text-sm font-medium text-gray-700 mb-1';
+    label.textContent = labelText;
+    wrap.appendChild(label);
+    wrap.appendChild(el);
+    return wrap;
   }
-
-  const form = document.createElement('form');
-  form.id = 'createNightForm';
-  form.style.margin = '1em 0';
-  form.style.padding = '1em';
-  form.style.border = '1px solid #ccc';
-  form.style.borderRadius = '6px';
-  form.style.maxWidth = '300px';
-  form.style.background = '#f8f8f8';
-
-  const heading = document.createElement('h4');
-  heading.textContent = night ? 'Edit Game Night' : 'Create a New Game Night';
 
   const dateInput = document.createElement('input');
   dateInput.type = 'date';
   dateInput.required = true;
-  dateInput.value = night?.date || new Date().toISOString().split('T')[0];
-  dateInput.style.marginBottom = '0.5em';
-  dateInput.style.display = 'block';
+  dateInput.value = night?.date || today;
+  dateInput.className = 'field';
 
   const timeInput = document.createElement('input');
   timeInput.type = 'time';
   timeInput.required = true;
   timeInput.value = night?.time || '19:00';
-  timeInput.style.marginBottom = '0.5em';
-  timeInput.style.display = 'block';
+  timeInput.className = 'field';
 
   const locationInput = document.createElement('input');
   locationInput.type = 'text';
   locationInput.required = true;
   locationInput.placeholder = '123 Maple Lane or Zoom link';
   locationInput.value = night?.location || '';
-  locationInput.style.marginBottom = '0.5em';
-  locationInput.style.display = 'block';
+  locationInput.className = 'field';
 
-  const descriptionInput = document.createElement('textarea');
-  descriptionInput.placeholder = 'Casual night, bring your favorites!';
-  descriptionInput.value = night?.description || '';
-  descriptionInput.style.marginBottom = '0.5em';
-  descriptionInput.style.display = 'block';
+  const descInput = document.createElement('textarea');
+  descInput.placeholder = 'Casual night, bring your favorites!';
+  descInput.value = night?.description || '';
+  descInput.rows = 3;
+  descInput.className = 'field resize-none';
 
-  const submitBtn = document.createElement('button');
-  submitBtn.type = 'submit';
-  submitBtn.textContent = night ? 'Update Night' : 'Create Night';
-  submitBtn.style.marginTop = '0.5em';
+  const fields = document.createElement('div');
+  fields.className = 'space-y-4 mb-6';
+  fields.appendChild(field('Date', dateInput));
+  fields.appendChild(field('Time', timeInput));
+  fields.appendChild(field('Location', locationInput));
+  fields.appendChild(field('Description (optional)', descInput));
+  box.appendChild(fields);
 
-  const cancelBtn = document.createElement('button');
-  cancelBtn.type = 'button';
-  cancelBtn.textContent = 'Cancel';
-  cancelBtn.style.marginLeft = '0.5em';
-  cancelBtn.onclick = () => form.remove();
+  // ── Buttons ───────────────────────────────────────────────
+  const btnRow = document.createElement('div');
+  btnRow.className = 'flex gap-3';
 
-  form.append(
-  heading,
-  dateInput,
-  timeInput,
-  locationInput,
-  descriptionInput,
-  submitBtn,
-  cancelBtn
-);
+  const submitBtn = btn(night ? 'Update' : 'Create Night', 'primary');
+  submitBtn.className += ' flex-1 py-2';
 
-  scheduler.appendChild(form);
+  const cancelBtn = btn('Cancel', 'secondary');
+  cancelBtn.className += ' flex-1 py-2';
+  cancelBtn.onclick = () => backdrop.remove();
 
-form.onsubmit = async e => {
-  e.preventDefault();
+  btnRow.appendChild(submitBtn);
+  btnRow.appendChild(cancelBtn);
+  box.appendChild(btnRow);
 
-  const updatedNight = {
-    ...(night || {}),
-    id: night?.id || crypto.randomUUID(),
-    date: dateInput.value,
-    time: timeInput.value,
-    location: locationInput.value.trim(),
-    description: descriptionInput.value.trim(),
-    hostUserId: night?.hostUserId || currentUser.userId,
-    selectedGames: night?.selectedGames || [],
-    rsvps: (() => {
-      // Start with existing RSVPs if editing
+  document.body.appendChild(backdrop);
+  dateInput.focus();
+
+  // ── Submit ────────────────────────────────────────────────
+  submitBtn.onclick = async () => {
+    if (!dateInput.value || !locationInput.value.trim()) {
+      dateInput.reportValidity();
+      locationInput.reportValidity();
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Saving…';
+
+    try {
       const existing = night?.rsvps ? [...night.rsvps] : [];
-      // Ensure host is included
       if (!existing.some(r => r.userId === currentUser.userId)) {
-        existing.push({
-          userId: currentUser.userId,
-          timestamp: Date.now()
-        });
+        existing.push({ userId: currentUser.userId, name: currentUser.name, timestamp: Date.now() });
       }
-      return existing;
-    })(),
-    lastModified: Date.now(),
+
+      const updatedNight = {
+        ...(night || {}),
+        id: night?.id || crypto.randomUUID(),
+        date: dateInput.value,
+        time: timeInput.value,
+        location: locationInput.value.trim(),
+        description: descInput.value.trim(),
+        hostUserId: night?.hostUserId || currentUser.userId,
+        selectedGames: night?.selectedGames || {},
+        rsvps: existing,
+        lastModified: Date.now(),
+      };
+
+      await onSave(updatedNight);
+      backdrop.remove();
+      toastSuccess(night ? 'Event updated!' : 'Game night created!');
+    } catch {
+      toastError('Could not save. Try again.');
+      submitBtn.disabled = false;
+      submitBtn.textContent = night ? 'Update' : 'Create Night';
+    }
   };
-
-  await onSave(updatedNight);
-
-  form.remove();
-
-  const confirmation = document.createElement('div');
-  confirmation.textContent = night ? '✅ Game Night updated!' : '✅ Game Night created!';
-  confirmation.style.marginTop = '0.5em';
-  confirmation.style.fontSize = '0.9em';
-  confirmation.style.color = 'green';
-  scheduler.appendChild(confirmation);
-
-  setTimeout(() => confirmation.remove(), 2500);
-};
-
 }

@@ -4,18 +4,15 @@ import { saveGameNights } from '../data/index.js';
 import { renderGameNightForm } from './renderGameNightForm.js';
 import { getCurrentUser } from '../auth/userStore.js';
 import { renderGameNights } from './renderGameNights.js';
+import { btn, input } from '../ui/elements.js';
+import { toastSuccess, toastError, toastInfo } from '../ui/toast.js';
 
-/**
- * Renders admin controls for adding games to a game night.
- * Removes any separate UI for removing games (now handled inline).
- */
 export function renderHostGameControls(night, nights) {
   const container = document.createElement('div');
-  container.style.marginTop = '0.5em';
+  container.className = 'space-y-3';
 
-  // --- Add Game Button (already exists) ---
-  const addGameBtn = document.createElement('button');
-  addGameBtn.textContent = 'Add Game';
+  // ── Add game ─────────────────────────────────────────────
+  const addGameBtn = btn('＋ Add game', 'secondary');
   addGameBtn.onclick = () => {
     openGameSelectionModal({
       night,
@@ -26,6 +23,7 @@ export function renderHostGameControls(night, nights) {
             maxPlayers: game.defaultMaxPlayers || 4,
             signedUpPlayers: []
           };
+          toastSuccess(`${game.title} added!`);
         }
         syncAndRender(nights);
       }
@@ -33,53 +31,47 @@ export function renderHostGameControls(night, nights) {
   };
   container.appendChild(addGameBtn);
 
-  // --- Invite User UI ---
-  const inviteLabel = document.createElement('label');
-  inviteLabel.textContent = 'Invite user by ID: ';
-  inviteLabel.style.marginLeft = '1em';
+  // ── Invite by username ───────────────────────────────────
+  const inviteRow = document.createElement('div');
+  inviteRow.className = 'flex gap-2 items-center';
 
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.placeholder = 'e.g. eli456';
-  input.style.marginRight = '0.5em';
+  const inviteInput = input('Invite by username…');
+  inviteInput.className = 'field flex-1 text-sm';
 
-  const inviteBtn = document.createElement('button');
-  inviteBtn.textContent = '+';
+  const inviteBtn = btn('Invite', 'secondary');
   inviteBtn.onclick = () => {
-    const userId = input.value.trim();
+    const userId = inviteInput.value.trim();
     if (!userId) return;
 
     night.invited = night.invited || [];
-    const alreadyThere =
-      night.rsvps.some(r => r.userId === userId) ||
-      night.invited.includes(userId);
-
-    if (!alreadyThere) {
+    const already = night.rsvps?.some(r => r.userId === userId) ||
+                    night.invited.includes(userId);
+    if (!already) {
       night.invited.push(userId);
       night.lastModified = Date.now();
+      inviteInput.value = '';
       syncAndRender(nights);
+      toastSuccess(`${userId} invited!`);
+    } else {
+      toastInfo(`${userId} is already invited.`);
+      inviteInput.value = '';
     }
-
-    input.value = ''; // reset after invite
   };
 
-  inviteLabel.appendChild(input);
-  inviteLabel.appendChild(inviteBtn);
-  container.appendChild(document.createElement('br'));
-  container.appendChild(inviteLabel);
+  inviteInput.addEventListener('keydown', e => { if (e.key === 'Enter') inviteBtn.click(); });
+
+  inviteRow.appendChild(inviteInput);
+  inviteRow.appendChild(inviteBtn);
+  container.appendChild(inviteRow);
 
   return container;
 }
 
-/**
- * Renders admin-level actions for a given game night,
- * including editing or canceling the event.
- */
 export function renderHostActions(night, nights) {
   const container = document.createElement('div');
+  container.className = 'flex gap-2 pt-2';
 
-  const editBtn = document.createElement('button');
-  editBtn.textContent = 'Edit';
+  const editBtn = btn('Edit event', 'secondary');
   editBtn.onclick = () => {
     renderGameNightForm({
       night,
@@ -88,26 +80,26 @@ export function renderHostActions(night, nights) {
         if (idx !== -1) nights[idx] = updated;
         await saveGameNights(nights);
         renderGameNights(nights, getCurrentUser());
+        toastSuccess('Event updated!');
       }
     });
   };
 
-
-
-  const cancelBtn = document.createElement('button');
-  cancelBtn.textContent = 'Cancel Event';
+  const cancelBtn = btn('Cancel event', 'danger');
   cancelBtn.onclick = async () => {
-  const updated = nights.filter(n => n.id !== night.id);
-  try {
-    syncAndRender(updated);
-    await saveGameNights(updated);
-  } catch (err) {
-    console.error('❌ Failed to cancel event:', err);
-  }
-};
+    if (!confirm('Cancel this game night? This cannot be undone.')) return;
+    cancelBtn.disabled = true;
+    try {
+      const updated = nights.filter(n => n.id !== night.id);
+      syncAndRender(updated);
+      await saveGameNights(updated);
+      toastInfo('Event cancelled.');
+    } catch (err) {
+      toastError('Could not cancel event.');
+      cancelBtn.disabled = false;
+    }
+  };
 
-
-  container.appendChild(document.createElement('br'));
   container.appendChild(editBtn);
   container.appendChild(cancelBtn);
   return container;

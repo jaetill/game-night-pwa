@@ -5,74 +5,57 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#4CAF50">
+  <meta name="theme-color" content="#d97706">
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="style.css" />
-  <title>Game Night Planner</title>
+  <title>Game Night</title>
 </head>
-<body>
-  <h1>🎲 Game Night Planner</h1>
-  <button id="auth-button">Log Out</button>
+<body class="min-h-screen">
 
+  <!-- ── Header ────────────────────────────────────────── -->
+  <header class="bg-white shadow-sm sticky top-0 z-30">
+    <div class="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+      <h1 class="text-lg font-bold text-gray-900 flex items-center gap-2">
+        🎲 <span>Game Night</span>
+      </h1>
+      <button id="auth-button"
+              class="btn btn-ghost text-sm">
+        Log out
+      </button>
+    </div>
+  </header>
 
-  <!-- Visibile to everyone  -->
-  <h2>📅 Upcoming Game Nights</h2>
-  <div id="app"></div>
+  <!-- ── Main content ───────────────────────────────────── -->
+  <main class="max-w-2xl mx-auto px-4 py-6">
+    <div id="app"></div>
+  </main>
 
-  <!-- Only visible to admin -->
-  <section id="schedulerSection" style="display: none;">
-    <h2>📅 Schedule a Game Night</h2>
-    <form id="scheduleForm">
-      <label for="gameDate">Date:</label>
-      <input type="date" id="gameDate" required />
-
-      <label for="gameTime">Time:</label>
-      <input type="time" id="gameTime" required />
-
-      <label for="location">Location (required):</label>
-      <input type="text" id="location" placeholder="123 Maple Lane or Zoom link" required />
-
-      <label for="description">Description (optional):</label>
-      <textarea id="description" placeholder="Casual night, bring your favorites!"></textarea>
-
-      <input type="text" id="snackNotes" placeholder="Snacks (optional)" />
-
-      <button type="submit">Add Game Night</button>
-    </form>
-  </section>
-
-  <div id="nextGame"></div>
-  <ul id="guestList"></ul>
-
+  <!-- ── Game selection modal (rendered by gameSelectionModal.js) ── -->
   <div id="gameModal" class="modal hidden">
     <div class="modal-content">
-      <h2>Select a Game</h2>
+      <h2 class="text-lg font-bold text-gray-900 mb-4">Select a Game</h2>
 
-      <label>
-        Search:
-        <input type="text" id="gameSearch" placeholder="e.g. space, wings, catan" />
-      </label>
+      <div class="space-y-3 mb-4">
+        <input type="text" id="gameSearch" class="field"
+               placeholder="Search by name…">
+        <div class="flex items-center gap-2">
+          <label for="gamePlayerCount" class="text-sm text-gray-600 shrink-0">Players:</label>
+          <input type="number" id="gamePlayerCount" min="1" value="4" class="field w-24">
+        </div>
+      </div>
 
-      <label>
-        Players:
-        <input type="number" id="gamePlayerCount" min="1" value="4" />
-      </label>
+      <ul id="gameSelectionList" class="space-y-1 mb-4"></ul>
 
-      <ul id="gameSelectionList" class="game-list"></ul>
-
-      <button id="closeModal">Cancel</button>
+      <button id="closeModal" class="btn btn-secondary w-full">Cancel</button>
     </div>
   </div>
 
-  <!-- 🧠 Auth gate: redirect to login if not signed in -->
-	<script type="module" src="./src/js/auth/session-check.js"></script>
-	<script type="module" src="./src/js/app.js"></script>
+  <!-- ── Toast container ────────────────────────────────── -->
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- ── Auth gate ──────────────────────────────────────── -->
+  <script type="module" src="./src/js/auth/session-check.js"></script>
+  <script type="module" src="./src/js/app.js"></script>
 
 </body>
 </html>
-<!-- 
-  This HTML file serves as the main entry point for the Game Night Planner app.
-  It includes the necessary meta tags, styles, and scripts to run the application.
-  The app features a game night scheduler, guest list management, and game selection.
-  The auth gate ensures users are logged in before accessing the app's features.
-  --->

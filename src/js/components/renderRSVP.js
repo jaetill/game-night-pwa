@@ -5,70 +5,104 @@ import { renderGameNights } from './renderGameNights.js';
 import { sanitizeNight } from '../data/storage.js';
 import { DEBUG_MODE } from '../config.js';
 import { getDisplayName } from '../utils/userDirectory.js';
+import { btn } from '../ui/elements.js';
+import { toastSuccess, toastError } from '../ui/toast.js';
 
-export function renderRSVP(night, nights) {
+export function renderRSVP(night, nights, currentUser) {
   const wrapper = document.createElement('div');
-  const currentUser = getCurrentUser();
+  currentUser = currentUser || getCurrentUser();
   if (!currentUser) return wrapper;
 
   const { userId } = currentUser;
-  const alreadyRSVPd = night.rsvps?.some(r => r.userId === userId);
+  const alreadyRSVPd   = night.rsvps?.some(r => r.userId === userId);
   const alreadyDeclined = night.declined?.includes(userId);
-  const isInvited = night.invited?.includes(userId);
-  const isHost = night.hostUserId === userId;
+  const isInvited       = night.invited?.includes(userId);
 
-  // 📝 RSVP Button
-  if (!alreadyRSVPd && !alreadyDeclined && isInvited) {
-    const rsvpBtn = document.createElement('button');
-    rsvpBtn.textContent = 'RSVP';
+  const section = document.createElement('div');
+  section.className = 'space-y-3';
+
+  // ── Action buttons ───────────────────────────────────────
+  if (isInvited && !alreadyRSVPd && !alreadyDeclined) {
+    const actions = document.createElement('div');
+    actions.className = 'flex gap-2';
+
+    const rsvpBtn = btn("I'm going! 🎟", 'primary');
     rsvpBtn.onclick = async () => {
-      const name = prompt(`RSVP name for ${night.date}?`, currentUser.name || '');
-      if (name?.trim()) {
+      rsvpBtn.disabled = true;
+      rsvpBtn.textContent = 'Saving…';
+      try {
         night.rsvps = Array.isArray(night.rsvps) ? night.rsvps : [];
-        night.rsvps.push({ userId, name: name.trim() });
+        night.rsvps.push({ userId, name: currentUser.name || currentUser.userId });
         night.lastModified = Date.now();
         sanitizeNight(night);
         await saveGameNights(nights);
         renderGameNights(nights, currentUser);
+        toastSuccess("You're on the list!");
+      } catch {
+        toastError('Could not save RSVP. Try again.');
+        rsvpBtn.disabled = false;
+        rsvpBtn.textContent = "I'm going! 🎟";
       }
     };
-    wrapper.appendChild(rsvpBtn);
-  }
 
-  // ❌ Not Attending Button
-  if (!alreadyRSVPd && isInvited && !alreadyDeclined) {
-    const declineBtn = document.createElement('button');
-    declineBtn.textContent = 'Not Attending';
+    const declineBtn = btn('Not attending', 'ghost');
     declineBtn.onclick = async () => {
-      night.declined = Array.isArray(night.declined) ? night.declined : [];
-      night.declined.push(userId);
-      night.lastModified = Date.now();
-      sanitizeNight(night);
-      await saveGameNights(nights);
-      renderGameNights(nights, currentUser);
+      declineBtn.disabled = true;
+      try {
+        night.declined = Array.isArray(night.declined) ? night.declined : [];
+        night.declined.push(userId);
+        night.lastModified = Date.now();
+        sanitizeNight(night);
+        await saveGameNights(nights);
+        renderGameNights(nights, currentUser);
+        toastInfo('Marked as not attending.');
+      } catch {
+        toastError('Could not save. Try again.');
+        declineBtn.disabled = false;
+      }
     };
-    wrapper.appendChild(declineBtn);
+
+    actions.appendChild(rsvpBtn);
+    actions.appendChild(declineBtn);
+    section.appendChild(actions);
   }
 
-  // 🧾 RSVP List
+  // ── Attendee list ────────────────────────────────────────
   if (Array.isArray(night.rsvps) && night.rsvps.length > 0) {
+    const label = document.createElement('span');
+    label.className = 'section-label';
+    label.textContent = 'Attending';
+    section.appendChild(label);
+
     const list = document.createElement('ul');
+    list.className = 'space-y-1';
 
     night.rsvps.forEach((rsvp, i) => {
       const item = document.createElement('li');
-      const displayName = rsvp.name || getDisplayName(rsvp.userId);
-      item.textContent = `🎟️ ${displayName}`;
+      item.className = 'flex items-center justify-between text-sm';
+
+      const name = document.createElement('span');
+      name.className = 'text-gray-700';
+      name.textContent = `🎟 ${rsvp.name || getDisplayName(rsvp.userId)}`;
+      item.appendChild(name);
 
       if (rsvp.userId === userId) {
-        const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel RSVP';
+        const cancelBtn = btn('Cancel RSVP', 'danger');
+        cancelBtn.className += ' text-xs py-0.5 px-2';
         cancelBtn.onclick = async () => {
-          night.rsvps.splice(i, 1);
-          withdrawFromAllGames(night, currentUser);
-          night.lastModified = Date.now();
-          sanitizeNight(night);
-          await saveGameNights(nights);
-          renderGameNights(nights, currentUser);
+          cancelBtn.disabled = true;
+          try {
+            night.rsvps.splice(i, 1);
+            withdrawFromAllGames(night, currentUser);
+            night.lastModified = Date.now();
+            sanitizeNight(night);
+            await saveGameNights(nights);
+            renderGameNights(nights, currentUser);
+            toastInfo('RSVP cancelled.');
+          } catch {
+            toastError('Could not cancel. Try again.');
+            cancelBtn.disabled = false;
+          }
         };
         item.appendChild(cancelBtn);
       }
@@ -76,45 +110,42 @@ export function renderRSVP(night, nights) {
       list.appendChild(item);
     });
 
-    wrapper.appendChild(list);
+    section.appendChild(list);
   }
 
-  // ✉️ Pending Invites (excluding RSVP'd and Declined)
-  const pendingInvites = (night.invited || []).filter(
-    invitedId =>
-      !night.rsvps?.some(r => r.userId === invitedId) &&
-      !night.declined?.includes(invitedId)
+  // ── Pending invites ──────────────────────────────────────
+  const pending = (night.invited || []).filter(
+    id => !night.rsvps?.some(r => r.userId === id) && !night.declined?.includes(id)
   );
 
-  if (pendingInvites.length > 0) {
-    const inviteesBlock = document.createElement('div');
-    inviteesBlock.className = 'invited-users';
+  if (pending.length > 0) {
+    const label = document.createElement('span');
+    label.className = 'section-label';
+    label.textContent = 'Awaiting reply';
+    section.appendChild(label);
 
-    const label = document.createElement('strong');
-    label.textContent = 'Invited (awaiting RSVP):';
-    inviteesBlock.appendChild(label);
-
-    pendingInvites.forEach(invitedId => {
-      const displayName = getDisplayName(invitedId);
-      const item = document.createElement('div');
-      item.textContent = ` ${displayName}`;
+    const pendingDiv = document.createElement('div');
+    pendingDiv.className = 'flex flex-wrap gap-1';
+    pending.forEach(id => {
+      const chip = document.createElement('span');
+      chip.className = 'text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full';
+      chip.textContent = getDisplayName(id);
+      pendingDiv.appendChild(chip);
 
       if (DEBUG_MODE) {
-        const removeBtn = document.createElement('button');
-        removeBtn.textContent = 'Remove';
+        const removeBtn = btn('×', 'ghost');
+        removeBtn.className += ' text-xs py-0 px-1';
         removeBtn.onclick = () => {
-          night.invited = night.invited.filter(uid => uid !== invitedId);
+          night.invited = night.invited.filter(uid => uid !== id);
           night.lastModified = Date.now();
           renderGameNights(nights, currentUser);
         };
-        item.appendChild(removeBtn);
+        chip.appendChild(removeBtn);
       }
-
-      inviteesBlock.appendChild(item);
     });
-
-    wrapper.appendChild(inviteesBlock);
+    section.appendChild(pendingDiv);
   }
 
+  wrapper.appendChild(section);
   return wrapper;
 }
