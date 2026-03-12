@@ -8,7 +8,20 @@
       "Bash(cd \"C:/Users/tille/Documents/Source Code/game-night-pwa\" && curl -s \"https://api.github.com/repos/jaetill/game-night-pwa/actions/runs?per_page=3\" | python -c \"import sys,json; runs=json.load\\(sys.stdin\\)['workflow_runs']; [print\\(r['name'], r['status'], r['conclusion'], r['html_url']\\) for r in runs]\" 2>&1)",
       "Bash(aws --version 2>&1 && aws sts get-caller-identity 2>&1)",
       "Bash(aws lambda:*)",
-      "Bash(cd \"C:/Users/tille/Documents/Source Code/game-night-pwa\" && npm install -D tailwindcss @tailwindcss/vite 2>&1 | tail -5)"
+      "Bash(cd \"C:/Users/tille/Documents/Source Code/game-night-pwa\" && npm install -D tailwindcss @tailwindcss/vite 2>&1 | tail -5)",
+      "Bash(cd \"C:/Users/tille/Documents/Source Code/game-night-pwa\" && npm run build 2>&1 | tail -8 && npm test 2>&1 | tail -6)",
+      "Bash(cd \"C:/Users/tille/Documents/Source Code/game-night-pwa\" && npm run build 2>&1 | tail -5)",
+      "Bash(aws apigateway:*)",
+      "Bash(aws cognito-idp:*)",
+      "Bash(curl -s \"https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod/bgg?username=jaetill\" | head -c 500)",
+      "Bash(aws s3api:*)",
+      "Read(//usr/**)",
+      "Read(//mingw64/**)",
+      "Bash(python -c \":*)",
+      "Read(//c/tmp/**)",
+      "Bash(curl -s \"https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod/get-token?key=collections/jaetill.json\" | head -c 150)",
+      "Bash(aws iam:*)",
+      "Bash(sleep 5 && curl -s -X POST \"https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod/bgg\" \\\\\n  -H \"Content-Type: application/json\" \\\\\n  -d '{\"userId\":\"jaetill\",\"games\":[]}' 2>&1)"
     ]
   }
 }

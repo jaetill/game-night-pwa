@@ -1,6 +1,5 @@
 import { loadGameNights, fetchOwnedGames } from './data/index.js';
 import { renderApp } from './components/render.js';
-import { setupEventListeners } from './events/events.js';
 import { setCurrentUser } from './auth/userStore.js';
 import { loadProfile } from './auth/profile.js';
 import { toastError } from './ui/toast.js';
@@ -35,7 +34,6 @@ async function init() {
     ]);
 
     renderApp({ nights, currentUser: { userId: cognitoUser.username, name: cognitoUser.attributes?.name || cognitoUser.username } });
-    setupEventListeners();
   } catch (err) {
     console.error('Init failed:', err);
     toastError('Something went wrong loading the app.');
