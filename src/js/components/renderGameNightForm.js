@@ -103,7 +103,7 @@ export function renderGameNightForm({ night = null, onSave }) {
     try {
       const existing = night?.rsvps ? [...night.rsvps] : [];
       if (!existing.some(r => r.userId === currentUser.userId)) {
-        existing.push({ userId: currentUser.userId, name: currentUser.name, timestamp: Date.now() });
+        existing.push({ userId: currentUser.userId, name: currentUser.name, type: 'playing', timestamp: Date.now() });
       }
 
       const updatedNight = {

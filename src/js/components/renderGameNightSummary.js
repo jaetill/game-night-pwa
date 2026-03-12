@@ -8,8 +8,7 @@ export function renderGameNightSummary(night, currentUser) {
   const declined = Array.isArray(night.declined) ? night.declined : [];
   const invited  = Array.isArray(night.invited)  ? night.invited  : [];
 
-  const hostDeclined  = declined.includes(night.hostUserId);
-  const attendingCount = rsvps.length + (night.hostUserId && !hostDeclined ? 1 : 0);
+  const attendingCount = rsvps.length;
   const pendingCount   = invited.filter(
     uid => !rsvps.some(r => r.userId === uid) && !declined.includes(uid)
   ).length;
