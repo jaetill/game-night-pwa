@@ -4,7 +4,7 @@ import { renderGameNights } from './renderGameNights.js';
 import { isHost } from '../auth/permissions.js';
 import { getDisplayName } from '../utils/userDirectory.js';
 import { btn } from '../ui/elements.js';
-import { toastSuccess, toastError } from '../ui/toast.js';
+import { toastSuccess, toastError, toastInfo } from '../ui/toast.js';
 
 export function renderSelectedGames(night, currentUser, nights) {
   const container = document.createElement('div');
