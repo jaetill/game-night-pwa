@@ -31,29 +31,34 @@ export function renderHostGameControls(night, nights) {
   };
   container.appendChild(addGameBtn);
 
-  // ── Invite by username ───────────────────────────────────
+  // ── Invite by email ──────────────────────────────────────
   const inviteRow = document.createElement('div');
   inviteRow.className = 'flex gap-2 items-center';
 
-  const inviteInput = input('Invite by username…');
+  const inviteInput = input('Invite by email…');
+  inviteInput.type = 'email';
   inviteInput.className = 'field flex-1 text-sm';
 
   const inviteBtn = btn('Invite', 'secondary');
   inviteBtn.onclick = () => {
-    const userId = inviteInput.value.trim();
-    if (!userId) return;
+    const email = inviteInput.value.trim().toLowerCase();
+    if (!email) return;
+    if (!email.includes('@')) {
+      toastError('Please enter a valid email address.');
+      return;
+    }
 
     night.invited = night.invited || [];
-    const already = night.rsvps?.some(r => r.userId === userId) ||
-                    night.invited.includes(userId);
+    const already = night.rsvps?.some(r => r.userId === email) ||
+                    night.invited.includes(email);
     if (!already) {
-      night.invited.push(userId);
+      night.invited.push(email);
       night.lastModified = Date.now();
       inviteInput.value = '';
       syncAndRender(nights);
-      toastSuccess(`${userId} invited!`);
+      toastSuccess(`${email} invited!`);
     } else {
-      toastInfo(`${userId} is already invited.`);
+      toastInfo(`${email} is already invited.`);
       inviteInput.value = '';
     }
   };

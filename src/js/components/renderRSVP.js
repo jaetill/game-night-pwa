@@ -13,10 +13,11 @@ export function renderRSVP(night, nights, currentUser) {
   currentUser = currentUser || getCurrentUser();
   if (!currentUser) return wrapper;
 
-  const { userId } = currentUser;
-  const alreadyRSVPd   = night.rsvps?.some(r => r.userId === userId);
+  const { userId, email } = currentUser;
+  const alreadyRSVPd    = night.rsvps?.some(r => r.userId === userId);
   const alreadyDeclined = night.declined?.includes(userId);
-  const isInvited       = night.invited?.includes(userId);
+  const isInvited       = night.invited?.includes(userId) ||
+                          (email && night.invited?.includes(email.toLowerCase()));
 
   const section = document.createElement('div');
   section.className = 'space-y-3';

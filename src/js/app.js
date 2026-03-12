@@ -2,6 +2,7 @@ import { loadGameNights, fetchOwnedGames } from './data/index.js';
 import { renderApp } from './components/render.js';
 import { setCurrentUser } from './auth/userStore.js';
 import { loadProfile } from './auth/profile.js';
+import { buildDirectoryFromNights } from './utils/userDirectory.js';
 import { toastError } from './ui/toast.js';
 
 import { Amplify, Auth, Hub } from 'aws-amplify';
@@ -33,7 +34,12 @@ async function init() {
       fetchOwnedGames(cognitoUser.username),
     ]);
 
-    renderApp({ nights, currentUser: { userId: cognitoUser.username, name: cognitoUser.attributes?.name || cognitoUser.username } });
+    buildDirectoryFromNights(nights);
+    renderApp({ nights, currentUser: {
+      userId: cognitoUser.username,
+      name:   cognitoUser.attributes?.name || cognitoUser.username,
+      email:  cognitoUser.attributes?.email || '',
+    } });
   } catch (err) {
     console.error('Init failed:', err);
     toastError('Something went wrong loading the app.');
