@@ -55,7 +55,8 @@ export function renderGameNightForm({ night = null, onSave }) {
   locationInput.type = 'text';
   locationInput.required = true;
   locationInput.placeholder = '123 Maple Lane or Zoom link';
-  locationInput.value = night?.location || (!night ? getProfile().address || '' : '');
+  const profileAddress = (getProfile().address || '').replace(/\n+/g, ', ').trim();
+  locationInput.value = night?.location || (!night ? profileAddress : '');
   locationInput.className = 'field';
 
   const descInput = document.createElement('textarea');
