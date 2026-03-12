@@ -5,12 +5,17 @@ import { isHost } from '../auth/permissions.js';
 import { btn, input } from '../ui/elements.js';
 
 export function renderSuggestions(night, nights) {
+  const currentUserForHost = getCurrentUser();
+  const hostView = isHost(currentUserForHost, night);
+
   const wrapper = document.createElement('div');
 
   const label = document.createElement('span');
   label.className = 'section-label';
   label.textContent = 'Game Suggestions';
   wrapper.appendChild(label);
+
+  if (hostView && !night.suggestions?.length) return wrapper;
 
   // ── Search input with live dropdown ────────────────────────
   const inputWrap = document.createElement('div');
@@ -82,7 +87,6 @@ export function renderSuggestions(night, nights) {
   bringLabel.appendChild(bringCheck);
   bringLabel.appendChild(bringText);
 
-  // ── Submit row ─────────────────────────────────────────────
   const submitRow = document.createElement('div');
   submitRow.className = 'flex gap-2 mt-2';
   const suggestBtn = btn('Suggest', 'secondary');
@@ -95,15 +99,15 @@ export function renderSuggestions(night, nights) {
     const me = getCurrentUser();
     night.suggestions.push({
       title,
-      bggId:            selectedGame?.id     || null,
-      thumbnail:        selectedGame?.thumbnail || null,
-      suggestedBy:      me?.name             || 'Someone',
-      suggestedByUserId: me?.userId          || null,
-      willBring:        bringCheck.checked,
+      bggId:             selectedGame?.id        || null,
+      thumbnail:         selectedGame?.thumbnail  || null,
+      suggestedBy:       me?.name                || 'Someone',
+      suggestedByUserId: me?.userId              || null,
+      willBring:         bringCheck.checked,
     });
 
     night.lastModified = Date.now();
-    inputEl.value     = '';
+    inputEl.value      = '';
     bringCheck.checked = false;
     selectedGame       = null;
     syncAndRender(nights);
@@ -112,10 +116,12 @@ export function renderSuggestions(night, nights) {
   inputEl.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
   suggestBtn.onclick = submit;
 
-  submitRow.appendChild(inputWrap);
-  submitRow.appendChild(suggestBtn);
-  wrapper.appendChild(submitRow);
-  wrapper.appendChild(bringLabel);
+  if (!hostView) {
+    submitRow.appendChild(inputWrap);
+    submitRow.appendChild(suggestBtn);
+    wrapper.appendChild(submitRow);
+    wrapper.appendChild(bringLabel);
+  }
 
   // ── Suggestions list ───────────────────────────────────────
   if (night.suggestions?.length) {
