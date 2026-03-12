@@ -119,7 +119,7 @@ export function renderRSVP(night, nights, currentUser) {
       section.appendChild(groupLabel);
 
       const list = document.createElement('ul');
-      list.className = 'space-y-1';
+      list.className = 'space-y-1 pl-3';
 
       members.forEach(rsvp => {
         const item = document.createElement('li');
