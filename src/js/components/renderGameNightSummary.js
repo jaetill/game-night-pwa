@@ -26,7 +26,7 @@ export function renderGameNightSummary(night, currentUser) {
 
   const dateText = document.createElement('div');
   dateText.innerHTML = `<p class="font-semibold text-gray-900">${day}</p>
-    <p class="text-sm text-gray-500">${time}${canSeeLocation && night.location ? ` · ${night.location}` : ''}</p>`;
+    <p class="text-sm text-gray-500">${time}${canSeeLocation && night.location ? ` · ${night.location.replace(/\n+/g, ', ')}` : ''}</p>`;
   dateRow.appendChild(dateText);
 
   // Current user's own status badge
