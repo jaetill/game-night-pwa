@@ -10,12 +10,12 @@ export function renderSuggestions(night, nights) {
 
   const wrapper = document.createElement('div');
 
+  if (hostView && !night.suggestions?.length) return wrapper;
+
   const label = document.createElement('span');
   label.className = 'section-label';
   label.textContent = 'Game Suggestions';
   wrapper.appendChild(label);
-
-  if (hostView && !night.suggestions?.length) return wrapper;
 
   // ── Search input with live dropdown ────────────────────────
   const inputWrap = document.createElement('div');
