@@ -6,6 +6,28 @@ import { getDisplayName } from '../utils/userDirectory.js';
 import { btn } from '../ui/elements.js';
 import { toastSuccess, toastError, toastInfo } from '../ui/toast.js';
 
+// Deterministic hue from a string so the same person always gets the same color
+function nameHue(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) & 0xffff;
+  return h % 360;
+}
+
+function initialsCircle(name) {
+  const parts    = name.trim().split(/\s+/);
+  const initials = parts.length >= 2
+    ? parts[0][0] + parts[parts.length - 1][0]
+    : name.slice(0, 2);
+  const hue = nameHue(name);
+
+  const el = document.createElement('div');
+  el.title     = name;
+  el.className = 'flex items-center justify-center rounded-full text-white font-semibold shrink-0';
+  el.style.cssText = `width:1.75rem;height:1.75rem;font-size:0.6rem;background:hsl(${hue},55%,52%)`;
+  el.textContent = initials.toUpperCase();
+  return el;
+}
+
 export function renderSelectedGames(night, currentUser, nights) {
   const container = document.createElement('div');
 
@@ -77,24 +99,31 @@ export function renderSelectedGames(night, currentUser, nights) {
     if (count >= maxPlayers) playerRow.classList.add('text-red-500', 'font-medium');
     info.appendChild(playerRow);
 
-    // Signed-up player names
+    // Signed-up players — initials circles
     if (signedUpPlayers.length) {
-      const names = document.createElement('p');
-      names.className = 'text-xs text-gray-400 mt-0.5 truncate';
-      names.textContent = signedUpPlayers
-        .map(p => p.name || getDisplayName(p.userId))
-        .join(', ');
-      info.appendChild(names);
+      const avatarRow = document.createElement('div');
+      avatarRow.className = 'flex flex-wrap gap-1 mt-1.5';
+      signedUpPlayers.forEach(p => {
+        avatarRow.appendChild(initialsCircle(p.name || getDisplayName(p.userId)));
+      });
+      info.appendChild(avatarRow);
     }
 
-    // Interested player names
+    // Interested players — name chips
     if (interestedPlayers.length) {
-      const interested = document.createElement('p');
-      interested.className = 'text-xs text-gray-400 mt-0.5 truncate italic';
-      interested.textContent = 'Interested: ' + interestedPlayers
-        .map(p => p.name || getDisplayName(p.userId))
-        .join(', ');
-      info.appendChild(interested);
+      const chipRow = document.createElement('div');
+      chipRow.className = 'flex flex-wrap gap-1 mt-1';
+      const label = document.createElement('span');
+      label.className = 'text-xs text-gray-400 italic self-center';
+      label.textContent = 'Interested:';
+      chipRow.appendChild(label);
+      interestedPlayers.forEach(p => {
+        const chip = document.createElement('span');
+        chip.className = 'text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full italic';
+        chip.textContent = p.name || getDisplayName(p.userId);
+        chipRow.appendChild(chip);
+      });
+      info.appendChild(chipRow);
     }
 
     // Join / Interested / Leave buttons
