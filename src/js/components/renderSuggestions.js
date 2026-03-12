@@ -1,6 +1,7 @@
 import { ownedGames } from '../data/state.js';
 import { syncAndRender } from '../utils/index.js';
 import { getCurrentUser } from '../auth/userStore.js';
+import { isHost } from '../auth/permissions.js';
 import { btn, input } from '../ui/elements.js';
 
 export function renderSuggestions(night, nights) {
@@ -91,12 +92,14 @@ export function renderSuggestions(night, nights) {
     if (!title) return;
 
     night.suggestions = night.suggestions || [];
+    const me = getCurrentUser();
     night.suggestions.push({
       title,
-      bggId:       selectedGame?.id        || null,
-      thumbnail:   selectedGame?.thumbnail || null,
-      suggestedBy: getCurrentUser()?.name  || 'Someone',
-      willBring:   bringCheck.checked,
+      bggId:            selectedGame?.id     || null,
+      thumbnail:        selectedGame?.thumbnail || null,
+      suggestedBy:      me?.name             || 'Someone',
+      suggestedByUserId: me?.userId          || null,
+      willBring:        bringCheck.checked,
     });
 
     night.lastModified = Date.now();
@@ -116,10 +119,14 @@ export function renderSuggestions(night, nights) {
 
   // ── Suggestions list ───────────────────────────────────────
   if (night.suggestions?.length) {
+    const currentUser = getCurrentUser();
     const list = document.createElement('ul');
     list.className = 'mt-3 space-y-2';
 
-    night.suggestions.forEach(s => {
+    night.suggestions.forEach((s, i) => {
+      // Normalize old string-based suggestions
+      if (typeof s === 'string') s = { title: s, suggestedBy: null };
+
       const li = document.createElement('li');
       li.className = 'text-sm text-gray-700 flex items-center gap-2';
 
@@ -138,16 +145,33 @@ export function renderSuggestions(night, nights) {
       titleEl.textContent = s.title;
       li.appendChild(titleEl);
 
-      const byEl = document.createElement('em');
-      byEl.className = 'text-xs text-gray-400';
-      byEl.textContent = `by ${s.suggestedBy}`;
-      li.appendChild(byEl);
+      if (s.suggestedBy) {
+        const byEl = document.createElement('em');
+        byEl.className = 'text-xs text-gray-400';
+        byEl.textContent = `by ${s.suggestedBy}`;
+        li.appendChild(byEl);
+      }
 
       if (s.willBring) {
         const badge = document.createElement('span');
         badge.className = 'badge badge-going text-xs ml-auto';
         badge.textContent = '🚗 bringing it';
         li.appendChild(badge);
+      }
+
+      // Delete: host can remove anything; suggester can remove their own
+      const canDelete = isHost(currentUser, night) ||
+                        (s.suggestedByUserId && s.suggestedByUserId === currentUser?.userId);
+      if (canDelete) {
+        const delBtn = btn('×', 'ghost');
+        delBtn.className += ' text-xs py-0 px-1.5 ml-auto shrink-0';
+        delBtn.setAttribute('aria-label', `Remove suggestion: ${s.title}`);
+        delBtn.onclick = () => {
+          night.suggestions.splice(i, 1);
+          night.lastModified = Date.now();
+          syncAndRender(nights);
+        };
+        li.appendChild(delBtn);
       }
 
       list.appendChild(li);
