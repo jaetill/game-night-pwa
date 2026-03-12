@@ -46,14 +46,14 @@ export function renderRSVP(night, nights, currentUser) {
       }
     }
 
-    const playingBtn = btn("I'm playing 🎮", 'primary');
-    playingBtn.onclick = () => doRSVP('playing', playingBtn, "I'm playing 🎮");
+    const playingBtn = btn("Reserve a seat", 'primary');
+    playingBtn.onclick = () => doRSVP('playing', playingBtn, "Reserve a seat");
 
-    const flexBtn = btn("I'll fill in ↔", 'secondary');
-    flexBtn.onclick = () => doRSVP('flexible', flexBtn, "I'll fill in ↔");
+    const flexBtn = btn("Fill in gaps", 'secondary');
+    flexBtn.onclick = () => doRSVP('flexible', flexBtn, "Fill in gaps");
 
-    const specBtn = btn('Just hanging out 👋', 'secondary');
-    specBtn.onclick = () => doRSVP('spectating', specBtn, 'Just hanging out 👋');
+    const specBtn = btn('Just hang out', 'secondary');
+    specBtn.onclick = () => doRSVP('spectating', specBtn, 'Just hang out');
 
     const declineBtn = btn("Can't make it", 'ghost');
     declineBtn.onclick = async () => {
