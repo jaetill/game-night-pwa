@@ -1,9 +1,11 @@
 import { Auth } from 'aws-amplify';
 import { getCurrentUser, setCurrentUser } from './userStore.js';
+import { authFetch } from '../utils/authFetch.js';
 
 const PROFILE_KEY = 'userProfile';
+const API_BASE    = 'https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod';
 
-/** Returns the locally-stored profile for the current user. */
+/** Returns the locally-cached profile for the current user. */
 export function getProfile() {
   const stored = localStorage.getItem(PROFILE_KEY);
   return stored ? JSON.parse(stored) : {};
@@ -15,16 +17,31 @@ function persistLocally(profile) {
   if (user) setCurrentUser({ ...user, bggUsername: profile.bggUsername || '' });
 }
 
-/** Loads profile from Cognito attributes and syncs to localStorage. */
+/** Loads profile from S3 (authoritative), falls back to Cognito attrs, then localStorage. */
 export async function loadProfile() {
   try {
-    const info = await Auth.currentUserInfo();
+    const res = await authFetch(`${API_BASE}/profiles`);
+    if (res.ok) {
+      const remote = await res.json();
+      if (remote && Object.keys(remote).length > 0) {
+        persistLocally(remote);
+        return remote;
+      }
+    }
+  } catch {
+    // fall through to Cognito / localStorage
+  }
+
+  // Seed from Cognito attributes if S3 has nothing yet
+  try {
+    const info  = await Auth.currentUserInfo();
     const attrs = info.attributes || {};
     const profile = {
-      displayName:  attrs.name || '',
-      bggUsername:  attrs['custom:bggUsername'] || getProfile().bggUsername || '',
-      contactEmail: attrs.email || '',
-      phone:        attrs.phone_number || '',
+      displayName:  attrs.name                    || '',
+      bggUsername:  attrs['custom:bggUsername']   || getProfile().bggUsername || '',
+      contactEmail: attrs.email                   || '',
+      phone:        attrs.phone_number            || '',
+      address:      getProfile().address          || '',
     };
     persistLocally(profile);
     return profile;
@@ -33,19 +50,28 @@ export async function loadProfile() {
   }
 }
 
-/**
- * Saves profile to localStorage and attempts to sync standard fields to Cognito.
- * BGG username is stored locally only until the Cognito custom attribute is configured.
- */
+/** Saves profile to S3, localStorage, and syncs select fields to Cognito. */
 export async function saveProfile(profile) {
   persistLocally(profile);
+
+  // Save to S3 (primary store)
+  try {
+    await authFetch(`${API_BASE}/profiles`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(profile),
+    });
+  } catch (err) {
+    console.warn('Profile: S3 save failed:', err.message);
+  }
+
+  // Sync name/email/phone to Cognito for auth-layer consistency
   try {
     const cognitoUser = await Auth.currentAuthenticatedUser();
     const updates = {};
-    if (profile.displayName)  updates.name                    = profile.displayName;
-    if (profile.contactEmail) updates.email                   = profile.contactEmail;
-    if (profile.bggUsername)  updates['custom:bggUsername']   = profile.bggUsername;
-    // Cognito requires E.164 format (e.g. +15551234567) — skip if not valid
+    if (profile.displayName)  updates.name                  = profile.displayName;
+    if (profile.contactEmail) updates.email                 = profile.contactEmail;
+    if (profile.bggUsername)  updates['custom:bggUsername'] = profile.bggUsername;
     if (profile.phone && /^\+\d{7,15}$/.test(profile.phone)) {
       updates.phone_number = profile.phone;
     }
