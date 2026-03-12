@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Game Night – Create Account</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="stylesheet" href="style.css" />
+  <script type="module" src="./src/js/custom-signup.js"></script>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-amber-50 to-orange-100">
+
+  <div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-sm">
+    <div class="text-center mb-8">
+      <div class="text-5xl mb-3">🎲</div>
+      <h1 class="text-2xl font-bold text-gray-900">Create Account</h1>
+      <p class="text-gray-500 mt-1 text-sm">Join to RSVP and plan game nights</p>
+    </div>
+
+    <!-- Sign up form -->
+    <form id="signup-form" class="space-y-4" novalidate>
+      <div>
+        <label for="display-name" class="block text-sm font-medium text-gray-700 mb-1">Your name</label>
+        <input id="display-name" type="text" required autocomplete="name"
+               class="field" placeholder="Jason Tilley">
+      </div>
+      <div>
+        <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+        <input id="email" type="email" required autocomplete="email"
+               class="field" placeholder="you@example.com">
+      </div>
+      <div>
+        <label for="username" class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+        <input id="username" type="text" required autocomplete="username"
+               class="field" placeholder="choose a username">
+        <p class="text-xs text-gray-400 mt-1">Used to sign in. Letters and numbers only.</p>
+      </div>
+      <div>
+        <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+        <input id="password" type="password" required autocomplete="new-password"
+               class="field" placeholder="••••••••">
+        <p class="text-xs text-gray-400 mt-1">At least 8 characters.</p>
+      </div>
+
+      <button type="submit" id="signup-btn" class="btn btn-primary w-full py-2 text-base mt-2">
+        Create account
+      </button>
+
+      <p class="text-center text-sm text-gray-500">
+        Already have an account?
+        <a href="login.html" class="text-amber-700 hover:underline">Sign in</a>
+      </p>
+    </form>
+
+    <!-- Confirmation code form -->
+    <form id="confirm-form" class="space-y-4 hidden" novalidate>
+      <p class="text-sm text-gray-600">We sent a confirmation code to your email. Enter it below to activate your account.</p>
+      <div>
+        <label for="confirm-code" class="block text-sm font-medium text-gray-700 mb-1">Confirmation code</label>
+        <input id="confirm-code" type="text" required autocomplete="one-time-code"
+               class="field" placeholder="123456">
+      </div>
+      <button type="submit" id="confirm-btn" class="btn btn-primary w-full py-2 text-base">
+        Confirm account
+      </button>
+      <p class="text-center">
+        <button type="button" id="resend-btn" class="text-sm text-amber-700 hover:underline">
+          Resend code
+        </button>
+      </p>
+    </form>
+
+    <p id="error" class="mt-4 text-sm text-red-600 text-center hidden"></p>
+  </div>
+
+</body>
+</html>
