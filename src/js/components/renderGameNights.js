@@ -6,7 +6,10 @@ import { renderHostGameControls, renderHostActions } from './renderGameNightHost
 import { isHost } from '../auth/permissions.js';
 import { btn } from '../ui/elements.js';
 
-export function renderGameNights(nights, currentUser, expandedNightIds = new Set()) {
+// Persisted across re-renders so expansion state survives syncAndRender calls.
+const expandedNightIds = new Set();
+
+export function renderGameNights(nights, currentUser) {
   const container = document.getElementById('gameNightList');
   if (!container) return;
   container.innerHTML = '';

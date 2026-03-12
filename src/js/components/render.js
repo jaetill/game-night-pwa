@@ -2,8 +2,6 @@ import { renderGameNights } from './renderGameNights.js';
 import { renderGlobalHostPanel } from './renderGlobalHostPanel.js';
 
 export function renderApp({ nights, currentUser }) {
-  const expandedNightIds = new Set();
-
   const root = document.getElementById('app');
   if (!root) { console.error('No #app element found in DOM.'); return; }
 
@@ -20,6 +18,6 @@ export function renderApp({ nights, currentUser }) {
   listContainer.className = 'space-y-1 p-0';
   root.appendChild(listContainer);
 
-  renderGameNights(nights, currentUser, expandedNightIds);
+  renderGameNights(nights, currentUser);
   renderGlobalHostPanel();
 }
