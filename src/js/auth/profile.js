@@ -32,16 +32,17 @@ export async function loadProfile() {
     // fall through to Cognito / localStorage
   }
 
-  // Seed from Cognito attributes if S3 has nothing yet
+  // Seed from Cognito attributes, merged with any existing localStorage values
   try {
-    const info  = await Auth.currentUserInfo();
-    const attrs = info.attributes || {};
-    const profile = {
-      displayName:  attrs.name                    || '',
-      bggUsername:  attrs['custom:bggUsername']   || getProfile().bggUsername || '',
-      contactEmail: attrs.email                   || '',
-      phone:        attrs.phone_number            || '',
-      address:      getProfile().address          || '',
+    const existing = getProfile();
+    const info     = await Auth.currentUserInfo();
+    const attrs    = info.attributes || {};
+    const profile  = {
+      displayName:  attrs.name                  || existing.displayName  || '',
+      bggUsername:  attrs['custom:bggUsername'] || existing.bggUsername  || '',
+      contactEmail: attrs.email                 || existing.contactEmail || '',
+      phone:        attrs.phone_number          || existing.phone        || '',
+      address:      existing.address            || '',
     };
     persistLocally(profile);
     return profile;
