@@ -34,6 +34,8 @@ export function renderRSVP(night, nights, currentUser) {
       try {
         night.rsvps = Array.isArray(night.rsvps) ? night.rsvps : [];
         night.rsvps.push({ userId, name: currentUser.name || currentUser.userId });
+        // Remove email invite now that the user has a userId-based RSVP
+        if (email) night.invited = (night.invited || []).filter(e => e !== email.toLowerCase());
         night.lastModified = Date.now();
         sanitizeNight(night);
         await saveGameNights(nights);
@@ -52,6 +54,8 @@ export function renderRSVP(night, nights, currentUser) {
       try {
         night.declined = Array.isArray(night.declined) ? night.declined : [];
         night.declined.push(userId);
+        // Remove email invite now that the user has explicitly declined
+        if (email) night.invited = (night.invited || []).filter(e => e !== email.toLowerCase());
         night.lastModified = Date.now();
         sanitizeNight(night);
         await saveGameNights(nights);
@@ -115,8 +119,11 @@ export function renderRSVP(night, nights, currentUser) {
   }
 
   // ── Pending invites ──────────────────────────────────────
-  const pending = (night.invited || []).filter(
-    id => !night.rsvps?.some(r => r.userId === id) && !night.declined?.includes(id)
+  // An entry is still pending if it hasn't been acted on.
+  // Entries can be userIds or email addresses — check both forms.
+  const pending = (night.invited || []).filter(id =>
+    !night.rsvps?.some(r => r.userId === id) &&
+    !night.declined?.includes(id)
   );
 
   if (pending.length > 0) {
