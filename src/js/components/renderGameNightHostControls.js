@@ -118,6 +118,21 @@ export function renderHostGameControls(night, nights) {
       header.querySelector('span:last-child').textContent = collapsed ? '▼' : '▲';
     };
 
+    // Select all / Uncheck all
+    const bulkRow = document.createElement('div');
+    bulkRow.className = 'flex gap-3 mb-1';
+    const selectAllBtn = document.createElement('button');
+    selectAllBtn.type = 'button';
+    selectAllBtn.textContent = 'Select all';
+    selectAllBtn.className = 'text-xs text-amber-700 hover:underline';
+    const uncheckAllBtn = document.createElement('button');
+    uncheckAllBtn.type = 'button';
+    uncheckAllBtn.textContent = 'Uncheck all';
+    uncheckAllBtn.className = 'text-xs text-gray-400 hover:underline';
+    bulkRow.appendChild(selectAllBtn);
+    bulkRow.appendChild(uncheckAllBtn);
+    body.appendChild(bulkRow);
+
     // Checkboxes
     const checkboxes = [];
     guests.forEach(guest => {
@@ -134,6 +149,9 @@ export function renderHostGameControls(night, nights) {
       row.appendChild(document.createTextNode(guest.label));
       body.appendChild(row);
     });
+
+    selectAllBtn.onclick  = () => checkboxes.forEach(cb => cb.checked = true);
+    uncheckAllBtn.onclick = () => checkboxes.forEach(cb => cb.checked = false);
 
     // Add selected button
     const addBtn = btn('Add selected', 'secondary');
