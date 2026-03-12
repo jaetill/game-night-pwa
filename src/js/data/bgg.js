@@ -1,88 +1,103 @@
 import { ownedGames } from '../data/state.js';
 
+const CORS_PROXY = 'https://corsproxy.io/?url=';
+const CACHE_KEY  = 'bggOwnedGames';
+const CACHE_VER  = 'bggCacheVersion';
+const CURRENT_VER = '3'; // bump this to force a refresh after breaking changes
+
 export async function fetchOwnedGames(username) {
-  const cached = localStorage.getItem("bggOwnedGames");
-  if (cached) {
+  // Ignore cache if it's empty or from an older version
+  const cachedVer  = localStorage.getItem(CACHE_VER);
+  const cachedData = localStorage.getItem(CACHE_KEY);
+
+  if (cachedVer === CURRENT_VER && cachedData) {
     try {
-      const parsed = JSON.parse(cached);
-      ownedGames.length = 0;
-      ownedGames.push(...parsed);
-      return;
+      const parsed = JSON.parse(cachedData);
+      if (parsed.length > 0) {
+        ownedGames.length = 0;
+        ownedGames.push(...parsed);
+        console.log(`BGG: loaded ${parsed.length} games from cache.`);
+        return;
+      }
     } catch {
-      console.warn("Corrupt cache.");
+      console.warn('BGG: corrupt cache, refetching.');
     }
   }
 
+  console.log(`BGG: fetching collection for "${username}"…`);
   let tries = 0;
 
-async function tryFetch() {
-  tries++;
+  async function tryFetch() {
+    tries++;
 
-  const res = await fetch(`https://boardgamegeek.com/xmlapi2/collection?username=${username}&own=1`);
-  const text = await res.text();
-  const xml = new DOMParser().parseFromString(text, "text/xml");
-
-  if (xml.querySelector("message")) {
-    if (tries < 5) return setTimeout(tryFetch, 3000);
-    console.warn("BGG timeout.");
-    return;
-  }
-
-  const baseGames = [...xml.querySelectorAll("item")].map(item => ({
-    id: item.getAttribute("objectid"),
-    title: item.querySelector("name")?.textContent || "Untitled"
-  }));
-
-  // 🔁 Break game IDs into chunks of 40
-  const chunkSize = 20;
-  const chunks = [];
-  for (let i = 0; i < baseGames.length; i += chunkSize) {
-    chunks.push(baseGames.slice(i, i + chunkSize));
-  }
-
-  const enrichedGames = [];
-
-  for (const chunk of chunks) {
-    const ids = chunk.map(g => g.id).join(',');
-    const corsProxy = 'https://corsproxy.io/?';
-    const detailsUrl = `${corsProxy}https://boardgamegeek.com/xmlapi2/thing?id=${ids}&stats=1`;
-
+    let text, xml;
     try {
-      const detailsRes = await fetch(detailsUrl);
-      const detailsText = await detailsRes.text();
-      const detailsXml = new DOMParser().parseFromString(detailsText, "text/xml");
-
-      chunk.forEach(game => {
-		
-        const detail = detailsXml.querySelector(`item[id="${game.id}"]`);
-		if (!detail) {
-			console.warn(`No detail found for game ID ${game.id}`);
-			return;
-}
-        const min = detail?.querySelector("minplayers")?.getAttribute("value");
-        const max = detail?.querySelector("maxplayers")?.getAttribute("value");
-        //console.log(detail.outerHTML); // optional, just for verification
-        const thumbnail = detail?.querySelector("thumbnail")?.textContent;
-		    //console.log("Detail XML for game", game.id, detail?.outerHTML);
-        console.log("Thumbnail for game is at: ", thumbnail);
-        enrichedGames.push({
-          ...game,
-          minPlayers: Number(min) || 1,
-          maxPlayers: Number(max) || 99,
-           thumbnail: thumbnail || ''
-        });
-      });
+      const url = `${CORS_PROXY}${encodeURIComponent(`https://boardgamegeek.com/xmlapi2/collection?username=${username}&own=1`)}`;
+      const res = await fetch(url);
+      text = await res.text();
+      xml  = new DOMParser().parseFromString(text, 'text/xml');
     } catch (err) {
-      console.warn(`Failed to load chunk for IDs: ${ids}`, err);
+      console.warn('BGG: collection fetch failed.', err);
+      return;
     }
+
+    // BGG returns a <message> while it queues the request — retry
+    if (xml.querySelector('message')) {
+      console.log(`BGG: response queued, retrying (${tries}/5)…`);
+      if (tries < 5) return setTimeout(tryFetch, 3000);
+      console.warn('BGG: gave up after 5 tries.');
+      return;
+    }
+
+    const baseGames = [...xml.querySelectorAll('item')].map(item => ({
+      id:    item.getAttribute('objectid'),
+      title: item.querySelector('name')?.textContent || 'Untitled',
+    }));
+
+    console.log(`BGG: found ${baseGames.length} games, enriching…`);
+
+    // Enrich in chunks of 20 to get player counts + thumbnails
+    const enriched = [];
+    for (let i = 0; i < baseGames.length; i += 20) {
+      const chunk = baseGames.slice(i, i + 20);
+      const ids   = chunk.map(g => g.id).join(',');
+      const detailUrl = `${CORS_PROXY}${encodeURIComponent(`https://boardgamegeek.com/xmlapi2/thing?id=${ids}&stats=1`)}`;
+
+      try {
+        const detailRes  = await fetch(detailUrl);
+        const detailText = await detailRes.text();
+        const detailXml  = new DOMParser().parseFromString(detailText, 'text/xml');
+
+        chunk.forEach(game => {
+          const detail = detailXml.querySelector(`item[id="${game.id}"]`);
+          if (!detail) return;
+
+          enriched.push({
+            ...game,
+            minPlayers: Number(detail.querySelector('minplayers')?.getAttribute('value')) || 1,
+            maxPlayers: Number(detail.querySelector('maxplayers')?.getAttribute('value')) || 99,
+            thumbnail:  detail.querySelector('thumbnail')?.textContent || '',
+          });
+        });
+      } catch (err) {
+        console.warn(`BGG: failed to enrich chunk ${ids}`, err);
+        // Still include games without enrichment rather than silently dropping them
+        chunk.forEach(game => enriched.push({ ...game, minPlayers: 1, maxPlayers: 99, thumbnail: '' }));
+      }
+    }
+
+    ownedGames.length = 0;
+    ownedGames.push(...enriched);
+
+    localStorage.setItem(CACHE_KEY,  JSON.stringify(enriched));
+    localStorage.setItem(CACHE_VER,  CURRENT_VER);
+    console.log(`BGG: cached ${enriched.length} games.`);
   }
-
-  ownedGames.length = 0;
-  ownedGames.push(...enrichedGames);
-
-  localStorage.setItem("bggOwnedGames", JSON.stringify(ownedGames));
-}
-
 
   tryFetch();
+}
+
+export function clearBggCache() {
+  localStorage.removeItem(CACHE_KEY);
+  localStorage.removeItem(CACHE_VER);
 }
