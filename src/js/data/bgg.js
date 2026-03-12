@@ -2,7 +2,7 @@ import { ownedGames } from './state.js';
 import { authFetch } from '../utils/authFetch.js';
 
 const API_BASE   = 'https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod';
-const CACHE_VER  = '4'; // bump to invalidate old caches
+const CACHE_VER  = '5'; // bump to invalidate old caches (v5: includes player counts)
 
 function cacheKey(userId)    { return `bggGames_${userId}`; }
 function cacheVerKey(userId) { return `bggGamesVer_${userId}`; }

@@ -13,7 +13,7 @@ export function openImportModal() {
   // Update the link with the current bgg username
   const link = document.getElementById('importBggLink');
   if (link) {
-    link.href        = `https://boardgamegeek.com/xmlapi2/collection?username=${encodeURIComponent(bggUsername)}&own=1`;
+    link.href        = `https://boardgamegeek.com/xmlapi2/collection?username=${encodeURIComponent(bggUsername)}&own=1&stats=1`;
     link.textContent = link.href;
   }
 
