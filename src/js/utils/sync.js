@@ -12,8 +12,6 @@ export async function syncAndRender(nightsData) {
     return;
   }
 
-  console.log("Loaded nights:", nights.map(n => n.selectedGames));
-
   await saveGameNights(nights);
   renderGameNights(nights, getCurrentUser());
 }
