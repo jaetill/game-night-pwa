@@ -67,36 +67,23 @@ function syncGameNights(nights) {
 }
 
 /**
- * Uploads the game nights array to the cloud via S3 upload token.
- * Always requests a fresh presigned URL.
+ * Uploads the game nights array to the cloud.
+ * The Lambda validates that the caller is authorised to make each change.
  */
 export async function pushGameNightsToCloud(nights) {
   try {
-    const res = await authFetch(`${API_BASE}/upload-token`);
-    if (!res.ok) throw new Error(`Failed to get upload URL: ${res.status}`);
-    const { url, fields } = await res.json();
-
-    const formData = new FormData();
-    Object.entries(fields).forEach(([k, v]) => formData.append(k, v));
-    formData.append('file', new Blob([JSON.stringify(nights)], { type: 'application/json' }));
-
-    let uploadRes = await fetch(url, { method: 'POST', body: formData });
-
-    // Retry if URL expired
-    if (uploadRes.status === 403) {
-      console.warn("Upload URL expired, retrying...");
-      const retryRes = await authFetch(`${API_BASE}/upload-token`);
-      const { url: retryUrl, fields: retryFields } = await retryRes.json();
-      const retryForm = new FormData();
-      Object.entries(retryFields).forEach(([k, v]) => retryForm.append(k, v));
-      retryForm.append('file', new Blob([JSON.stringify(nights)], { type: 'application/json' }));
-      uploadRes = await fetch(retryUrl, { method: 'POST', body: retryForm });
+    const res = await authFetch(`${API_BASE}/upload-token`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(nights),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Upload failed: ${res.status}`);
     }
-
-    if (!uploadRes.ok) throw new Error(`Upload failed: ${uploadRes.status}`);
     console.log('✅ Game nights uploaded to cloud.');
   } catch (err) {
-    console.warn('❌ Failed to push to cloud:', err);
+    console.warn('❌ Failed to push to cloud:', err.message);
   }
 }
 
