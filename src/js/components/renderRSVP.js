@@ -25,49 +25,57 @@ export function renderRSVP(night, nights, currentUser) {
   // ── Action buttons ───────────────────────────────────────
   if (isInvited && !alreadyRSVPd && !alreadyDeclined) {
     const actions = document.createElement('div');
-    actions.className = 'flex gap-2';
+    actions.className = 'flex flex-wrap gap-2';
 
-    const rsvpBtn = btn("I'm going! 🎟", 'primary');
-    rsvpBtn.onclick = async () => {
-      rsvpBtn.disabled = true;
-      rsvpBtn.textContent = 'Saving…';
+    async function doRSVP(type, btnEl, label) {
+      btnEl.disabled = true;
+      btnEl.textContent = 'Saving…';
       try {
         night.rsvps = Array.isArray(night.rsvps) ? night.rsvps : [];
-        night.rsvps.push({ userId, name: currentUser.name || currentUser.userId });
-        // Remove email invite now that the user has a userId-based RSVP
+        night.rsvps.push({ userId, name: currentUser.name || currentUser.userId, type });
         if (email) night.invited = (night.invited || []).filter(e => e !== email.toLowerCase());
         night.lastModified = Date.now();
         sanitizeNight(night);
         await saveGameNights(nights);
         renderGameNights(nights, currentUser);
-        toastSuccess("You're on the list!");
+        toastSuccess(label);
       } catch {
         toastError('Could not save RSVP. Try again.');
-        rsvpBtn.disabled = false;
-        rsvpBtn.textContent = "I'm going! 🎟";
+        btnEl.disabled = false;
+        btnEl.textContent = label;
       }
-    };
+    }
 
-    const declineBtn = btn('Not attending', 'ghost');
+    const playingBtn = btn("I'm playing 🎮", 'primary');
+    playingBtn.onclick = () => doRSVP('playing', playingBtn, "I'm playing 🎮");
+
+    const flexBtn = btn("I'll fill in ↔", 'secondary');
+    flexBtn.onclick = () => doRSVP('flexible', flexBtn, "I'll fill in ↔");
+
+    const specBtn = btn('Just hanging out 👋', 'secondary');
+    specBtn.onclick = () => doRSVP('spectating', specBtn, 'Just hanging out 👋');
+
+    const declineBtn = btn("Can't make it", 'ghost');
     declineBtn.onclick = async () => {
       declineBtn.disabled = true;
       try {
         night.declined = Array.isArray(night.declined) ? night.declined : [];
         night.declined.push(userId);
-        // Remove email invite now that the user has explicitly declined
         if (email) night.invited = (night.invited || []).filter(e => e !== email.toLowerCase());
         night.lastModified = Date.now();
         sanitizeNight(night);
         await saveGameNights(nights);
         renderGameNights(nights, currentUser);
-        toastInfo('Marked as not attending.');
+        toastInfo("Marked as not attending.");
       } catch {
         toastError('Could not save. Try again.');
         declineBtn.disabled = false;
       }
     };
 
-    actions.appendChild(rsvpBtn);
+    actions.appendChild(playingBtn);
+    actions.appendChild(flexBtn);
+    actions.appendChild(specBtn);
     actions.appendChild(declineBtn);
     section.appendChild(actions);
   }
@@ -86,9 +94,10 @@ export function renderRSVP(night, nights, currentUser) {
       const item = document.createElement('li');
       item.className = 'flex items-center justify-between text-sm';
 
+      const typeIcon = { playing: '🎮', flexible: '↔', spectating: '👋' }[rsvp.type] ?? '🎟';
       const name = document.createElement('span');
       name.className = 'text-gray-700';
-      name.textContent = `🎟 ${rsvp.name || getDisplayName(rsvp.userId)}`;
+      name.textContent = `${typeIcon} ${rsvp.name || getDisplayName(rsvp.userId)}`;
       item.appendChild(name);
 
       if (rsvp.userId === userId) {

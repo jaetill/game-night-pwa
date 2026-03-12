@@ -12,15 +12,22 @@ export function sanitizeNight(night) {
   if (Array.isArray(night.selectedGames)) {
     night.selectedGames.forEach(g => {
       if (typeof g === 'string') {
-        selectedGames[g] = { maxPlayers: 4, signedUpPlayers: [] };
+        selectedGames[g] = { maxPlayers: 4, signedUpPlayers: [], interestedPlayers: [] };
       } else if (g.gameId) {
         selectedGames[g.gameId] = {
           maxPlayers: g.maxPlayers || 4,
-          signedUpPlayers: Array.isArray(g.signedUpPlayers) ? g.signedUpPlayers : []
+          signedUpPlayers: Array.isArray(g.signedUpPlayers) ? g.signedUpPlayers : [],
+          interestedPlayers: Array.isArray(g.interestedPlayers) ? g.interestedPlayers : [],
         };
       }
     });
   } else if (typeof night.selectedGames === 'object' && night.selectedGames !== null) {
+    // Ensure interestedPlayers exists on every game entry
+    for (const [key, game] of Object.entries(night.selectedGames)) {
+      if (!Array.isArray(game.interestedPlayers)) {
+        night.selectedGames[key] = { ...game, interestedPlayers: [] };
+      }
+    }
     selectedGames = night.selectedGames;
   }
 

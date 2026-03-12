@@ -66,10 +66,11 @@ export function joinGame(night, gameId) {
 // It includes functions to create game nights, add/remove games, and manage player signups
 
 export function withdrawFromAllGames(night, user) {
-  if (!Array.isArray(night.selectedGames)) return;
+  if (!night.selectedGames || typeof night.selectedGames !== 'object') return;
 
-  night.selectedGames.forEach(g => {
-    withdrawFromGame(night, g.gameId, user);
+  Object.keys(night.selectedGames).forEach(gameId => {
+    withdrawFromGame(night, gameId, user);
+    withdrawInterest(night, gameId, user);
   });
 }
 
@@ -90,6 +91,34 @@ export function withdrawFromGame(night, gameId, user) {
 
   game.signedUpPlayers = game.signedUpPlayers.filter(
     p => p.userId !== user.userId
+  );
+  night.lastModified = Date.now();
+}
+
+export function expressInterest(night, gameId) {
+  const user = getCurrentUser();
+  if (!user) return false;
+
+  const game = night.selectedGames[gameId];
+  if (!game) return false;
+
+  game.interestedPlayers = game.interestedPlayers || [];
+  if (game.interestedPlayers.some(p => p.userId === user.userId)) return false;
+
+  game.interestedPlayers.push({ userId: user.userId, name: user.name });
+  night.lastModified = Date.now();
+  return true;
+}
+
+export function withdrawInterest(night, gameId, user) {
+  const u = user || getCurrentUser();
+  if (!u) return;
+
+  const game = night.selectedGames[gameId];
+  if (!game) return;
+
+  game.interestedPlayers = (game.interestedPlayers || []).filter(
+    p => p.userId !== u.userId
   );
   night.lastModified = Date.now();
 }

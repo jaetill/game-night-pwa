@@ -1,5 +1,5 @@
 import { ownedGames, saveGameNights } from '../data/index.js';
-import { joinGame, withdrawFromGame, isGameFull } from '../utils/index.js';
+import { joinGame, withdrawFromGame, isGameFull, expressInterest, withdrawInterest } from '../utils/index.js';
 import { renderGameNights } from './renderGameNights.js';
 import { isHost } from '../auth/permissions.js';
 import { getDisplayName } from '../utils/userDirectory.js';
@@ -68,14 +68,16 @@ export function renderSelectedGames(night, currentUser, nights) {
     info.appendChild(titleRow);
 
     // Player count progress
+    const interestedPlayers = gameData.interestedPlayers || [];
     const count = signedUpPlayers.length;
     const playerRow = document.createElement('p');
     playerRow.className = 'text-xs text-gray-500 mt-0.5';
-    playerRow.textContent = `${count}/${maxPlayers} players`;
+    playerRow.textContent = `${count}/${maxPlayers} players` +
+      (interestedPlayers.length ? ` · ${interestedPlayers.length} interested` : '');
     if (count >= maxPlayers) playerRow.classList.add('text-red-500', 'font-medium');
     info.appendChild(playerRow);
 
-    // Player names
+    // Signed-up player names
     if (signedUpPlayers.length) {
       const names = document.createElement('p');
       names.className = 'text-xs text-gray-400 mt-0.5 truncate';
@@ -85,48 +87,100 @@ export function renderSelectedGames(night, currentUser, nights) {
       info.appendChild(names);
     }
 
-    // Join / Leave button
+    // Interested player names
+    if (interestedPlayers.length) {
+      const interested = document.createElement('p');
+      interested.className = 'text-xs text-gray-400 mt-0.5 truncate italic';
+      interested.textContent = 'Interested: ' + interestedPlayers
+        .map(p => p.name || getDisplayName(p.userId))
+        .join(', ');
+      info.appendChild(interested);
+    }
+
+    // Join / Interested / Leave buttons
     const isRSVPd = night.rsvps?.some(u => u.userId === currentUser?.userId);
     if (isRSVPd && currentUser) {
-      const isSignedUp = signedUpPlayers.some(p => p.userId === currentUser.userId);
-      const isFull = isGameFull(night, gameId);
+      const isSignedUp    = signedUpPlayers.some(p => p.userId === currentUser.userId);
+      const isInterested  = interestedPlayers.some(p => p.userId === currentUser.userId);
+      const isFull        = isGameFull(night, gameId);
+      const btnRow        = document.createElement('div');
+      btnRow.className    = 'flex gap-1 mt-1';
 
-      let actionBtn;
       if (isSignedUp) {
-        actionBtn = btn('Leave', 'ghost');
-        actionBtn.className += ' text-xs mt-1';
-        actionBtn.onclick = async () => {
-          actionBtn.disabled = true;
+        const leaveBtn = btn('Leave', 'ghost');
+        leaveBtn.className += ' text-xs';
+        leaveBtn.onclick = async () => {
+          leaveBtn.disabled = true;
           try {
             withdrawFromGame(night, gameId, currentUser);
             await saveGameNights(nights);
             renderGameNights(nights, currentUser);
           } catch {
             toastError('Could not update. Try again.');
-            actionBtn.disabled = false;
+            leaveBtn.disabled = false;
           }
         };
-      } else if (!isFull) {
-        actionBtn = btn('Join', 'primary');
-        actionBtn.className += ' text-xs mt-1';
-        actionBtn.onclick = async () => {
-          actionBtn.disabled = true;
-          try {
-            joinGame(night, gameId);
-            await saveGameNights(nights);
-            renderGameNights(nights, currentUser);
-            toastSuccess(`Joined ${game.title}!`);
-          } catch {
-            toastError('Could not join. Try again.');
-            actionBtn.disabled = false;
-          }
-        };
+        btnRow.appendChild(leaveBtn);
       } else {
-        actionBtn = btn('Full', 'secondary');
-        actionBtn.disabled = true;
-        actionBtn.className += ' text-xs mt-1 opacity-50';
+        if (!isFull) {
+          const joinBtn = btn('Join', 'primary');
+          joinBtn.className += ' text-xs';
+          joinBtn.onclick = async () => {
+            joinBtn.disabled = true;
+            try {
+              // Also remove interest if they had expressed it
+              withdrawInterest(night, gameId, currentUser);
+              joinGame(night, gameId);
+              await saveGameNights(nights);
+              renderGameNights(nights, currentUser);
+              toastSuccess(`Joined ${game.title}!`);
+            } catch {
+              toastError('Could not join. Try again.');
+              joinBtn.disabled = false;
+            }
+          };
+          btnRow.appendChild(joinBtn);
+        } else {
+          const fullBtn = btn('Full', 'secondary');
+          fullBtn.disabled = true;
+          fullBtn.className += ' text-xs opacity-50';
+          btnRow.appendChild(fullBtn);
+        }
+
+        if (isInterested) {
+          const unintBtn = btn('Interested ✓', 'secondary');
+          unintBtn.className += ' text-xs';
+          unintBtn.onclick = async () => {
+            unintBtn.disabled = true;
+            try {
+              withdrawInterest(night, gameId, currentUser);
+              await saveGameNights(nights);
+              renderGameNights(nights, currentUser);
+            } catch {
+              toastError('Could not update. Try again.');
+              unintBtn.disabled = false;
+            }
+          };
+          btnRow.appendChild(unintBtn);
+        } else {
+          const intBtn = btn('Interested', 'ghost');
+          intBtn.className += ' text-xs';
+          intBtn.onclick = async () => {
+            intBtn.disabled = true;
+            try {
+              expressInterest(night, gameId);
+              await saveGameNights(nights);
+              renderGameNights(nights, currentUser);
+            } catch {
+              toastError('Could not update. Try again.');
+              intBtn.disabled = false;
+            }
+          };
+          btnRow.appendChild(intBtn);
+        }
       }
-      info.appendChild(actionBtn);
+
+      info.appendChild(btnRow);
     }
 
     card.appendChild(info);
