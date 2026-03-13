@@ -1,5 +1,5 @@
 import { ownedGames, saveGameNights } from '../data/index.js';
-import { joinGame, withdrawFromGame, isGameFull, expressInterest, withdrawInterest } from '../utils/index.js';
+import { joinGame, withdrawFromGame, isGameFull } from '../utils/index.js';
 import { renderGameNights } from './renderGameNights.js';
 import { isHost } from '../auth/permissions.js';
 import { getDisplayName } from '../utils/userDirectory.js';
@@ -135,14 +135,13 @@ export function renderSelectedGames(night, currentUser, nights) {
       info.appendChild(chipRow);
     }
 
-    // Join / Interested / Leave buttons
-    const isRSVPd = night.rsvps?.some(u => u.userId === currentUser?.userId);
-    if (isRSVPd && currentUser) {
-      const isSignedUp    = signedUpPlayers.some(p => p.userId === currentUser.userId);
-      const isInterested  = interestedPlayers.some(p => p.userId === currentUser.userId);
-      const isFull        = isGameFull(night, gameId);
-      const btnRow        = document.createElement('div');
-      btnRow.className    = 'flex gap-1 mt-1';
+    // ── Guest join/leave (playing type only) ─────────────────
+    const currentRSVP = night.rsvps?.find(r => r.userId === currentUser?.userId);
+    if (currentRSVP && currentUser) {
+      const isSignedUp = signedUpPlayers.some(p => p.userId === currentUser.userId);
+      const isFull     = isGameFull(night, gameId);
+      const btnRow     = document.createElement('div');
+      btnRow.className = 'flex gap-1 mt-1';
 
       if (isSignedUp) {
         const leaveBtn = btn('Leave', 'ghost');
@@ -159,66 +158,80 @@ export function renderSelectedGames(night, currentUser, nights) {
           }
         };
         btnRow.appendChild(leaveBtn);
-      } else {
-        if (!isFull) {
-          const joinBtn = btn('Join', 'primary');
-          joinBtn.className += ' text-xs';
-          joinBtn.onclick = async () => {
-            joinBtn.disabled = true;
-            try {
-              // Also remove interest if they had expressed it
-              withdrawInterest(night, gameId, currentUser);
-              joinGame(night, gameId);
-              await saveGameNights(nights);
-              renderGameNights(nights, currentUser);
-              toastSuccess(`Joined ${game.title}!`);
-            } catch {
-              toastError('Could not join. Try again.');
-              joinBtn.disabled = false;
-            }
-          };
-          btnRow.appendChild(joinBtn);
-        } else {
-          const fullBtn = btn('Full', 'secondary');
-          fullBtn.disabled = true;
-          fullBtn.className += ' text-xs opacity-50';
-          btnRow.appendChild(fullBtn);
-        }
-
-        if (isInterested) {
-          const unintBtn = btn('Interested ✓', 'secondary');
-          unintBtn.className += ' text-xs';
-          unintBtn.onclick = async () => {
-            unintBtn.disabled = true;
-            try {
-              withdrawInterest(night, gameId, currentUser);
-              await saveGameNights(nights);
-              renderGameNights(nights, currentUser);
-            } catch {
-              toastError('Could not update. Try again.');
-              unintBtn.disabled = false;
-            }
-          };
-          btnRow.appendChild(unintBtn);
-        } else {
-          const intBtn = btn('Interested', 'ghost');
-          intBtn.className += ' text-xs';
-          intBtn.onclick = async () => {
-            intBtn.disabled = true;
-            try {
-              expressInterest(night, gameId);
-              await saveGameNights(nights);
-              renderGameNights(nights, currentUser);
-            } catch {
-              toastError('Could not update. Try again.');
-              intBtn.disabled = false;
-            }
-          };
-          btnRow.appendChild(intBtn);
-        }
+      } else if (currentRSVP.type === 'playing' && !isFull) {
+        const joinBtn = btn('Join', 'primary');
+        joinBtn.className += ' text-xs';
+        joinBtn.onclick = async () => {
+          joinBtn.disabled = true;
+          try {
+            joinGame(night, gameId);
+            await saveGameNights(nights);
+            renderGameNights(nights, currentUser);
+            toastSuccess(`Joined ${game.title}!`);
+          } catch {
+            toastError('Could not join. Try again.');
+            joinBtn.disabled = false;
+          }
+        };
+        btnRow.appendChild(joinBtn);
+      } else if (currentRSVP.type === 'playing' && isFull) {
+        const fullBtn = btn('Full', 'secondary');
+        fullBtn.disabled = true;
+        fullBtn.className += ' text-xs opacity-50';
+        btnRow.appendChild(fullBtn);
       }
 
-      info.appendChild(btnRow);
+      if (btnRow.children.length) info.appendChild(btnRow);
+    }
+
+    // ── Host assignment (any_game / if_needed people) ─────────
+    if (isHost(currentUser, night)) {
+      const assignable = (night.rsvps || []).filter(r =>
+        (r.type === 'any_game' || r.type === 'if_needed') &&
+        !signedUpPlayers.some(p => p.userId === r.userId) &&
+        !isGameFull(night, gameId)
+      );
+
+      if (assignable.length > 0) {
+        const assignRow = document.createElement('div');
+        assignRow.className = 'flex gap-2 mt-2 items-center';
+
+        const select = document.createElement('select');
+        select.className = 'field text-xs flex-1 py-1';
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = 'Assign a player…';
+        select.appendChild(placeholder);
+        assignable.forEach(r => {
+          const opt = document.createElement('option');
+          opt.value = r.userId;
+          opt.textContent = `${r.name || getDisplayName(r.userId)} (${r.type === 'any_game' ? 'put me in a game' : 'if needed'})`;
+          select.appendChild(opt);
+        });
+
+        const assignBtn = btn('Assign', 'secondary');
+        assignBtn.className += ' text-xs';
+        assignBtn.onclick = async () => {
+          if (!select.value) return;
+          const rsvp = night.rsvps.find(r => r.userId === select.value);
+          if (!rsvp) return;
+          assignBtn.disabled = true;
+          try {
+            night.selectedGames[gameId].signedUpPlayers.push({ userId: rsvp.userId, name: rsvp.name });
+            night.lastModified = Date.now();
+            await saveGameNights(nights);
+            renderGameNights(nights, currentUser);
+            toastSuccess(`${rsvp.name} assigned to ${game.title}!`);
+          } catch {
+            toastError('Could not assign. Try again.');
+            assignBtn.disabled = false;
+          }
+        };
+
+        assignRow.appendChild(select);
+        assignRow.appendChild(assignBtn);
+        info.appendChild(assignRow);
+      }
     }
 
     card.appendChild(info);

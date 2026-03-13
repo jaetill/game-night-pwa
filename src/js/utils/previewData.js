@@ -41,30 +41,21 @@ export function injectPreviewData(night) {
     if (!night.declined.includes(uid)) night.declined.push(uid);
   }
 
-  // Distribute preview players across games if any exist
+  // Only 'playing' type people sign up for specific games
   const gameIds = Object.keys(night.selectedGames || {});
   if (gameIds.length > 0) {
-    const playing = PREVIEW_RSVPS.filter(r => r.type === 'playing' || r.type === 'flexible');
+    const playingOnly = PREVIEW_RSVPS.filter(r => r.type === 'playing');
 
     gameIds.forEach((gameId, gi) => {
       const game = night.selectedGames[gameId];
-      game.signedUpPlayers  = game.signedUpPlayers  || [];
+      game.signedUpPlayers   = game.signedUpPlayers   || [];
       game.interestedPlayers = game.interestedPlayers || [];
 
-      // Sign up 2-3 preview players per game (cycling through them)
-      const signers = playing.filter((_, i) => i % gameIds.length === gi).slice(0, 3);
+      // Sign up playing-type preview players per game (cycling through them)
+      const signers = playingOnly.filter((_, i) => i % gameIds.length === gi).slice(0, 3);
       for (const p of signers) {
         if (!game.signedUpPlayers.some(x => x.userId === p.userId)) {
           game.signedUpPlayers.push({ userId: p.userId, name: p.name, _preview: true });
-        }
-      }
-
-      // Add 1-2 interested players per game
-      const interested = playing.filter((_, i) => i % gameIds.length !== gi).slice(0, 2);
-      for (const p of interested) {
-        if (!game.interestedPlayers.some(x => x.userId === p.userId) &&
-            !game.signedUpPlayers.some(x => x.userId === p.userId)) {
-          game.interestedPlayers.push({ userId: p.userId, name: p.name, _preview: true });
         }
       }
     });
