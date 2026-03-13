@@ -1,5 +1,5 @@
 import { renderGameNightSummary } from './renderGameNightSummary.js';
-import { renderRSVP } from './renderRSVP.js';
+import { renderRSVP, renderAttendeeGroups } from './renderRSVP.js';
 import { renderSuggestions } from './renderSuggestions.js';
 import { renderSelectedGames } from './renderSelectedGames.js';
 import { renderHostGameControls, renderHostActions } from './renderGameNightHostControls.js';
@@ -69,16 +69,21 @@ export function renderGameNights(nights, currentUser) {
         details.appendChild(desc);
       }
 
+      // RSVP action buttons only (attendee groups rendered below)
       details.appendChild(renderRSVP(night, nights, currentUser));
+
+      // Games first — signed-up players are visible within each game card
+      if (Object.keys(night.selectedGames || {}).length > 0) {
+        details.appendChild(renderSelectedGames(night, currentUser, nights));
+      }
+
+      // Unassigned attendee groups (playing-but-no-game, any_game, if_needed, spectating)
+      details.appendChild(renderAttendeeGroups(night, nights, currentUser));
 
       const foodEl = renderFood(night, nights, currentUser);
       if (foodEl) details.appendChild(foodEl);
 
       details.appendChild(renderSuggestions(night, nights));
-
-      if (Object.keys(night.selectedGames || {}).length > 0) {
-        details.appendChild(renderSelectedGames(night, currentUser, nights));
-      }
 
       if (isHost(currentUser, night)) {
         const hostSection = document.createElement('div');

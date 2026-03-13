@@ -84,72 +84,86 @@ export function renderRSVP(night, nights, currentUser) {
     section.appendChild(actions);
   }
 
-  // ── Attendee list ────────────────────────────────────────
-  if (Array.isArray(night.rsvps) && night.rsvps.length > 0) {
-    const groups = [
-      { type: 'playing',    heading: 'Reserved a seat' },
-      { type: 'any_game',   heading: 'Put me in a game' },
-      { type: 'if_needed',  heading: "I'll play if needed" },
-      { type: 'spectating', heading: 'Just hanging out' },
-    ];
+  wrapper.appendChild(section);
+  return wrapper;
+}
 
-    function makeCancelBtn() {
-      const cancelBtn = btn('Cancel RSVP', 'danger');
-      cancelBtn.className += ' text-xs py-0.5 px-2';
-      cancelBtn.onclick = async () => {
-        cancelBtn.disabled = true;
-        try {
-          night.rsvps = night.rsvps.filter(r => r.userId !== userId);
-          withdrawFromAllGames(night, currentUser);
-          night.lastModified = Date.now();
-          sanitizeNight(night);
-          await saveGameNights(nights);
-          renderGameNights(nights, currentUser);
-          toastInfo('RSVP cancelled.');
-        } catch {
-          toastError('Could not cancel. Try again.');
-          cancelBtn.disabled = false;
-        }
-      };
-      return cancelBtn;
-    }
+export function renderAttendeeGroups(night, nights, currentUser) {
+  currentUser = currentUser || getCurrentUser();
+  const userId = currentUser?.userId;
+  const wrapper = document.createElement('div');
+  wrapper.className = 'space-y-3';
 
-    // Migrate legacy 'flexible' type to 'if_needed'
-    night.rsvps.forEach(r => { if (r.type === 'flexible') r.type = 'if_needed'; });
+  if (!Array.isArray(night.rsvps) || night.rsvps.length === 0) return wrapper;
 
-    for (const { type, heading } of groups) {
-      const members = night.rsvps.filter(r => (r.type ?? 'playing') === type);
-      if (members.length === 0) continue;
+  // Migrate legacy 'flexible' type to 'if_needed'
+  night.rsvps.forEach(r => { if (r.type === 'flexible') r.type = 'if_needed'; });
 
-      const groupLabel = document.createElement('span');
-      groupLabel.className = 'section-label';
-      groupLabel.textContent = heading;
-      section.appendChild(groupLabel);
+  // 'playing' people not yet in any game
+  const assignedUserIds = new Set(
+    Object.values(night.selectedGames || {}).flatMap(g => g.signedUpPlayers.map(p => p.userId))
+  );
+  const unassignedPlaying = night.rsvps.filter(
+    r => (r.type ?? 'playing') === 'playing' && !assignedUserIds.has(r.userId)
+  );
 
-      const list = document.createElement('ul');
-      list.className = 'space-y-1 pl-3';
+  const groups = [
+    { members: unassignedPlaying,                                               heading: "Hasn't picked a game yet" },
+    { members: night.rsvps.filter(r => r.type === 'any_game'),                  heading: 'Put me in a game' },
+    { members: night.rsvps.filter(r => r.type === 'if_needed'),                 heading: "I'll play if needed" },
+    { members: night.rsvps.filter(r => r.type === 'spectating'),                heading: 'Just hanging out' },
+  ];
 
-      members.forEach(rsvp => {
-        const item = document.createElement('li');
-        item.className = 'flex items-center justify-between text-sm';
-
-        const name = document.createElement('span');
-        name.className = 'text-gray-700';
-        name.textContent = rsvp.name || getDisplayName(rsvp.userId);
-        item.appendChild(name);
-
-        if (rsvp.userId === userId) item.appendChild(makeCancelBtn());
-
-        list.appendChild(item);
-      });
-
-      section.appendChild(list);
-    }
+  function makeCancelBtn() {
+    const cancelBtn = btn('Cancel RSVP', 'danger');
+    cancelBtn.className += ' text-xs py-0.5 px-2';
+    cancelBtn.onclick = async () => {
+      cancelBtn.disabled = true;
+      try {
+        night.rsvps = night.rsvps.filter(r => r.userId !== userId);
+        withdrawFromAllGames(night, currentUser);
+        night.lastModified = Date.now();
+        sanitizeNight(night);
+        await saveGameNights(nights);
+        renderGameNights(nights, currentUser);
+        toastInfo('RSVP cancelled.');
+      } catch {
+        toastError('Could not cancel. Try again.');
+        cancelBtn.disabled = false;
+      }
+    };
+    return cancelBtn;
   }
 
-  // ── Pending invites ──────────────────────────────────────
-  // An entry is still pending if it hasn't been acted on.
-  // Entries can be userIds or email addresses — check both forms.
+  for (const { members, heading } of groups) {
+    if (members.length === 0) continue;
+
+    const groupLabel = document.createElement('span');
+    groupLabel.className = 'section-label';
+    groupLabel.textContent = heading;
+    wrapper.appendChild(groupLabel);
+
+    const list = document.createElement('ul');
+    list.className = 'space-y-1 pl-3';
+
+    members.forEach(rsvp => {
+      const item = document.createElement('li');
+      item.className = 'flex items-center justify-between text-sm';
+
+      const name = document.createElement('span');
+      name.className = 'text-gray-700';
+      name.textContent = rsvp.name || getDisplayName(rsvp.userId);
+      item.appendChild(name);
+
+      if (rsvp.userId === userId) item.appendChild(makeCancelBtn());
+
+      list.appendChild(item);
+    });
+
+    wrapper.appendChild(list);
+  }
+
+  // ── Pending invites ───────────────────────────────────────
   const pending = (night.invited || []).filter(id =>
     !night.rsvps?.some(r => r.userId === id) &&
     !night.declined?.includes(id)
@@ -159,7 +173,7 @@ export function renderRSVP(night, nights, currentUser) {
     const label = document.createElement('span');
     label.className = 'section-label';
     label.textContent = 'Awaiting reply';
-    section.appendChild(label);
+    wrapper.appendChild(label);
 
     const pendingDiv = document.createElement('div');
     pendingDiv.className = 'flex flex-wrap gap-1';
@@ -180,9 +194,8 @@ export function renderRSVP(night, nights, currentUser) {
         chip.appendChild(removeBtn);
       }
     });
-    section.appendChild(pendingDiv);
+    wrapper.appendChild(pendingDiv);
   }
 
-  wrapper.appendChild(section);
   return wrapper;
 }
