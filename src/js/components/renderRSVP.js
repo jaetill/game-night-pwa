@@ -114,6 +114,23 @@ export function renderAttendeeGroups(night, nights, currentUser) {
     { members: night.rsvps.filter(r => r.type === 'spectating'),                heading: 'Just hanging out' },
   ];
 
+  // Expand guest entries from all RSVPs into the if_needed group
+  function guestEntriesFor(rsvp) {
+    const count = rsvp.guests || 0;
+    const entries = [];
+    const sponsorName = rsvp.name || getDisplayName(rsvp.userId);
+    for (let i = 1; i <= count; i++) {
+      entries.push({
+        userId: `${rsvp.userId}_guest_${i}`,
+        name:   `${sponsorName}'s Guest #${i}`,
+        _guest: true,
+      });
+    }
+    return entries;
+  }
+
+  const allGuests = night.rsvps.flatMap(guestEntriesFor);
+
   function makeCancelBtn() {
     const cancelBtn = btn('Cancel RSVP', 'danger');
     cancelBtn.className += ' text-xs py-0.5 px-2';
@@ -135,6 +152,64 @@ export function renderAttendeeGroups(night, nights, currentUser) {
     return cancelBtn;
   }
 
+  function makeGuestStepper(rsvp) {
+    const stepper = document.createElement('div');
+    stepper.className = 'flex items-center gap-1 ml-2';
+
+    const label = document.createElement('span');
+    label.className = 'text-xs text-gray-400';
+    label.textContent = '+guests:';
+
+    const minusBtn = document.createElement('button');
+    minusBtn.type = 'button';
+    minusBtn.className = 'w-5 h-5 rounded text-xs bg-gray-200 hover:bg-gray-300 font-bold leading-none';
+    minusBtn.textContent = '−';
+
+    const countEl = document.createElement('span');
+    countEl.className = 'text-xs w-4 text-center font-medium';
+    countEl.textContent = rsvp.guests || 0;
+
+    const plusBtn = document.createElement('button');
+    plusBtn.type = 'button';
+    plusBtn.className = 'w-5 h-5 rounded text-xs bg-gray-200 hover:bg-gray-300 font-bold leading-none';
+    plusBtn.textContent = '+';
+
+    async function setGuests(n) {
+      minusBtn.disabled = true;
+      plusBtn.disabled  = true;
+      try {
+        rsvp.guests = n;
+        night.lastModified = Date.now();
+        await saveGameNights(nights);
+        renderGameNights(nights, currentUser);
+      } catch {
+        toastError('Could not update guests.');
+        minusBtn.disabled = false;
+        plusBtn.disabled  = false;
+      }
+    }
+
+    minusBtn.onclick = () => { if ((rsvp.guests || 0) > 0) setGuests((rsvp.guests || 0) - 1); };
+    plusBtn.onclick  = () => setGuests((rsvp.guests || 0) + 1);
+
+    stepper.appendChild(label);
+    stepper.appendChild(minusBtn);
+    stepper.appendChild(countEl);
+    stepper.appendChild(plusBtn);
+    return stepper;
+  }
+
+  // Augment if_needed group with guest entries
+  const ifNeededIndex = groups.findIndex(g => g.heading === "I'll play if needed");
+  if (ifNeededIndex >= 0) {
+    groups[ifNeededIndex] = {
+      ...groups[ifNeededIndex],
+      members: [...groups[ifNeededIndex].members, ...allGuests],
+    };
+  } else if (allGuests.length > 0) {
+    groups.push({ members: allGuests, heading: "I'll play if needed" });
+  }
+
   for (const { members, heading } of groups) {
     if (members.length === 0) continue;
 
@@ -150,10 +225,16 @@ export function renderAttendeeGroups(night, nights, currentUser) {
       const item = document.createElement('li');
       item.className = 'flex items-center justify-between text-sm';
 
+      const left = document.createElement('div');
+      left.className = 'flex items-center';
+
       const name = document.createElement('span');
-      name.className = 'text-gray-700';
+      name.className = rsvp._guest ? 'text-gray-400 italic' : 'text-gray-700';
       name.textContent = rsvp.name || getDisplayName(rsvp.userId);
-      item.appendChild(name);
+      left.appendChild(name);
+
+      if (rsvp.userId === userId) left.appendChild(makeGuestStepper(rsvp));
+      item.appendChild(left);
 
       if (rsvp.userId === userId) item.appendChild(makeCancelBtn());
 

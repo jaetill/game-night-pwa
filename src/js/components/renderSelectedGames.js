@@ -186,11 +186,23 @@ export function renderSelectedGames(night, currentUser, nights) {
 
     // ── Host assignment (any_game / if_needed people) ─────────
     if (isHost(currentUser, night)) {
-      const assignable = (night.rsvps || []).filter(r =>
+      // Build assignable list: any_game/if_needed RSVPs + their guests
+      const assignableRsvps = (night.rsvps || []).filter(r =>
         (r.type === 'any_game' || r.type === 'if_needed') &&
         !signedUpPlayers.some(p => p.userId === r.userId) &&
         !isGameFull(night, gameId)
       );
+
+      const assignableGuests = (night.rsvps || []).flatMap(r => {
+        const sponsorName = r.name || getDisplayName(r.userId);
+        return Array.from({ length: r.guests || 0 }, (_, i) => ({
+          userId: `${r.userId}_guest_${i + 1}`,
+          name:   `${sponsorName}'s Guest #${i + 1}`,
+          _guest: true,
+        }));
+      }).filter(g => !signedUpPlayers.some(p => p.userId === g.userId) && !isGameFull(night, gameId));
+
+      const assignable = [...assignableRsvps, ...assignableGuests];
 
       if (assignable.length > 0) {
         const assignRow = document.createElement('div');
@@ -205,7 +217,9 @@ export function renderSelectedGames(night, currentUser, nights) {
         assignable.forEach(r => {
           const opt = document.createElement('option');
           opt.value = r.userId;
-          opt.textContent = `${r.name || getDisplayName(r.userId)} (${r.type === 'any_game' ? 'put me in a game' : 'if needed'})`;
+          opt.textContent = r._guest
+            ? r.name
+            : `${r.name || getDisplayName(r.userId)} (${r.type === 'any_game' ? 'put me in a game' : 'if needed'})`;
           select.appendChild(opt);
         });
 
@@ -213,15 +227,15 @@ export function renderSelectedGames(night, currentUser, nights) {
         assignBtn.className += ' text-xs';
         assignBtn.onclick = async () => {
           if (!select.value) return;
-          const rsvp = night.rsvps.find(r => r.userId === select.value);
-          if (!rsvp) return;
+          const entry = assignable.find(r => r.userId === select.value);
+          if (!entry) return;
           assignBtn.disabled = true;
           try {
-            night.selectedGames[gameId].signedUpPlayers.push({ userId: rsvp.userId, name: rsvp.name });
+            night.selectedGames[gameId].signedUpPlayers.push({ userId: entry.userId, name: entry.name });
             night.lastModified = Date.now();
             await saveGameNights(nights);
             renderGameNights(nights, currentUser);
-            toastSuccess(`${rsvp.name} assigned to ${game.title}!`);
+            toastSuccess(`${entry.name} assigned to ${game.title}!`);
           } catch {
             toastError('Could not assign. Try again.');
             assignBtn.disabled = false;
