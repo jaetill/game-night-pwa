@@ -1,5 +1,5 @@
 // config.js
-export const DEBUG_MODE = true;
+export const DEBUG_MODE = false;
 
 export default {
   Auth: {
