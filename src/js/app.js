@@ -42,8 +42,22 @@ async function init() {
     } });
   } catch (err) {
     console.error('Init failed:', err);
+    if (err?.code === 'UserUnAuthenticatedException' || err === 'The user is not authenticated') {
+      window.location.href = 'login.html';
+      return;
+    }
+    const container = document.getElementById('gameNightList');
+    if (container) {
+      container.innerHTML = `<div class="text-center py-12 text-red-400">
+        <p class="font-medium">Something went wrong loading the app.</p>
+        <p class="text-sm mt-1">Try refreshing. If it keeps happening, try signing out and back in.</p>
+      </div>`;
+    }
     toastError('Something went wrong loading the app.');
   }
 }
 
-window.addEventListener('DOMContentLoaded', init);
+window.addEventListener('DOMContentLoaded', () => {
+  console.log('[App] DOMContentLoaded — starting init');
+  init();
+});
