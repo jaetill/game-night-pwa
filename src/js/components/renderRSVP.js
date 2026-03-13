@@ -46,11 +46,14 @@ export function renderRSVP(night, nights, currentUser) {
       }
     }
 
-    const playingBtn = btn("Reserve a seat", 'primary');
-    playingBtn.onclick = () => doRSVP('playing', playingBtn, "Reserve a seat");
+    const playingBtn = btn('Reserve a seat', 'primary');
+    playingBtn.onclick = () => doRSVP('playing', playingBtn, 'Reserve a seat');
 
-    const flexBtn = btn("Fill in gaps", 'secondary');
-    flexBtn.onclick = () => doRSVP('flexible', flexBtn, "Fill in gaps");
+    const anyGameBtn = btn('Put me in a game', 'secondary');
+    anyGameBtn.onclick = () => doRSVP('any_game', anyGameBtn, 'Put me in a game');
+
+    const ifNeededBtn = btn("I'll play if needed", 'secondary');
+    ifNeededBtn.onclick = () => doRSVP('if_needed', ifNeededBtn, "I'll play if needed");
 
     const specBtn = btn('Just hang out', 'secondary');
     specBtn.onclick = () => doRSVP('spectating', specBtn, 'Just hang out');
@@ -74,7 +77,8 @@ export function renderRSVP(night, nights, currentUser) {
     };
 
     actions.appendChild(playingBtn);
-    actions.appendChild(flexBtn);
+    actions.appendChild(anyGameBtn);
+    actions.appendChild(ifNeededBtn);
     actions.appendChild(specBtn);
     actions.appendChild(declineBtn);
     section.appendChild(actions);
@@ -84,7 +88,8 @@ export function renderRSVP(night, nights, currentUser) {
   if (Array.isArray(night.rsvps) && night.rsvps.length > 0) {
     const groups = [
       { type: 'playing',    heading: 'Reserved a seat' },
-      { type: 'flexible',   heading: 'Filling in gaps' },
+      { type: 'any_game',   heading: 'Put me in a game' },
+      { type: 'if_needed',  heading: "I'll play if needed" },
       { type: 'spectating', heading: 'Just hanging out' },
     ];
 
@@ -108,6 +113,9 @@ export function renderRSVP(night, nights, currentUser) {
       };
       return cancelBtn;
     }
+
+    // Migrate legacy 'flexible' type to 'if_needed'
+    night.rsvps.forEach(r => { if (r.type === 'flexible') r.type = 'if_needed'; });
 
     for (const { type, heading } of groups) {
       const members = night.rsvps.filter(r => (r.type ?? 'playing') === type);

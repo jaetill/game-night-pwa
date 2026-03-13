@@ -8,12 +8,12 @@
 const PREVIEW_RSVPS = [
   { userId: 'preview_alice',  name: 'Alice Chen',    type: 'playing'    },
   { userId: 'preview_bob',    name: 'Bob Martinez',  type: 'playing'    },
-  { userId: 'preview_carol',  name: 'Carol Williams',type: 'flexible'   },
+  { userId: 'preview_carol',  name: 'Carol Williams',type: 'any_game'   },
   { userId: 'preview_david',  name: 'David Park',    type: 'spectating' },
   { userId: 'preview_emma',   name: 'Emma Johnson',  type: 'playing'    },
-  { userId: 'preview_frank',  name: 'Frank Torres',  type: 'flexible'   },
+  { userId: 'preview_frank',  name: 'Frank Torres',  type: 'if_needed'  },
   { userId: 'preview_grace',  name: 'Grace Kim',     type: 'spectating' },
-  { userId: 'preview_henry',  name: 'Henry Walsh',   type: 'playing'    },
+  { userId: 'preview_henry',  name: 'Henry Walsh',   type: 'any_game'   },
 ];
 
 const PREVIEW_INVITES  = ['sarah.preview@example.com', 'mike.preview@example.com'];
