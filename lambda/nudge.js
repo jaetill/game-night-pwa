@@ -6,7 +6,7 @@
 //   FROM_EMAIL          — Verified sender address (e.g. gamenight@jaetill.com)
 //   COGNITO_USER_POOL_ID — us-east-2_xneeJzaDJ
 //   S3_BUCKET           — jaetill-game-nights
-//   APP_URL             — https://jaetill.github.io/game-night-pwa/
+//   APP_URL             — https://gamenights.jaetill.com/
 
 'use strict';
 
@@ -21,15 +21,25 @@ const BUCKET       = process.env.S3_BUCKET            || 'jaetill-game-nights';
 const USER_POOL_ID = process.env.COGNITO_USER_POOL_ID || 'us-east-2_xneeJzaDJ';
 const FROM_EMAIL   = process.env.FROM_EMAIL;
 const POSTMARK_KEY = process.env.POSTMARK_API_KEY;
-const APP_URL      = process.env.APP_URL               || 'https://jaetill.github.io/game-night-pwa/';
+const APP_URL      = process.env.APP_URL               || 'https://gamenights.jaetill.com/';
 
-const CORS = {
-  'Access-Control-Allow-Origin':  'https://jaetill.github.io',
-  'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-  'Content-Type':                 'application/json',
-};
+const ALLOWED_ORIGINS = new Set([
+  'https://gamenights.jaetill.com',
+  'https://jaetill.github.io',
+]);
+
+function corsHeaders(event) {
+  const origin = event.headers?.origin || event.headers?.Origin || '';
+  return {
+    'Access-Control-Allow-Origin':  ALLOWED_ORIGINS.has(origin) ? origin : 'https://gamenights.jaetill.com',
+    'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+    'Content-Type':                 'application/json',
+  };
+}
 
 exports.handler = async (event) => {
+  const CORS = corsHeaders(event);
+
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: { ...CORS, 'Access-Control-Allow-Methods': 'POST,OPTIONS' }, body: '' };
   }
@@ -37,23 +47,23 @@ exports.handler = async (event) => {
   // ── Auth: decode Cognito JWT to get caller userId ──
   const rawAuth = event.headers?.Authorization || event.headers?.authorization || '';
   const token   = rawAuth.startsWith('Bearer ') ? rawAuth.slice(7) : rawAuth;
-  if (!token) return respond(401, { error: 'Unauthorized' });
+  if (!token) return respond(401, { error: 'Unauthorized' }, CORS);
 
   let callerId;
   try {
     const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
     callerId = payload['cognito:username'] || payload.sub;
   } catch {
-    return respond(401, { error: 'Invalid token' });
+    return respond(401, { error: 'Invalid token' }, CORS);
   }
 
   // ── Parse body ──
   let body;
   try { body = JSON.parse(event.body || '{}'); }
-  catch { return respond(400, { error: 'Invalid JSON' }); }
+  catch { return respond(400, { error: 'Invalid JSON' }, CORS); }
 
   const { nightId } = body;
-  if (!nightId) return respond(400, { error: 'nightId required' });
+  if (!nightId) return respond(400, { error: 'nightId required' }, CORS);
 
   // ── Load game nights from S3 ──
   let nights;
@@ -63,14 +73,14 @@ exports.handler = async (event) => {
     nights = JSON.parse(text);
   } catch (e) {
     console.error('S3 load failed', e);
-    return respond(500, { error: 'Could not load game nights' });
+    return respond(500, { error: 'Could not load game nights' }, CORS);
   }
 
   const night = nights.find(n => n.id === nightId);
-  if (!night) return respond(404, { error: 'Game night not found' });
+  if (!night) return respond(404, { error: 'Game night not found' }, CORS);
 
   // ── Verify caller is the host ──
-  if (night.hostUserId !== callerId) return respond(403, { error: 'Only the host can nudge' });
+  if (night.hostUserId !== callerId) return respond(403, { error: 'Only the host can nudge' }, CORS);
 
   // ── Compute non-responders ──
   const rsvpdIds   = new Set((night.rsvps    || []).map(r => r.userId));
@@ -78,7 +88,7 @@ exports.handler = async (event) => {
   const nonResponders = (night.invited || []).filter(id => !rsvpdIds.has(id) && !declinedIds.has(id));
 
   if (nonResponders.length === 0) {
-    return respond(200, { sent: 0, message: 'Everyone has already responded' });
+    return respond(200, { sent: 0, message: 'Everyone has already responded' }, CORS);
   }
 
   // ── Get host display name from Cognito ──
@@ -105,7 +115,7 @@ exports.handler = async (event) => {
   }
 
   if (targets.length === 0) {
-    return respond(200, { sent: 0, message: 'No email addresses could be resolved' });
+    return respond(200, { sent: 0, message: 'No email addresses could be resolved' }, CORS);
   }
 
   // ── Build email content ──
@@ -131,13 +141,13 @@ exports.handler = async (event) => {
     }
   }
 
-  return respond(200, { sent, total: targets.length, errors });
+  return respond(200, { sent, total: targets.length, errors }, CORS);
 };
 
 // ── Helpers ───────────────────────────────────────────────
 
-function respond(status, body) {
-  return { statusCode: status, headers: CORS, body: JSON.stringify(body) };
+function respond(status, body, headers) {
+  return { statusCode: status, headers, body: JSON.stringify(body) };
 }
 
 function formatDate(dateStr) {
