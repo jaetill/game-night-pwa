@@ -9,6 +9,9 @@ import { toastSuccess, toastError, toastInfo } from '../ui/toast.js';
 import { DEBUG_MODE } from '../config.js';
 import { injectPreviewData, clearPreviewData, hasPreviewData } from '../utils/previewData.js';
 import { getDisplayName } from '../utils/userDirectory.js';
+import { authFetch } from '../utils/authFetch.js';
+
+const API_BASE = 'https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod';
 
 export function renderHostGameControls(night, nights) {
   const container = document.createElement('div');
@@ -217,6 +220,37 @@ export function renderHostActions(night, nights) {
     }
   };
 
+  // ── Nudge non-responders ─────────────────────────────────
+  const rsvpdIds    = new Set((night.rsvps    || []).map(r => r.userId));
+  const declinedIds = new Set(night.declined  || []);
+  const nonResponders = (night.invited || []).filter(id => !rsvpdIds.has(id) && !declinedIds.has(id));
+
+  const nudgeBtn = btn(`Nudge non-responders (${nonResponders.length})`, 'secondary');
+  nudgeBtn.disabled = nonResponders.length === 0;
+  if (nonResponders.length === 0) nudgeBtn.title = 'Everyone has responded';
+
+  nudgeBtn.onclick = async () => {
+    nudgeBtn.disabled = true;
+    nudgeBtn.textContent = 'Sending…';
+    try {
+      const res = await authFetch(`${API_BASE}/nudge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nightId: night.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      toastSuccess(`Nudge sent to ${data.sent} ${data.sent === 1 ? 'person' : 'people'}!`);
+    } catch (e) {
+      console.error('Nudge failed:', e);
+      toastError('Could not send nudge. Try again.');
+    } finally {
+      nudgeBtn.disabled = nonResponders.length === 0;
+      nudgeBtn.textContent = `Nudge non-responders (${nonResponders.length})`;
+    }
+  };
+
+  container.appendChild(nudgeBtn);
   container.appendChild(editBtn);
   container.appendChild(cancelBtn);
 
