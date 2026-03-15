@@ -1,5 +1,5 @@
-// Lambda: POST /nudge
-// Sends a Postmark reminder email to everyone on a game night who hasn't responded.
+// Lambda: POST /nudge  — sends Postmark reminder to non-responders
+//         POST /invite — sends Postmark invite to a newly added guest
 //
 // Environment variables required:
 //   POSTMARK_API_KEY    — Postmark server token
@@ -62,7 +62,7 @@ exports.handler = async (event) => {
   try { body = JSON.parse(event.body || '{}'); }
   catch { return respond(400, { error: 'Invalid JSON' }, CORS); }
 
-  const { nightId } = body;
+  const { nightId, action, email: inviteEmail } = body;
   if (!nightId) return respond(400, { error: 'nightId required' }, CORS);
 
   // ── Load game nights from S3 ──
@@ -80,7 +80,40 @@ exports.handler = async (event) => {
   if (!night) return respond(404, { error: 'Game night not found' }, CORS);
 
   // ── Verify caller is the host ──
-  if (night.hostUserId !== callerId) return respond(403, { error: 'Only the host can nudge' }, CORS);
+  if (night.hostUserId !== callerId) return respond(403, { error: 'Only the host can do this' }, CORS);
+
+  // ── Invite action: send a single invite email ──────────────────────────────
+  if (action === 'invite') {
+    if (!inviteEmail || !inviteEmail.includes('@')) {
+      return respond(400, { error: 'Valid email required for invite' }, CORS);
+    }
+
+    // Get host display name
+    let hostName = callerId;
+    try {
+      const u = await cognito.send(new AdminGetUserCommand({ UserPoolId: USER_POOL_ID, Username: callerId }));
+      const attr = u.UserAttributes?.find(a => a.Name === 'name');
+      if (attr?.Value) hostName = attr.Value;
+    } catch { /* non-fatal */ }
+
+    const dateStr = formatDate(night.date);
+    const ctx = { hostName, dateStr, timeStr: night.time || '', location: night.location || '', description: night.description || '' };
+    const name = inviteEmail.split('@')[0];
+
+    try {
+      await postmark({
+        To:       inviteEmail,
+        From:     FROM_EMAIL,
+        Subject:  `You're invited to game night${dateStr ? ` on ${dateStr}` : ''}!`,
+        TextBody: buildInviteText({ ...ctx, name }),
+        HtmlBody: buildInviteHtml({ ...ctx, name }),
+      });
+      return respond(200, { sent: 1 }, CORS);
+    } catch (e) {
+      console.error(`Postmark invite failed for ${inviteEmail}:`, e.message);
+      return respond(500, { error: `Failed to send invite: ${e.message}` }, CORS);
+    }
+  }
 
   // ── Compute non-responders ──
   const rsvpdIds   = new Set((night.rsvps    || []).map(r => r.userId));
@@ -157,6 +190,49 @@ function formatDate(dateStr) {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
     });
   } catch { return dateStr; }
+}
+
+function buildInviteText({ name, hostName, dateStr, timeStr, location, description }) {
+  const lines = [
+    `Hi${name ? ` ${name}` : ''}!`,
+    '',
+    `${hostName} has invited you to game night` +
+      (dateStr  ? ` on ${dateStr}`  : '') +
+      (timeStr  ? ` at ${timeStr}`  : '') +
+      (location ? ` at ${location}` : '') + '.',
+  ];
+  if (description) lines.push('', description);
+  lines.push(
+    '',
+    `Let ${hostName} know if you can make it:`,
+    APP_URL,
+    '',
+    `If you don't know what this is about, you can safely ignore this message.`,
+  );
+  return lines.join('\n');
+}
+
+function buildInviteHtml({ name, hostName, dateStr, timeStr, location, description }) {
+  const when = [dateStr && `<strong>${dateStr}</strong>`, timeStr && `at <strong>${timeStr}</strong>`].filter(Boolean).join(' ');
+  return `<!DOCTYPE html>
+<html>
+<body style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px 16px;color:#1e293b;">
+  <h2 style="margin:0 0 16px;font-size:20px;">🎲 You're invited to game night!</h2>
+  <p>Hi${name ? ` ${name}` : ''}!</p>
+  <p><strong>${hostName}</strong> has invited you to game night${when ? ` ${when}` : ''}${location ? ` at <strong>${location}</strong>` : ''}.</p>
+  ${description ? `<p style="color:#64748b;font-style:italic;">${description}</p>` : ''}
+  <p>Let ${hostName} know if you can make it:</p>
+  <p>
+    <a href="${APP_URL}"
+       style="display:inline-block;background:#4f46e5;color:#fff;padding:10px 22px;border-radius:6px;text-decoration:none;font-weight:600;">
+      View invitation →
+    </a>
+  </p>
+  <p style="margin-top:28px;font-size:12px;color:#94a3b8;">
+    If you don't know what this is about, you can safely ignore this message.
+  </p>
+</body>
+</html>`;
 }
 
 function buildText({ name, hostName, dateStr, timeStr, location, description }) {
