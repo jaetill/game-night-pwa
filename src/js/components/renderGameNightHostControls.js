@@ -64,6 +64,17 @@ export function renderHostGameControls(night, nights) {
       inviteInput.value = '';
       syncAndRender(nights);
       toastSuccess(`${email} invited!`);
+      // Send invite email (fire-and-forget — don't block on failure)
+      authFetch(`${API_BASE}/invite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nightId: night.id, action: 'invite', email }),
+      }).then(async res => {
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          console.warn('Invite email failed:', err.error || res.status);
+        }
+      }).catch(e => console.warn('Invite email error:', e.message));
     } else {
       toastInfo(`${email} is already invited.`);
       inviteInput.value = '';
