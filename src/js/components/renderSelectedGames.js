@@ -50,17 +50,19 @@ export function renderSelectedGames(night, currentUser, nights) {
 
   Object.entries(night.selectedGames).forEach(([gameId, gameData]) => {
     const { maxPlayers, signedUpPlayers } = gameData;
-    const game = ownedGames.find(g => g.id === gameId);
-    if (!game) return;
+    const owned = ownedGames.find(g => g.id === gameId);
+    const title     = gameData.title     || owned?.title;
+    const thumbnail = gameData.thumbnail ?? owned?.thumbnail;
+    if (!title) return;
 
     const card = document.createElement('div');
     card.className = 'flex items-start gap-3 p-3 bg-gray-50 rounded-xl';
 
     // Thumbnail
-    if (game.thumbnail) {
+    if (thumbnail) {
       const img = document.createElement('img');
-      img.src = game.thumbnail;
-      img.alt = game.title;
+      img.src = thumbnail;
+      img.alt = title;
       img.className = 'game-thumb';
       card.appendChild(img);
     }
@@ -74,20 +76,20 @@ export function renderSelectedGames(night, currentUser, nights) {
 
     const titleEl = document.createElement('p');
     titleEl.className = 'font-medium text-sm text-gray-900 truncate';
-    titleEl.textContent = game.title;
+    titleEl.textContent = title;
     titleRow.appendChild(titleEl);
 
     if (isHost(currentUser, night)) {
       const removeBtn = btn('Remove', 'danger');
       removeBtn.className += ' text-xs py-0.5 px-2 shrink-0';
-      removeBtn.setAttribute('aria-label', `Remove ${game.title}`);
+      removeBtn.setAttribute('aria-label', `Remove ${title}`);
       removeBtn.onclick = async () => {
         removeBtn.disabled = true;
         try {
           delete night.selectedGames[gameId];
           await saveGameNights(nights);
           renderGameNights(nights, currentUser);
-          toastInfo(`${game.title} removed.`);
+          toastInfo(`${title} removed.`);
         } catch {
           toastError('Could not remove game.');
           removeBtn.disabled = false;
@@ -167,7 +169,7 @@ export function renderSelectedGames(night, currentUser, nights) {
             joinGame(night, gameId);
             await saveGameNights(nights);
             renderGameNights(nights, currentUser);
-            toastSuccess(`Joined ${game.title}!`);
+            toastSuccess(`Joined ${title}!`);
           } catch {
             toastError('Could not join. Try again.');
             joinBtn.disabled = false;
@@ -235,7 +237,7 @@ export function renderSelectedGames(night, currentUser, nights) {
             night.lastModified = Date.now();
             await saveGameNights(nights);
             renderGameNights(nights, currentUser);
-            toastSuccess(`${entry.name} assigned to ${game.title}!`);
+            toastSuccess(`${entry.name} assigned to ${title}!`);
           } catch {
             toastError('Could not assign. Try again.');
             assignBtn.disabled = false;

@@ -29,10 +29,10 @@ async function init() {
     // Load profile (BGG username, contact info) — may sync from Cognito attributes
     await loadProfile();
 
-    const [nights] = await Promise.all([
-      loadGameNights(),
-      fetchOwnedGames(cognitoUser.username),
-    ]);
+    const nights = await loadGameNights();
+
+    // Fetch BGG collection in background — only needed for game selection modal
+    fetchOwnedGames(cognitoUser.username).catch(() => {});
 
     buildDirectoryFromNights(nights);
     renderApp({ nights, currentUser: {

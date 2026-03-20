@@ -26,8 +26,10 @@ export function renderHostGameControls(night, nights) {
         night.selectedGames = night.selectedGames || {};
         if (!night.selectedGames[game.id]) {
           night.selectedGames[game.id] = {
-            maxPlayers: game.maxPlayers || 4,
-            signedUpPlayers: [],
+            maxPlayers:        game.maxPlayers || 4,
+            title:             game.title,
+            thumbnail:         game.thumbnail || '',
+            signedUpPlayers:   [],
             interestedPlayers: [],
           };
           toastSuccess(`${game.title} added!`);
@@ -86,6 +88,41 @@ export function renderHostGameControls(night, nights) {
   inviteRow.appendChild(inviteInput);
   inviteRow.appendChild(inviteBtn);
   container.appendChild(inviteRow);
+
+  // ── Invited guests (removable) ────────────────────────────
+  const rsvpdUserIds = new Set((night.rsvps || []).map(r => r.userId));
+  const removableGuests = (night.invited || []).filter(id => !rsvpdUserIds.has(id));
+
+  if (removableGuests.length > 0) {
+    const guestList = document.createElement('div');
+    guestList.className = 'flex flex-wrap gap-2';
+
+    removableGuests.forEach(email => {
+      const tag = document.createElement('span');
+      tag.className = 'flex items-center gap-1 text-xs bg-gray-100 text-gray-700 rounded-full px-2 py-1';
+
+      const label = document.createElement('span');
+      label.textContent = email;
+
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.textContent = '×';
+      removeBtn.className = 'text-gray-400 hover:text-red-500 font-bold leading-none';
+      removeBtn.title = `Remove ${email}`;
+      removeBtn.onclick = () => {
+        night.invited = night.invited.filter(id => id !== email);
+        night.lastModified = Date.now();
+        syncAndRender(nights);
+        toastInfo(`${email} removed.`);
+      };
+
+      tag.appendChild(label);
+      tag.appendChild(removeBtn);
+      guestList.appendChild(tag);
+    });
+
+    container.appendChild(guestList);
+  }
 
   // ── Recent guests ─────────────────────────────────────────
   const currentUser = getCurrentUser();

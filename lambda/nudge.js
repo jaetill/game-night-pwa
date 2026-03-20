@@ -102,11 +102,12 @@ exports.handler = async (event) => {
 
     try {
       await postmark({
-        To:       inviteEmail,
-        From:     FROM_EMAIL,
-        Subject:  `You're invited to game night${dateStr ? ` on ${dateStr}` : ''}!`,
-        TextBody: buildInviteText({ ...ctx, name }),
-        HtmlBody: buildInviteHtml({ ...ctx, name }),
+        To:            inviteEmail,
+        From:          FROM_EMAIL,
+        Subject:       `You're invited to game night${dateStr ? ` on ${dateStr}` : ''}!`,
+        TextBody:      buildInviteText({ ...ctx, name }),
+        HtmlBody:      buildInviteHtml({ ...ctx, name }),
+        MessageStream: 'outbound',
       });
       return respond(200, { sent: 1 }, CORS);
     } catch (e) {
@@ -161,11 +162,12 @@ exports.handler = async (event) => {
   for (const { email, name } of targets) {
     try {
       await postmark({
-        To:       email,
-        From:     FROM_EMAIL,
-        Subject:  `Reminder: Game night${dateStr ? ` on ${dateStr}` : ''}`,
-        TextBody: buildText({ ...ctx, name }),
-        HtmlBody: buildHtml({ ...ctx, name }),
+        To:            email,
+        From:          FROM_EMAIL,
+        Subject:       `Reminder: Game night${dateStr ? ` on ${dateStr}` : ''}`,
+        TextBody:      buildText({ ...ctx, name }),
+        HtmlBody:      buildHtml({ ...ctx, name }),
+        MessageStream: 'outbound',
       });
       sent++;
     } catch (e) {
@@ -207,6 +209,8 @@ function buildInviteText({ name, hostName, dateStr, timeStr, location, descripti
     `Let ${hostName} know if you can make it:`,
     APP_URL,
     '',
+    `First time? You'll need to create a free account to RSVP. The app may take a moment to load.`,
+    '',
     `If you don't know what this is about, you can safely ignore this message.`,
   );
   return lines.join('\n');
@@ -228,6 +232,7 @@ function buildInviteHtml({ name, hostName, dateStr, timeStr, location, descripti
       View invitation →
     </a>
   </p>
+  <p style="font-size:13px;color:#64748b;">First time? You'll need to create a free account to RSVP. The app may take a moment to load.</p>
   <p style="margin-top:28px;font-size:12px;color:#94a3b8;">
     If you don't know what this is about, you can safely ignore this message.
   </p>

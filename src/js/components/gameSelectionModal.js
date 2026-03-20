@@ -72,8 +72,10 @@ export function openGameSelectionModal({ night, onSelect }) {
           nights[index].selectedGames = nights[index].selectedGames || {};
           if (!nights[index].selectedGames[game.id]) {
             nights[index].selectedGames[game.id] = {
-              maxPlayers: game.defaultMaxPlayers || 4,
-              signedUpPlayers: []
+              maxPlayers:      game.defaultMaxPlayers || game.maxPlayers || 4,
+              title:           game.title,
+              thumbnail:       game.thumbnail || '',
+              signedUpPlayers: [],
             };
           }
 
