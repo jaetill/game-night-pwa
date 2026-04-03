@@ -10,6 +10,7 @@ import { DEBUG_MODE } from '../config.js';
 import { injectPreviewData, clearPreviewData, hasPreviewData } from '../utils/previewData.js';
 import { getDisplayName } from '../utils/userDirectory.js';
 import { authFetch } from '../utils/authFetch.js';
+import { getGroups, saveGroup } from '../auth/groups.js';
 
 const API_BASE = 'https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod';
 
@@ -124,13 +125,83 @@ export function renderHostGameControls(night, nights) {
     container.appendChild(guestList);
   }
 
-  // ── Recent guests ─────────────────────────────────────────
+  // ── Shared state used by both Saved groups and Recent guests ──
   const currentUser = getCurrentUser();
   const alreadyOnNight = new Set([
     ...(night.invited || []),
     ...(night.rsvps   || []).map(r => r.userId),
   ]);
 
+  // ── Saved groups ──────────────────────────────────────────
+  const groups = getGroups().filter(g => g.emails.length > 0);
+  if (groups.length > 0) {
+    const groupSection = document.createElement('div');
+    groupSection.className = 'border border-gray-200 rounded-xl overflow-hidden';
+
+    const groupHeader = document.createElement('button');
+    groupHeader.type = 'button';
+    groupHeader.className = 'w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-600 bg-gray-50 hover:bg-gray-100';
+    groupHeader.innerHTML = `<span>Saved groups</span><span class="text-gray-400 text-xs">▼</span>`;
+
+    const groupBody = document.createElement('div');
+    groupBody.className = 'hidden p-3 space-y-2';
+
+    groupHeader.onclick = () => {
+      const collapsed = groupBody.classList.toggle('hidden');
+      groupHeader.querySelector('span:last-child').textContent = collapsed ? '▼' : '▲';
+    };
+
+    groups.forEach(group => {
+      const newEmails = group.emails.filter(e => !alreadyOnNight.has(e));
+
+      const row = document.createElement('div');
+      row.className = 'flex items-center justify-between gap-2';
+
+      const label = document.createElement('span');
+      label.className = 'text-sm text-gray-700';
+      label.textContent = `${group.name}`;
+
+      const countBadge = document.createElement('span');
+      countBadge.className = 'text-xs text-gray-400';
+      countBadge.textContent = newEmails.length === 0
+        ? 'already invited'
+        : `${newEmails.length} new`;
+
+      const addGroupBtn = btn('Add all', 'secondary');
+      addGroupBtn.className += ' text-xs';
+      addGroupBtn.disabled = newEmails.length === 0;
+      addGroupBtn.onclick = () => {
+        night.invited = night.invited || [];
+        const added = [];
+        for (const email of newEmails) {
+          if (!night.invited.includes(email)) {
+            night.invited.push(email);
+            added.push(email);
+          }
+        }
+        if (added.length > 0) {
+          night.lastModified = Date.now();
+          syncAndRender(nights);
+          toastSuccess(`${added.length} from "${group.name}" invited!`);
+        }
+      };
+
+      const left = document.createElement('div');
+      left.className = 'flex items-center gap-2 min-w-0';
+      left.appendChild(label);
+      left.appendChild(countBadge);
+
+      row.appendChild(left);
+      row.appendChild(addGroupBtn);
+      groupBody.appendChild(row);
+    });
+
+    groupSection.appendChild(groupHeader);
+    groupSection.appendChild(groupBody);
+    container.appendChild(groupSection);
+  }
+
+  // ── Recent guests ─────────────────────────────────────────
   const guestMap = new Map(); // value → { value, label }
   for (const n of nights) {
     if (n.id === night.id || n.hostUserId !== currentUser?.userId) continue;
@@ -227,6 +298,29 @@ export function renderHostGameControls(night, nights) {
     };
 
     body.appendChild(addBtn);
+
+    // Save checked guests as a new group
+    const saveAsGroupBtn = document.createElement('button');
+    saveAsGroupBtn.type = 'button';
+    saveAsGroupBtn.textContent = 'Save as group…';
+    saveAsGroupBtn.className = 'text-xs text-amber-700 hover:underline mt-1';
+    saveAsGroupBtn.onclick = async () => {
+      const selected = checkboxes.filter(cb => cb.checked).map(cb => cb.value).filter(v => v.includes('@'));
+      if (selected.length === 0) {
+        toastError('Check at least one email address to save as a group.');
+        return;
+      }
+      const name = prompt('Group name (e.g. "Regular Group"):');
+      if (!name?.trim()) return;
+      try {
+        await saveGroup(name.trim(), selected);
+        toastSuccess(`Group "${name.trim()}" saved.`);
+      } catch {
+        toastError('Could not save group.');
+      }
+    };
+    body.appendChild(saveAsGroupBtn);
+
     section.appendChild(header);
     section.appendChild(body);
     container.appendChild(section);
