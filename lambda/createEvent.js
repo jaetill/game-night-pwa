@@ -1,6 +1,8 @@
 // Lambda: POST /create-event — creates a new game night event
 //
-// Auth: Cognito JWT (Bearer token in Authorization header)
+// Auth: API key (X-API-Key header via apiKeyAuthorizer) or Cognito JWT
+//       API key resolves to userId via requestContext.authorizer.userId;
+//       JWT fallback decodes cognito:username/sub from Authorization header.
 //
 // Environment variables required:
 //   S3_BUCKET            — jaetill-game-nights
@@ -45,17 +47,18 @@ exports.handler = async (event) => {
     return { statusCode: 200, headers: { ...CORS, 'Access-Control-Allow-Methods': 'POST,OPTIONS' }, body: '' };
   }
 
-  // ── Auth: decode Cognito JWT to get caller userId ──
-  const rawAuth = event.headers?.Authorization || event.headers?.authorization || '';
-  const token   = rawAuth.startsWith('Bearer ') ? rawAuth.slice(7) : rawAuth;
-  if (!token) return respond(401, { error: 'Unauthorized' }, CORS);
-
-  let callerId;
-  try {
-    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
-    callerId = payload['cognito:username'] || payload.sub;
-  } catch {
-    return respond(401, { error: 'Invalid token' }, CORS);
+  // ── Auth: API key (via authorizer context) or Cognito JWT fallback ──
+  let callerId = event.requestContext?.authorizer?.userId;
+  if (!callerId) {
+    const rawAuth = event.headers?.Authorization || event.headers?.authorization || '';
+    const token   = rawAuth.startsWith('Bearer ') ? rawAuth.slice(7) : rawAuth;
+    if (!token) return respond(401, { error: 'Unauthorized' }, CORS);
+    try {
+      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
+      callerId = payload['cognito:username'] || payload.sub;
+    } catch {
+      return respond(401, { error: 'Invalid token' }, CORS);
+    }
   }
 
   // ── Parse body ──

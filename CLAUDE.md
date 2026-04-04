@@ -37,6 +37,10 @@ Hosted at **https://gamenights.jaetill.com** (GitHub Pages frontend, AWS backend
 | `bggProxy` | `bggProxy-role-4m5m0lfj` | Proxy BGG XML API (CORS workaround) |
 | `GeneratePresignedGetUrl` | `GeneratePresignedGetUrl-role-vghochhj` | S3 presigned download URL |
 | `GeneratePresignedPost` | `GeneratePresignedPost-role-1hw3dtet` | S3 presigned upload URL |
+| `createEvent` | `createEvent-lambda-role` | Create game night event (API key auth) |
+| `searchGames` | `searchGames-lambda-role` | Search user's BGG collection (API key auth) |
+| `groups` | `groups-lambda-role` | Manage invitation groups (API key auth) |
+| `apiKeyAuthorizer` | `apiKeyAuthorizer-lambda-role` | REQUEST authorizer: validates X-API-Key via SSM |
 
 ## Lambda env vars
 | Function | Var | Purpose |
@@ -48,21 +52,31 @@ Hosted at **https://gamenights.jaetill.com** (GitHub Pages frontend, AWS backend
 | `nudgeNonResponders` | `APP_URL` | `https://gamenights.jaetill.com/` |
 
 ## API routes (`pufsqfvq8g/prod`)
-All routes require Cognito JWT in `Authorization` header (via `authFetch` utility).
+Browser-facing routes use Cognito JWT (`Authorization: Bearer <token>` via `authFetch`).
+MCP/API-key routes use `X-API-Key` header (validated by `apiKeyAuthorizer` → SSM lookup).
 
-| Method | Route | Lambda | Purpose |
-|---|---|---|---|
-| POST | `/nudge` | nudgeNonResponders | Send reminders to non-responders |
-| POST | `/invite` | nudgeNonResponders | Send invite email to a new guest |
-| GET | `/get-token` | GeneratePresignedGetUrl | Presigned URL to download `gameNights.json` |
-| POST | `/upload-token` | GeneratePresignedPost | Presigned URL to upload `gameNights.json` |
-| GET | `/bgg` | bggProxy | Proxy BGG XML collection for a username |
+| Method | Route | Lambda | Auth | Purpose |
+|---|---|---|---|---|
+| POST | `/nudge` | nudgeNonResponders | Cognito JWT | Send reminders to non-responders |
+| POST | `/invite` | nudgeNonResponders | Cognito JWT | Send invite email to a new guest |
+| GET | `/get-token` | GeneratePresignedGetUrl | Cognito JWT | Presigned URL to download `gameNights.json` |
+| POST | `/upload-token` | GeneratePresignedPost | Cognito JWT | Presigned URL to upload `gameNights.json` |
+| GET | `/bgg` | bggProxy | Cognito JWT | Proxy BGG XML collection for a username |
+| GET | `/profiles` | (TBD) | Cognito JWT | User profile read |
+| POST | `/create-event` | createEvent | API key | Create a new game night event |
+| GET | `/search-games` | searchGames | API key | Search caller's BGG collection |
+| GET,POST,DELETE | `/groups` | groups | API key | Manage saved invitation groups |
+
+### API key management
+Keys are stored in SSM Parameter Store at `/game-night/api-keys/{key}` (SecureString).
+Value is the Cognito **username** (e.g. `jaetill`), which matches how profile/collection
+files are keyed in S3. Use `jaetill-dev` credentials + `ssm:PutParameter` to add keys.
 
 ## S3 data layout (`jaetill-game-nights`)
 ```
 gameNights.json                   — master list of all game night events
 profiles/{userId}.json            — user profile (displayName, bggUsername, email, phone)
-bgg-collections/{userId}.json     — user's BGG game collection
+collections/{userId}.json         — user's BGG game collection (userId = Cognito username)
 ```
 
 Frontend never reads/writes S3 directly — always via presigned URLs from

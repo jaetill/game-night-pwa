@@ -2,7 +2,9 @@
 //         POST /groups   — upserts a named group { name, emails[] }
 //         DELETE /groups — removes a group by name { name }
 //
-// Auth: Cognito JWT in Authorization header (same pattern as nudge.js)
+// Auth: API key (X-API-Key header via apiKeyAuthorizer) or Cognito JWT
+//       API key resolves to userId via requestContext.authorizer.userId;
+//       JWT fallback decodes cognito:username/sub from Authorization header.
 // S3:   reads and writes profiles/{userId}.json in BUCKET
 //       preserves all existing profile fields; only updates the `groups` key
 //
@@ -116,17 +118,18 @@ exports.handler = async (event) => {
     };
   }
 
-  // ── Auth: decode Cognito JWT to get caller userId ──
-  const rawAuth = event.headers?.Authorization || event.headers?.authorization || '';
-  const token   = rawAuth.startsWith('Bearer ') ? rawAuth.slice(7) : rawAuth;
-  if (!token) return respond(401, { error: 'Unauthorized' }, CORS);
-
-  let userId;
-  try {
-    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
-    userId = payload['cognito:username'] || payload.sub;
-  } catch {
-    return respond(401, { error: 'Invalid token' }, CORS);
+  // ── Auth: API key (via authorizer context) or Cognito JWT fallback ──
+  let userId = event.requestContext?.authorizer?.userId;
+  if (!userId) {
+    const rawAuth = event.headers?.Authorization || event.headers?.authorization || '';
+    const token   = rawAuth.startsWith('Bearer ') ? rawAuth.slice(7) : rawAuth;
+    if (!token) return respond(401, { error: 'Unauthorized' }, CORS);
+    try {
+      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
+      userId = payload['cognito:username'] || payload.sub;
+    } catch {
+      return respond(401, { error: 'Invalid token' }, CORS);
+    }
   }
 
   try {
