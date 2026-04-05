@@ -143,6 +143,28 @@ ui/toast.js                       — toast notifications
     from Cognito, sends individually via Postmark
 - Both use `from: FROM_EMAIL` (`jason@jaetill.com`), `MessageStream: 'outbound'`
 
+## MCP server (`mcp/`)
+A custom MCP server that wraps the Game Night API for use with Claude Desktop
+and Claude Code. Uses `@modelcontextprotocol/sdk` with stdio transport.
+
+### Tools
+| Tool | Description |
+|---|---|
+| `search_games` | Search user's BGG collection by title |
+| `list_groups` / `save_group` | Read/write invitation groups |
+| `create_event` | Create a game night event (auto-resolves game names and group names) |
+| `invite_to_event` | Send invite emails for an existing event |
+| `list_events` / `get_event` | Read game night events via presigned URL |
+
+### Auth
+Uses `X-API-Key` header. Key set via `GAME_NIGHT_API_KEY` env var in
+`.claude/mcp.json` (gitignored). Keys stored in SSM at
+`/game-night/api-keys/{key}` (value = Cognito username).
+
+### Running
+Configured in `.claude/mcp.json` (not committed — contains API key).
+Claude Code picks it up automatically on startup.
+
 ## Key gotchas
 - Frontend is on **GitHub Pages**, not CloudFront — no OAC, no S3 direct reads.
   All S3 access is via presigned URLs issued by Lambda.
