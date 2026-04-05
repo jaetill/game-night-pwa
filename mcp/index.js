@@ -200,11 +200,11 @@ server.tool(
       return { content: [{ type: 'text', text: 'No emails provided. Pass group_name or emails (or both).' }] };
     }
 
-    // Send invite for each email via POST /nudge (action: invite)
+    // Send invite for each email via POST /invite (API key auth)
     const results = [];
     for (const email of allEmails) {
       try {
-        await apiFetch('/nudge', {
+        await apiFetch('/invite', {
           method: 'POST',
           body: JSON.stringify({ nightId: event_id, action: 'invite', email }),
         });
