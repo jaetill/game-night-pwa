@@ -34,22 +34,27 @@ Hosted at **https://gamenights.jaetill.com** (GitHub Pages frontend, AWS backend
 | Function | Role | Purpose |
 |---|---|---|
 | `nudgeNonResponders` | `nudge-lambda-role` | Send invite + nudge emails via Postmark |
-| `bggProxy` | `bggProxy-role-4m5m0lfj` | Proxy BGG XML API (CORS workaround) |
-| `GeneratePresignedGetUrl` | `GeneratePresignedGetUrl-role-vghochhj` | S3 presigned download URL |
-| `GeneratePresignedPost` | `GeneratePresignedPost-role-1hw3dtet` | S3 presigned upload URL |
+| `bggProxy` | `bggProxy-role-4m5m0lfj` | Collection + profile CRUD (S3), not just BGG proxy |
+| `GeneratePresignedGetUrl` | `GeneratePresignedGetUrl-role-vghochhj` | Presigned download URL (gameNights.json + collections) |
+| `GeneratePresignedPost` | `GeneratePresignedPost-role-1hw3dtet` | Upload gameNights.json with validation + invite emails |
 | `createEvent` | `createEvent-lambda-role` | Create game night event (API key auth) |
 | `searchGames` | `searchGames-lambda-role` | Search user's BGG collection (API key auth) |
 | `groups` | `groups-lambda-role` | Manage invitation groups (API key auth) |
 | `apiKeyAuthorizer` | `apiKeyAuthorizer-lambda-role` | REQUEST authorizer: validates X-API-Key via SSM |
 
 ## Lambda env vars
-| Function | Var | Purpose |
-|---|---|---|
-| `nudgeNonResponders` | `POSTMARK_API_KEY` | Postmark server token |
-| `nudgeNonResponders` | `FROM_EMAIL` | `jason@jaetill.com` |
-| `nudgeNonResponders` | `COGNITO_USER_POOL_ID` | `us-east-2_xneeJzaDJ` |
-| `nudgeNonResponders` | `S3_BUCKET` | `jaetill-game-nights` |
-| `nudgeNonResponders` | `APP_URL` | `https://gamenights.jaetill.com/` |
+| Function | Var | Source | Purpose |
+|---|---|---|---|
+| `nudgeNonResponders` | `POSTMARK_API_KEY` | Secrets Manager: `shared/postmark-api-key` | Postmark server token |
+| `nudgeNonResponders` | `FROM_EMAIL` | env var | `jason@jaetill.com` |
+| `nudgeNonResponders` | `COGNITO_USER_POOL_ID` | env var | `us-east-2_xneeJzaDJ` |
+| `nudgeNonResponders` | `S3_BUCKET` | env var | `jaetill-game-nights` |
+| `nudgeNonResponders` | `APP_URL` | env var | `https://gamenights.jaetill.com/` |
+
+### Secrets Manager caching
+Secrets fetched from Secrets Manager are cached in-memory on first access (cold
+start, ~50-100ms latency). Subsequent invocations on the same warm Lambda
+instance reuse the cached value with no additional API calls.
 
 ## API routes (`pufsqfvq8g/prod`)
 Browser-facing routes use Cognito JWT (`Authorization: Bearer <token>` via `authFetch`).

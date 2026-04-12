@@ -6,25 +6,37 @@
 //       JWT fallback decodes cognito:username/sub from Authorization header.
 //
 // Environment variables required:
-//   POSTMARK_API_KEY    — Postmark server token
 //   FROM_EMAIL          — Verified sender address (e.g. gamenight@jaetill.com)
 //   COGNITO_USER_POOL_ID — us-east-2_xneeJzaDJ
 //   S3_BUCKET           — jaetill-game-nights
 //   APP_URL             — https://gamenights.jaetill.com/
+//
+// Secrets (AWS Secrets Manager):
+//   shared/postmark-api-key — contains POSTMARK_API_KEY
 
 'use strict';
 
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { CognitoIdentityProviderClient, AdminGetUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
+const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
 const https = require('https');
 
 const s3      = new S3Client({ region: process.env.AWS_REGION || 'us-east-2' });
 const cognito = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION || 'us-east-2' });
+const smClient = new SecretsManagerClient({ region: 'us-east-2' });
+
+let _secrets;
+async function getSecrets() {
+  if (!_secrets) {
+    const res = await smClient.send(new GetSecretValueCommand({ SecretId: 'shared/postmark-api-key' }));
+    _secrets = JSON.parse(res.SecretString);
+  }
+  return _secrets;
+}
 
 const BUCKET       = process.env.S3_BUCKET            || 'jaetill-game-nights';
 const USER_POOL_ID = process.env.COGNITO_USER_POOL_ID || 'us-east-2_xneeJzaDJ';
 const FROM_EMAIL   = process.env.FROM_EMAIL;
-const POSTMARK_KEY = process.env.POSTMARK_API_KEY;
 const APP_URL      = process.env.APP_URL               || 'https://gamenights.jaetill.com/';
 
 const ALLOWED_ORIGINS = new Set([
@@ -42,6 +54,8 @@ function corsHeaders(event) {
 }
 
 exports.handler = async (event) => {
+  const secrets = await getSecrets();
+  const POSTMARK_KEY = secrets.POSTMARK_API_KEY;
   const CORS = corsHeaders(event);
 
   if (event.httpMethod === 'OPTIONS') {
@@ -106,7 +120,7 @@ exports.handler = async (event) => {
     const name = inviteEmail.split('@')[0];
 
     try {
-      await postmark({
+      await postmark(POSTMARK_KEY, {
         To:            inviteEmail,
         From:          FROM_EMAIL,
         Subject:       `You're invited to game night${dateStr ? ` on ${dateStr}` : ''}!`,
@@ -166,7 +180,7 @@ exports.handler = async (event) => {
   const errors = [];
   for (const { email, name } of targets) {
     try {
-      await postmark({
+      await postmark(POSTMARK_KEY, {
         To:            email,
         From:          FROM_EMAIL,
         Subject:       `Reminder: Game night${dateStr ? ` on ${dateStr}` : ''}`,
@@ -288,7 +302,7 @@ function buildHtml({ name, hostName, dateStr, timeStr, location, description }) 
 </html>`;
 }
 
-function postmark(msg) {
+function postmark(apiKey, msg) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify(msg);
     const req  = https.request({
@@ -298,7 +312,7 @@ function postmark(msg) {
       headers:  {
         'Accept':                    'application/json',
         'Content-Type':              'application/json',
-        'X-Postmark-Server-Token':   POSTMARK_KEY,
+        'X-Postmark-Server-Token':   apiKey,
         'Content-Length':            Buffer.byteLength(body),
       },
     }, res => {
