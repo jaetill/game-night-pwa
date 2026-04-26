@@ -8,8 +8,10 @@ BoardGameGeek), email invitations and nudges, and host controls.
 Hosted at **https://gamenights.jaetill.com** (GitHub Pages frontend, AWS backend).
 
 ## Tech stack
-- **Frontend**: Vite + Tailwind SPA, vanilla JS (no framework). Three HTML entry
-  points: `index.html`, `login.html`, `signup.html`. Auth via `aws-amplify`.
+- **Frontend**: Vite + Tailwind SPA, vanilla JS (no framework). Two HTML entry
+  points: `index.html` (app) and `callback.html` (OAuth code → token exchange).
+  Auth via Cognito Hosted UI at `just.jaetill.com` — OAuth 2.0 Authorization Code
+  + PKCE, hand-rolled in `src/js/auth.js` (no `aws-amplify` dependency).
   Tests via Vitest + happy-dom.
 - **Backend**: Multiple Lambdas behind a single API Gateway. All Node.js (CommonJS).
 - **Storage**: S3 bucket `jaetill-game-nights` (private) — presigned URLs used
@@ -25,8 +27,11 @@ Hosted at **https://gamenights.jaetill.com** (GitHub Pages frontend, AWS backend
 |---|---|
 | S3 bucket | `jaetill-game-nights` |
 | API Gateway | `pufsqfvq8g` (prod stage) |
-| Cognito user pool | `us-east-2_xneeJzaDJ` (shared with meal-planner) |
-| Cognito web client | `34et7dk67ngqep1oqef49te0ic` (game-night-specific client) |
+| Cognito user pool | `us-east-2_xneeJzaDJ` (shared with meal-planner and jaetill-portal) |
+| Cognito web client | `34et7dk67ngqep1oqef49te0ic` (`GameNightPlannerWeb`) |
+| Cognito Hosted UI | `https://just.jaetill.com` (managed login v2) |
+| Cognito branding ID | `26736f11-feed-4a3f-994d-643e07b2e93d` (per-client branding required for managed login v2) |
+| Required group | `game-night-users` — users without this claim are bounced back to portal |
 | GitHub deploy role | `game-night-github-deploy` (OIDC, GitHub Pages deploy) |
 | Region | `us-east-2` |
 
@@ -89,15 +94,15 @@ Frontend never reads/writes S3 directly — always via presigned URLs from
 
 ## Frontend source (`src/js/`)
 ```
-app.js                            — bootstrap, auth guard (redirects to login.html)
-config.js                         — Amplify/Cognito config, DEBUG_MODE
-custom-login.js                   — custom Cognito sign-in form handler
-custom-signup.js                  — custom Cognito sign-up form handler
+auth.js                           — PKCE flow, token storage/refresh, JWT decode
+callback.js                       — OAuth redirect handler (paired with /callback.html)
+app.js                            — bootstrap, auth + group gate; redirects to portal if not in `game-night-users`
+config.js                         — Cognito Hosted UI config, DEBUG_MODE
 auth/
   userStore.js                    — global user state
-  profile.js                      — load/save user profile (S3 + Cognito attributes)
+  profile.js                      — load/save user profile (S3 primary; Cognito attribute sync deferred — TODO)
   permissions.js                  — role checks (host, invited, RSVP'd)
-  session-check.js                — session validation
+  session-check.js                — wires header buttons (logout, profile)
 data/
   index.js                        — data module exports
   state.js                        — global owned games array
@@ -170,12 +175,35 @@ Uses `X-API-Key` header. Key set via `GAME_NIGHT_API_KEY` env var in
 Configured in `.claude/mcp.json` (not committed — contains API key).
 Claude Code picks it up automatically on startup.
 
+## Auth & access control
+
+**Sign-in flow** (Authorization Code + PKCE via Cognito Hosted UI):
+1. User hits `gamenights.jaetill.com` → `app.js` checks `isAuthenticated()`
+2. Not authed → `startLogin()` redirects to `https://just.jaetill.com/oauth2/authorize?...`
+3. Hosted UI session cookie (set by portal sign-in) silently issues a code → no second password prompt
+4. `/callback.html` exchanges code for tokens → stored in `localStorage` under `gn.*` keys
+5. `app.js` checks ID-token claims for `cognito:groups` containing `game-night-users`; if missing, redirects to `https://jaetill.com/`
+
+**Tokens** in `localStorage`:
+- `gn.id.token`, `gn.access.token`, `gn.refresh.token`, `gn.expires.at`
+- Distinct prefix from portal (`jp.*`) — different App Clients, different tokens
+
+**App Client config** (`34et7dk67ngqep1oqef49te0ic`):
+- OAuth flows: Authorization code grant, PKCE
+- Scopes: `openid`, `email`, `profile`, `aws.cognito.signin.user.admin`
+- Callback URLs: `https://gamenights.jaetill.com/callback.html`, `https://jaetill.github.io/game-night-pwa/callback.html`, `http://localhost:5173/callback.html`
+- Logout URLs: same hosts, `/`
+- No client secret — public PKCE client
+
 ## Key gotchas
 - Frontend is on **GitHub Pages**, not CloudFront — no OAC, no S3 direct reads.
   All S3 access is via presigned URLs issued by Lambda.
 - Lambdas are **not in the deploy workflow** — changes to Lambda code must be
   deployed separately (manually or via a separate workflow/step).
-- Cognito user pool is **shared with meal-planner** (`us-east-2_xneeJzaDJ`) but
-  uses a different app client ID.
+- Cognito user pool is **shared with meal-planner and jaetill-portal** (`us-east-2_xneeJzaDJ`) but
+  each app uses its own App Client ID.
+- **Managed Login v2 requires per-client branding** (`create-managed-login-branding --use-cognito-provided-values`). Without it the Hosted UI shows "Login pages unavailable. Please contact an administrator." This client's branding ID is `26736f11-feed-4a3f-994d-643e07b2e93d`.
+- **Group enforcement is currently frontend-only** — `app.js` redirects users without `game-night-users` claim to the portal. Lambda-level group checks are a TODO for defense in depth (especially `nudge.js`, `bggProxy`, `GeneratePresigned*`).
+- **Access-token user-pool ops** (e.g. UpdateUserAttributes for the deferred profile sync) require the `aws.cognito.signin.user.admin` scope. Already granted in this client's allowed scopes.
 - `VITE_ADMIN_NAMES` controls who sees host controls — set in GitHub secrets.
 - BGG XML API has CORS restrictions — bggProxy Lambda exists to work around this.

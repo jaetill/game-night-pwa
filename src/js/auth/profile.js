@@ -1,4 +1,4 @@
-import { Auth } from 'aws-amplify';
+import { parseIdToken } from '../auth.js';
 import { getCurrentUser, setCurrentUser } from './userStore.js';
 import { authFetch } from '../utils/authFetch.js';
 
@@ -17,7 +17,7 @@ function persistLocally(profile) {
   if (user) setCurrentUser({ ...user, bggUsername: profile.bggUsername || '' });
 }
 
-/** Loads profile from S3 (authoritative), falls back to Cognito attrs, then localStorage. */
+/** Loads profile from S3 (authoritative), falls back to JWT claims, then localStorage. */
 export async function loadProfile() {
   try {
     const res = await authFetch(`${API_BASE}/profiles`);
@@ -29,33 +29,30 @@ export async function loadProfile() {
       }
     }
   } catch {
-    // fall through to Cognito / localStorage
+    // fall through to JWT claims / localStorage
   }
 
-  // Seed from Cognito attributes, merged with any existing localStorage values
-  try {
-    const existing = getProfile();
-    const info     = await Auth.currentUserInfo();
-    const attrs    = info.attributes || {};
-    const profile  = {
-      displayName:  attrs.name                  || existing.displayName  || '',
-      bggUsername:  attrs['custom:bggUsername'] || existing.bggUsername  || '',
-      contactEmail: attrs.email                 || existing.contactEmail || '',
-      phone:        attrs.phone_number          || existing.phone        || '',
-      address:      existing.address            || '',
-    };
-    persistLocally(profile);
-    return profile;
-  } catch {
-    return getProfile();
-  }
+  // Seed from JWT claims, merged with any existing localStorage values
+  const existing = getProfile();
+  const claims   = parseIdToken() || {};
+  const profile  = {
+    displayName:  claims.name                  || existing.displayName  || '',
+    bggUsername:  claims['custom:bggUsername'] || existing.bggUsername  || '',
+    contactEmail: claims.email                 || existing.contactEmail || '',
+    phone:        claims.phone_number          || existing.phone        || '',
+    address:      existing.address             || '',
+  };
+  persistLocally(profile);
+  return profile;
 }
 
-/** Saves profile to S3, localStorage, and syncs select fields to Cognito. */
+/** Saves profile to S3 + localStorage.
+ *  TODO: Cognito attribute sync (was Auth.updateUserAttributes pre-migration).
+ *  Call cognito-idp:UpdateUserAttributes directly with the access token if needed —
+ *  not critical for app function since profile data lives primarily in S3. */
 export async function saveProfile(profile) {
   persistLocally(profile);
 
-  // Save to S3 (primary store)
   try {
     await authFetch(`${API_BASE}/profiles`, {
       method:  'POST',
@@ -64,22 +61,5 @@ export async function saveProfile(profile) {
     });
   } catch (err) {
     console.warn('Profile: S3 save failed:', err.message);
-  }
-
-  // Sync name/email/phone to Cognito for auth-layer consistency
-  try {
-    const cognitoUser = await Auth.currentAuthenticatedUser();
-    const updates = {};
-    if (profile.displayName)  updates.name                  = profile.displayName;
-    if (profile.contactEmail) updates.email                 = profile.contactEmail;
-    if (profile.bggUsername)  updates['custom:bggUsername'] = profile.bggUsername;
-    if (profile.phone && /^\+\d{7,15}$/.test(profile.phone)) {
-      updates.phone_number = profile.phone;
-    }
-    if (Object.keys(updates).length) {
-      await Auth.updateUserAttributes(cognitoUser, updates);
-    }
-  } catch (err) {
-    console.warn('Profile: Cognito sync skipped:', err.message);
   }
 }

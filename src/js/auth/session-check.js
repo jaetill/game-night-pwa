@@ -1,26 +1,16 @@
-import { Amplify, Auth } from 'aws-amplify';
-import amplifyConfig from '../config.js';
-import { openProfileModal } from '../components/renderProfileModal.js';
+// Wires up header buttons. Auth gate itself lives in app.js — by the time this
+// runs we already know the user is authenticated and in `game-night-users`.
 
-Amplify.configure(amplifyConfig);
+import { logout } from '../auth.js';
+import { openProfileModal } from '../components/renderProfileModal.js';
 
 const authButton    = document.getElementById('auth-button');
 const profileButton = document.getElementById('profile-button');
 
-try {
-  await Auth.currentAuthenticatedUser();
-
+if (authButton) {
   authButton.textContent = 'Log Out';
-  authButton.onclick = async () => {
-    try {
-      await Auth.signOut();
-      window.location.href = 'login.html';
-    } catch (error) {
-      console.error('❌ Sign-out error:', error);
-    }
-  };
-
-  if (profileButton) profileButton.onclick = () => openProfileModal();
-} catch {
-  window.location.href = 'login.html';
+  authButton.onclick = () => logout();
+}
+if (profileButton) {
+  profileButton.onclick = () => openProfileModal();
 }

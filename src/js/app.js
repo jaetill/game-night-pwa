@@ -4,53 +4,47 @@ import { setCurrentUser } from './auth/userStore.js';
 import { loadProfile } from './auth/profile.js';
 import { buildDirectoryFromNights } from './utils/userDirectory.js';
 import { toastError } from './ui/toast.js';
+import { isAuthenticated, startLogin, parseIdToken } from './auth.js';
 
-import { Amplify, Auth, Hub } from 'aws-amplify';
-import amplifyConfig from './config.js';
-
-Amplify.configure(amplifyConfig);
-
-Hub.listen('auth', ({ payload }) => {
-  console.log(`[Auth] ${payload.event}`);
-});
+const PORTAL_URL     = 'https://jaetill.com';
+const REQUIRED_GROUP = 'game-night-users';
 
 async function init() {
+  // ── Auth gate: signed in? ──────────────────────────────────
+  if (!isAuthenticated()) {
+    return startLogin();
+  }
+
+  // ── Authz gate: invited to game-night? ─────────────────────
+  const claims = parseIdToken() || {};
+  const groups = Array.isArray(claims['cognito:groups']) ? claims['cognito:groups'] : [];
+  if (!groups.includes(REQUIRED_GROUP)) {
+    // Not invited — bounce back to portal where the user can see what they have access to.
+    window.location.replace(PORTAL_URL);
+    return;
+  }
+
+  // ── App init ───────────────────────────────────────────────
   try {
-    const cognitoUser = await Auth.currentAuthenticatedUser();
+    const userId = claims['cognito:username'] || claims.sub;
+    const name   = claims.name  || userId;
+    const email  = claims.email || '';
 
-    // Store identity so all components can call getCurrentUser()
-    setCurrentUser({
-      userId:      cognitoUser.username,
-      name:        cognitoUser.attributes?.name || cognitoUser.username,
-      email:       cognitoUser.attributes?.email || '',
-      bggUsername: '',
-    });
-
-    // Load profile (BGG username, contact info) — may sync from Cognito attributes
+    setCurrentUser({ userId, name, email, bggUsername: '' });
     await loadProfile();
 
     const nights = await loadGameNights();
-
-    // Fetch BGG collection in background — only needed for game selection modal
-    fetchOwnedGames(cognitoUser.username).catch(() => {});
+    fetchOwnedGames(userId).catch(() => {});
 
     buildDirectoryFromNights(nights);
-    renderApp({ nights, currentUser: {
-      userId: cognitoUser.username,
-      name:   cognitoUser.attributes?.name || cognitoUser.username,
-      email:  cognitoUser.attributes?.email || '',
-    } });
+    renderApp({ nights, currentUser: { userId, name, email } });
   } catch (err) {
     console.error('Init failed:', err);
-    if (err?.code === 'UserUnAuthenticatedException' || err === 'The user is not authenticated') {
-      window.location.href = 'login.html';
-      return;
-    }
     const container = document.getElementById('gameNightList');
     if (container) {
       container.innerHTML = `<div class="text-center py-12 text-red-400">
         <p class="font-medium">Something went wrong loading the app.</p>
-        <p class="text-sm mt-1">Try refreshing. If it keeps happening, try signing out and back in.</p>
+        <p class="text-sm mt-1">Try refreshing. If it keeps happening, sign out and back in.</p>
       </div>`;
     }
     toastError('Something went wrong loading the app.');
@@ -58,6 +52,5 @@ async function init() {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  console.log('[App] DOMContentLoaded — starting init');
   init();
 });
