@@ -155,8 +155,9 @@ ui/toast.js                       — toast notifications
 All Lambda source lives in `lambda/`. Most handlers are deployed as a single-file
 zip (Lambda's Node 22 runtime includes `@aws-sdk/*` and `@aws-sdk/s3-request-presigner`).
 **Exception:** `apiKeyAuthorizer` bundles `aws-jwt-verify` from `lambda/node_modules/`.
-`lambda/package.json` declares deps; `lambda/package-lock.json` and
-`lambda/node_modules/` are committed to keep the build deterministic.
+`lambda/package.json` and `lambda/package-lock.json` are committed; run
+`cd lambda && npm install` after a fresh clone to regenerate `node_modules/`
+before zipping.
 
 Build via `python build/zip.py <out.zip> <src-dir>` (a subprocess of the
 ad-hoc `aws lambda update-function-code` calls used to deploy). Windows'
