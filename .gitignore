@@ -20,6 +20,7 @@ dist-ssr
 
 # Lambda deploy artifacts (zipped per-function)
 lambda/*.zip
+build/
 
 # Editor directories and files
 .vscode/*

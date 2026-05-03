@@ -62,20 +62,29 @@ start, ~50-100ms latency). Subsequent invocations on the same warm Lambda
 instance reuse the cached value with no additional API calls.
 
 ## API routes (`pufsqfvq8g/prod`)
-Browser-facing routes use Cognito JWT (`Authorization: Bearer <token>` via `authFetch`).
-MCP/API-key routes use `X-API-Key` header (validated by `apiKeyAuthorizer` → SSM lookup).
+**All routes share one authorizer (`apiKeyAuthorizer`, dual-mode).** It accepts
+either an `X-API-Key` header (resolved against SSM Parameter Store) or an
+`Authorization` Cognito ID token (verified against the user pool's JWKS, with a
+required `cognito:groups` claim of `game-night-users`). Either way the
+downstream Lambda reads the resulting userId from
+`event.requestContext.authorizer.userId`.
 
-| Method | Route | Lambda | Auth | Purpose |
+`identitySource` is set to `method.request.header.Host` (a no-op precondition,
+since Host is always present) and `authorizerResultTtlInSeconds=0` to disable
+shared cross-user caching. Caching is still effective inside the authorizer
+Lambda (JWKS via `aws-jwt-verify`, API keys in a module-scoped Map).
+
+| Method | Route | Lambda | Used by | Purpose |
 |---|---|---|---|---|
-| POST | `/nudge` | nudgeNonResponders | Cognito JWT | Send reminders to non-responders |
-| POST | `/invite` | nudgeNonResponders | Cognito JWT | Send invite email to a new guest |
-| GET | `/get-token` | GeneratePresignedGetUrl | Cognito JWT | Presigned URL to download `gameNights.json` |
-| POST | `/upload-token` | GeneratePresignedPost | Cognito JWT | Presigned URL to upload `gameNights.json` |
-| GET | `/bgg` | bggProxy | Cognito JWT | Proxy BGG XML collection for a username |
-| GET | `/profiles` | (TBD) | Cognito JWT | User profile read |
-| POST | `/create-event` | createEvent | API key | Create a new game night event |
-| GET | `/search-games` | searchGames | API key | Search caller's BGG collection |
-| GET,POST,DELETE | `/groups` | groups | API key | Manage saved invitation groups |
+| POST | `/nudge` | nudgeNonResponders | browser | Send reminders to non-responders |
+| POST | `/invite` | nudgeNonResponders | browser, MCP | Send invite email to a new guest |
+| GET | `/get-token` | GeneratePresignedGetUrl | browser, MCP | Presigned URL — only `gameNights.json` or `collections/{caller}.json` |
+| POST | `/upload-token` | GeneratePresignedPost | browser | Validate + write `gameNights.json` (no longer issues a presigned URL despite the name) |
+| GET, POST | `/bgg` | bggProxy | browser | Caller's BGG collection (userId in body must match caller) |
+| GET, POST | `/profiles` | bggProxy | browser | Caller's profile (whitelisted fields only) |
+| POST | `/create-event` | createEvent | MCP | Create a new game night event |
+| GET | `/search-games` | searchGames | MCP | Search caller's BGG collection |
+| GET, POST, DELETE | `/groups` | groups | browser, MCP | Manage saved invitation groups |
 
 ### API key management
 Keys are stored in SSM Parameter Store at `/game-night/api-keys/{key}` (SecureString).
@@ -89,8 +98,11 @@ profiles/{userId}.json            — user profile (displayName, bggUsername, em
 collections/{userId}.json         — user's BGG game collection (userId = Cognito username)
 ```
 
-Frontend never reads/writes S3 directly — always via presigned URLs from
-`GeneratePresignedGetUrl` / `GeneratePresignedPost`.
+Frontend never reads/writes S3 directly. `gameNights.json` reads go through a
+presigned URL from `GeneratePresignedGetUrl`; writes go through
+`GeneratePresignedPost` which validates + persists the array via the Lambda's
+own role (no presigned PUT). Profiles and collections are read/written through
+`bggProxy` (`/profiles`, `/bgg`).
 
 ## Frontend source (`src/js/`)
 ```
@@ -139,19 +151,46 @@ ui/toast.js                       — toast notifications
 - Deployed to GitHub Pages (not S3) — no CloudFront, no invalidation step
 - Lambdas are **not deployed by this workflow** — deployed manually or separately
 
+### Lambda packaging
+All Lambda source lives in `lambda/`. Most handlers are deployed as a single-file
+zip (Lambda's Node 22 runtime includes `@aws-sdk/*` and `@aws-sdk/s3-request-presigner`).
+**Exception:** `apiKeyAuthorizer` bundles `aws-jwt-verify` from `lambda/node_modules/`.
+`lambda/package.json` declares deps; `lambda/package-lock.json` and
+`lambda/node_modules/` are committed to keep the build deterministic.
+
+Build via `python build/zip.py <out.zip> <src-dir>` (a subprocess of the
+ad-hoc `aws lambda update-function-code` calls used to deploy). Windows'
+`Compress-Archive` produces backslash-separated paths that Linux Lambda can't
+resolve, so prefer Python or `tar -a` for zipping.
+
+| Lambda function | Handler | Source |
+|---|---|---|
+| `apiKeyAuthorizer` | `apiKeyAuthorizer.handler` | `lambda/apiKeyAuthorizer.js` + `node_modules/aws-jwt-verify/` |
+| `createEvent` | `createEvent.handler` | `lambda/createEvent.js` |
+| `groups` | `groups.handler` | `lambda/groups.js` |
+| `searchGames` | `searchGames.handler` | `lambda/searchGames.js` |
+| `nudgeNonResponders` | `nudge.handler` | `lambda/nudge.js` |
+| `GeneratePresignedGetUrl` | `GeneratePresignedGetUrl.handler` | `lambda/GeneratePresignedGetUrl.js` |
+| `GeneratePresignedPost` | `GeneratePresignedPost.handler` | `lambda/GeneratePresignedPost.js` |
+| `bggProxy` | `bggProxy.handler` | `lambda/bggProxy.mjs` |
+
 ## BGG integration
 - User enters BGG username in profile modal
 - XML fetched from `https://boardgamegeek.com/xmlapi2/collection?username={u}&own=1&stats=1`
 - Parsed via DOMParser — extracts id, title, thumbnail, minPlayers, maxPlayers
-- Collection stored in S3 at `bgg-collections/{userId}.json`
+- Collection stored in S3 at `collections/{userId}.json`
 - Cached in localStorage (`bggGames_{userId}`, version key `bggGamesVer_{userId}`, current version v5)
 
 ## Email (Postmark)
-- Invite email: triggered when host adds a guest → `POST /invite`
+- Invite email: triggered when host adds a guest → `POST /invite` (handled by `nudgeNonResponders`)
 - Nudge email: triggered by "Nudge non-responders" button → `POST /nudge`
   - Loads `gameNights.json` from S3, finds non-responders, fetches their emails
     from Cognito, sends individually via Postmark
 - Both use `from: FROM_EMAIL` (`jason@jaetill.com`), `MessageStream: 'outbound'`
+- DNS for `jaetill.com`: SPF (`v=spf1 include:spf.mtasv.net include:amazonses.com ~all`),
+  DMARC (`v=DMARC1; p=none; sp=none`), and Postmark DKIM selector
+  `20260313102825pm._domainkey` are all live in Route 53. AOL/Yahoo bulk-sender
+  requirements (Feb 2024) are met.
 
 ## MCP server (`mcp/`)
 A custom MCP server that wraps the Game Night API for use with Claude Desktop
@@ -201,9 +240,12 @@ Claude Code picks it up automatically on startup.
 - Lambdas are **not in the deploy workflow** — changes to Lambda code must be
   deployed separately (manually or via a separate workflow/step).
 - Cognito user pool is **shared with meal-planner and jaetill-portal** (`us-east-2_xneeJzaDJ`) but
-  each app uses its own App Client ID.
+  each app uses its own App Client ID. The dual-mode authorizer pins JWT
+  verification to the game-night App Client (`34et7dk67ngqep1oqef49te0ic`) AND
+  requires `cognito:groups` to include `game-night-users` — a meal-planner
+  token will not pass.
 - **Managed Login v2 requires per-client branding** (`create-managed-login-branding --use-cognito-provided-values`). Without it the Hosted UI shows "Login pages unavailable. Please contact an administrator." This client's branding ID is `26736f11-feed-4a3f-994d-643e07b2e93d`.
-- **Group enforcement is currently frontend-only** — `app.js` redirects users without `game-night-users` claim to the portal. Lambda-level group checks are a TODO for defense in depth (especially `nudge.js`, `bggProxy`, `GeneratePresigned*`).
+- **Group enforcement happens at the authorizer**, not in each Lambda. The dual-mode `apiKeyAuthorizer` rejects any Cognito JWT that lacks `cognito:groups: game-night-users`. The frontend's `app.js` redirect is just a UX nicety — the real gate is the API Gateway authorizer.
 - **Access-token user-pool ops** (e.g. UpdateUserAttributes for the deferred profile sync) require the `aws.cognito.signin.user.admin` scope. Already granted in this client's allowed scopes.
 - `VITE_ADMIN_NAMES` controls who sees host controls — set in GitHub secrets.
 - BGG XML API has CORS restrictions — bggProxy Lambda exists to work around this.

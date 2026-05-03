@@ -1,0 +1,14 @@
+{
+  "name": "game-night-lambdas",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Shared dependencies for game-night Lambda functions. Each function is bundled with its handler + node_modules into a deployment zip.",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.633.0",
+    "@aws-sdk/client-cognito-identity-provider": "^3.633.0",
+    "@aws-sdk/client-secrets-manager": "^3.633.0",
+    "@aws-sdk/client-ssm": "^3.633.0",
+    "@aws-sdk/s3-request-presigner": "^3.633.0",
+    "aws-jwt-verify": "^4.0.1"
+  }
+}

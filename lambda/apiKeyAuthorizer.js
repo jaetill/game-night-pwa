@@ -1,86 +1,137 @@
-// Lambda: REQUEST-type authorizer for API key authentication.
+// Lambda: REQUEST-type API Gateway authorizer — dual-mode auth.
 //
-// Reads X-API-Key from request headers and resolves it to a userId via SSM
-// Parameter Store. Returns an IAM policy that downstream Lambdas see as
-// event.requestContext.authorizer.userId.
+// Accepts EITHER of:
+//   1. X-API-Key header  → SSM Parameter Store lookup
+//                          /game-night/api-keys/{key} → userId (SecureString)
+//   2. Authorization header (Cognito ID token, with or without "Bearer ")
+//      → JWKS-verified by aws-jwt-verify (signature, exp, iss, aud)
+//      → must be issued for the game-night App Client
+//      → must include `cognito:groups` containing `game-night-users`
 //
-// This runs alongside the existing Cognito JWT authorizer — they are assigned
-// to different routes in API Gateway. Existing browser-facing routes keep their
-// Cognito authorizer untouched.
+// On success returns an Allow policy with `userId` in the authorizer context,
+// which downstream Lambdas read from event.requestContext.authorizer.userId.
 //
-// Environment variables:
-//   SSM_PREFIX   — SSM path prefix (default: /game-night/api-keys/)
-//                  Parameters are stored as:
-//                    /game-night/api-keys/{apiKey} → userId (SecureString)
+// IDENTITY SOURCE NOTE
+// API Gateway's REQUEST authorizer treats identitySource as both the cache key
+// and the precondition for invoking the authorizer at all — all listed sources
+// must be present and non-empty, else API Gateway returns 401 *before* invoking
+// us. We can't require BOTH X-API-Key AND Authorization (only one is sent per
+// request), nor can we leave identitySource empty (API Gateway rejects that).
+// The workaround: use `method.request.header.Host` as a no-op precondition
+// (always present on HTTP/1.x requests, identical for all callers) and set
+// authorizerResultTtlInSeconds=0 so the shared cache key never produces a
+// cross-user cache hit. Caching is still effective at two lower layers:
+//   - aws-jwt-verify caches JWKS keys per user pool (one HTTPS call per Lambda
+//     instance lifetime).
+//   - Module-scoped Map caches API key → userId for 5 min per warm Lambda.
 //
-// IAM requirements for this Lambda's execution role:
-//   ssm:GetParameter on arn:aws:ssm:{region}:{account}:parameter/game-night/api-keys/*
-//
-// API Gateway authorizer settings:
-//   Type:                  REQUEST
-//   Identity sources:      method.request.header.X-API-Key
-//   Result TTL in seconds: 300  (API Gateway caches the policy per unique key)
+// IAM requirements:
+//   ssm:GetParameter on arn:aws:ssm:us-east-2:*:parameter/game-night/api-keys/*
 
 'use strict';
 
+const { CognitoJwtVerifier } = require('aws-jwt-verify');
 const { SSMClient, GetParameterCommand } = require('@aws-sdk/client-ssm');
 
-const ssm        = new SSMClient({ region: process.env.AWS_REGION || 'us-east-2' });
-const SSM_PREFIX = process.env.SSM_PREFIX || '/game-night/api-keys/';
+// ── Configuration ──────────────────────────────────────────────────────────
+const USER_POOL_ID    = 'us-east-2_xneeJzaDJ';
+const APP_CLIENT_ID   = '34et7dk67ngqep1oqef49te0ic';
+const REQUIRED_GROUP  = 'game-night-users';
+const SSM_PREFIX      = process.env.SSM_PREFIX || '/game-night/api-keys/';
+const REGION          = process.env.AWS_REGION || 'us-east-2';
 
-// Module-level cache supplements API Gateway's result TTL. Within a warm
-// execution environment the cache avoids repeated SSM calls for the same key.
-const cache       = new Map(); // apiKey → { userId, expiresAt }
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+// ── Clients ────────────────────────────────────────────────────────────────
+const ssm = new SSMClient({ region: REGION });
 
+const idTokenVerifier = CognitoJwtVerifier.create({
+  userPoolId: USER_POOL_ID,
+  tokenUse:   'id',
+  clientId:   APP_CLIENT_ID,
+});
+
+// ── Module-scoped API key cache ───────────────────────────────────────────
+const apiKeyCache    = new Map();
+const API_KEY_TTL_MS = 5 * 60 * 1000;
+
+// ── Handler ────────────────────────────────────────────────────────────────
 exports.handler = async (event) => {
-  // Headers arrive lowercase from API Gateway HTTP API; mixed-case from REST API.
-  const apiKey = event.headers?.['x-api-key'] || event.headers?.['X-API-Key'];
+  const headers = lowercaseHeaders(event.headers || {});
 
-  if (!apiKey) return deny(event.methodArn);
-
-  // ── Cache check ───────────────────────────────────────────────────────────
-  const hit = cache.get(apiKey);
-  if (hit && hit.expiresAt > Date.now()) {
-    return allow(hit.userId, event.methodArn);
+  // Path 1: API key (preferred — cheaper, used by MCP server)
+  const apiKey = headers['x-api-key'];
+  if (apiKey) {
+    return await authenticateApiKey(apiKey, event.methodArn);
   }
 
-  // ── SSM lookup ────────────────────────────────────────────────────────────
+  // Path 2: Cognito JWT (browser frontend)
+  const auth = headers['authorization'];
+  if (auth) {
+    return await authenticateJwt(auth, event.methodArn);
+  }
+
+  return deny(event.methodArn);
+};
+
+// ── Auth paths ─────────────────────────────────────────────────────────────
+
+async function authenticateApiKey(apiKey, methodArn) {
+  const hit = apiKeyCache.get(apiKey);
+  if (hit && hit.expiresAt > Date.now()) {
+    return allow(hit.userId, methodArn);
+  }
+
   let userId;
   try {
     const result = await ssm.send(new GetParameterCommand({
-      Name:            `${SSM_PREFIX}${apiKey}`,
-      WithDecryption:  true,
+      Name:           `${SSM_PREFIX}${apiKey}`,
+      WithDecryption: true,
     }));
-    userId = result.Parameter.Value;
+    userId = result.Parameter?.Value;
   } catch (e) {
     if (e.name === 'ParameterNotFound') {
       console.log('Unknown API key — denying');
-      return deny(event.methodArn);
+    } else {
+      console.error('SSM error during key lookup:', e.name, e.message);
     }
-    // Unexpected SSM error: fail closed (deny, don't throw).
-    console.error('SSM error during key lookup', e.name, e.message);
-    return deny(event.methodArn);
+    return deny(methodArn);
   }
 
-  if (!userId) {
-    console.log('SSM param value empty — denying');
-    return deny(event.methodArn);
+  if (!userId) return deny(methodArn);
+
+  apiKeyCache.set(apiKey, { userId, expiresAt: Date.now() + API_KEY_TTL_MS });
+  return allow(userId, methodArn);
+}
+
+async function authenticateJwt(authHeader, methodArn) {
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
+  if (!token) return deny(methodArn);
+
+  let payload;
+  try {
+    payload = await idTokenVerifier.verify(token);
+  } catch (e) {
+    console.log('JWT verification failed:', e.message);
+    return deny(methodArn);
   }
 
-  cache.set(apiKey, { userId, expiresAt: Date.now() + CACHE_TTL_MS });
-  return allow(userId, event.methodArn);
-};
+  const groups = payload['cognito:groups'] || [];
+  if (!groups.includes(REQUIRED_GROUP)) {
+    console.log(`User ${payload['cognito:username']} not in ${REQUIRED_GROUP} — denying`);
+    return deny(methodArn);
+  }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+  const userId = payload['cognito:username'] || payload.sub;
+  return allow(userId, methodArn);
+}
+
+// ── Policy builders ────────────────────────────────────────────────────────
 
 /**
- * Build a wildcard ARN covering all methods/routes in the same stage.
- * This ensures the cached authorization result is reused across routes,
- * not just the specific method that triggered the authorizer.
+ * Wildcard ARN scoped to the API stage. The cached policy can then be reused
+ * across routes within the same stage rather than tied to a specific method.
  *
- * Input:  arn:aws:execute-api:{region}:{acct}:{apiId}/{stage}/GET/search-games
- * Output: arn:aws:execute-api:{region}:{acct}:{apiId}/{stage}/*
+ *   arn:aws:execute-api:{r}:{a}:{api}/{stage}/GET/get-token
+ *   →  arn:aws:execute-api:{r}:{a}:{api}/{stage}/*
  */
 function stageWildcard(methodArn) {
   const parts = methodArn.split('/');
@@ -108,4 +159,12 @@ function allow(userId, methodArn) {
 
 function deny(methodArn) {
   return buildPolicy('Deny', 'unauthorized', methodArn);
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function lowercaseHeaders(h) {
+  const out = {};
+  for (const [k, v] of Object.entries(h)) out[k.toLowerCase()] = v;
+  return out;
 }

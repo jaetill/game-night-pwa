@@ -1,9 +1,8 @@
 // Lambda: POST /nudge  — sends Postmark reminder to non-responders
 //         POST /invite — sends Postmark invite to a newly added guest
 //
-// Auth: API key (X-API-Key header via apiKeyAuthorizer) or Cognito JWT
-//       API key resolves to userId via requestContext.authorizer.userId;
-//       JWT fallback decodes cognito:username/sub from Authorization header.
+// Auth: dual-mode (apiKeyAuthorizer). Caller's userId is in
+//       event.requestContext.authorizer.userId.
 //
 // Environment variables required:
 //   FROM_EMAIL          — Verified sender address (e.g. gamenight@jaetill.com)
@@ -62,19 +61,8 @@ exports.handler = async (event) => {
     return { statusCode: 200, headers: { ...CORS, 'Access-Control-Allow-Methods': 'POST,OPTIONS' }, body: '' };
   }
 
-  // ── Auth: API key (via authorizer context) or Cognito JWT fallback ──
-  let callerId = event.requestContext?.authorizer?.userId;
-  if (!callerId) {
-    const rawAuth = event.headers?.Authorization || event.headers?.authorization || '';
-    const token   = rawAuth.startsWith('Bearer ') ? rawAuth.slice(7) : rawAuth;
-    if (!token) return respond(401, { error: 'Unauthorized' }, CORS);
-    try {
-      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
-      callerId = payload['cognito:username'] || payload.sub;
-    } catch {
-      return respond(401, { error: 'Invalid token' }, CORS);
-    }
-  }
+  const callerId = event.requestContext?.authorizer?.userId;
+  if (!callerId) return respond(401, { error: 'Unauthorized' }, CORS);
 
   // ── Parse body ──
   let body;

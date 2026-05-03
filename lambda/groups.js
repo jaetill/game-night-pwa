@@ -2,9 +2,8 @@
 //         POST /groups   — upserts a named group { name, emails[] }
 //         DELETE /groups — removes a group by name { name }
 //
-// Auth: API key (X-API-Key header via apiKeyAuthorizer) or Cognito JWT
-//       API key resolves to userId via requestContext.authorizer.userId;
-//       JWT fallback decodes cognito:username/sub from Authorization header.
+// Auth: dual-mode (apiKeyAuthorizer). Caller's userId is in
+//       event.requestContext.authorizer.userId.
 // S3:   reads and writes profiles/{userId}.json in BUCKET
 //       preserves all existing profile fields; only updates the `groups` key
 //
@@ -118,19 +117,8 @@ exports.handler = async (event) => {
     };
   }
 
-  // ── Auth: API key (via authorizer context) or Cognito JWT fallback ──
-  let userId = event.requestContext?.authorizer?.userId;
-  if (!userId) {
-    const rawAuth = event.headers?.Authorization || event.headers?.authorization || '';
-    const token   = rawAuth.startsWith('Bearer ') ? rawAuth.slice(7) : rawAuth;
-    if (!token) return respond(401, { error: 'Unauthorized' }, CORS);
-    try {
-      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
-      userId = payload['cognito:username'] || payload.sub;
-    } catch {
-      return respond(401, { error: 'Invalid token' }, CORS);
-    }
-  }
+  const userId = event.requestContext?.authorizer?.userId;
+  if (!userId) return respond(401, { error: 'Unauthorized' }, CORS);
 
   try {
     if (event.httpMethod === 'GET') {
