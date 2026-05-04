@@ -182,16 +182,38 @@ resolve, so prefer Python or `tar -a` for zipping.
 - Collection stored in S3 at `collections/{userId}.json`
 - Cached in localStorage (`bggGames_{userId}`, version key `bggGamesVer_{userId}`, current version v5)
 
-## Email (Postmark)
-- Invite email: triggered when host adds a guest → `POST /invite` (handled by `nudgeNonResponders`)
-- Nudge email: triggered by "Nudge non-responders" button → `POST /nudge`
-  - Loads `gameNights.json` from S3, finds non-responders, fetches their emails
-    from Cognito, sends individually via Postmark
-- Both use `from: FROM_EMAIL` (`jason@jaetill.com`), `MessageStream: 'outbound'`
+## Email (Postmark + Cognito)
+- **Invite** (`POST /invite`, handled by `nudgeNonResponders`):
+  1. Provisions a Cognito user for the invited email if none exists, in the
+     `game-night-users` group. Cognito sends its standard "You have been
+     invited to jaetill.com" email with a temporary password (sender:
+     Cognito's `no-reply@verificationemail.com` since `EmailSendingAccount`
+     on the pool is `COGNITO_DEFAULT` — may land in spam for first-timers).
+  2. Sends a Postmark "You're invited to game night" email from
+     `jason@jaetill.com`. Includes a "First time?" prompt pointing at the
+     separate Cognito welcome email when `provisioned === 'created'`.
+- **Nudge** (`POST /nudge`): loads `gameNights.json`, finds non-responders,
+  resolves emails via Cognito, sends individually via Postmark.
+- Both Postmark sends use `MessageStream: 'outbound'`.
 - DNS for `jaetill.com`: SPF (`v=spf1 include:spf.mtasv.net include:amazonses.com ~all`),
   DMARC (`v=DMARC1; p=none; sp=none`), and Postmark DKIM selector
   `20260313102825pm._domainkey` are all live in Route 53. AOL/Yahoo bulk-sender
   requirements (Feb 2024) are met.
+
+### Provisioning permissions
+The `nudge-lambda-role` has `cognito-idp:AdminCreateUser`,
+`cognito-idp:AdminAddUserToGroup`, and `cognito-idp:ListUsers` on the user
+pool. IAM cannot scope `AdminAddUserToGroup` to a specific group, so the
+guard against escalation (e.g. adding a user to `admins`) is enforced in
+Lambda code only — `nudge.js` always passes `GroupName: 'game-night-users'`.
+The full policy lives at `lambda/iam/nudge-inline.json`.
+
+### Pool quirk: temp password is required
+Pool's choice-based auth (`ALLOW_USER_AUTH`) means `AdminCreateUser` rejects
+calls without a `TemporaryPassword`. `nudge.js` generates an 18-char password
+that meets the pool policy and lets Cognito's invite-message template handle
+delivery via the `{####}` substitution. The temp password is never logged,
+stored, or returned to the caller.
 
 ## MCP server (`mcp/`)
 A custom MCP server that wraps the Game Night API for use with Claude Desktop

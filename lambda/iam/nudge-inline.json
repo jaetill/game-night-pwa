@@ -1,0 +1,28 @@
+{
+  "_comment": "Inline policy `nudge-inline` on role nudge-lambda-role. Apply via: aws iam put-role-policy --role-name nudge-lambda-role --policy-name nudge-inline --policy-document file://lambda/iam/nudge-inline.json",
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadGameNights",
+      "Effect": "Allow",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::jaetill-game-nights/gameNights.json"
+    },
+    {
+      "Sid": "ReadCognitoUser",
+      "Effect": "Allow",
+      "Action": "cognito-idp:AdminGetUser",
+      "Resource": "arn:aws:cognito-idp:us-east-2:214599503944:userpool/us-east-2_xneeJzaDJ"
+    },
+    {
+      "Sid": "ProvisionInvitedUsers",
+      "Effect": "Allow",
+      "Action": [
+        "cognito-idp:ListUsers",
+        "cognito-idp:AdminCreateUser",
+        "cognito-idp:AdminAddUserToGroup"
+      ],
+      "Resource": "arn:aws:cognito-idp:us-east-2:214599503944:userpool/us-east-2_xneeJzaDJ"
+    }
+  ]
+}

@@ -1,8 +1,14 @@
 // Lambda: POST /nudge  — sends Postmark reminder to non-responders
-//         POST /invite — sends Postmark invite to a newly added guest
+//         POST /invite — provisions a Cognito user + sends Postmark invite
 //
 // Auth: dual-mode (apiKeyAuthorizer). Caller's userId is in
 //       event.requestContext.authorizer.userId.
+//
+// /invite implicitly acts as a portal invite scoped to game-night:
+//   - if no Cognito user exists for the email, AdminCreateUser is called
+//     (Cognito sends the temp-password welcome email from `jaetill.com`)
+//   - the user is added to the `game-night-users` group (idempotent)
+//   - a separate Postmark "you're invited to game night" email is sent
 //
 // Environment variables required:
 //   FROM_EMAIL          — Verified sender address (e.g. gamenight@jaetill.com)
@@ -16,9 +22,18 @@
 'use strict';
 
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
-const { CognitoIdentityProviderClient, AdminGetUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
+const {
+  CognitoIdentityProviderClient,
+  AdminGetUserCommand,
+  ListUsersCommand,
+  AdminCreateUserCommand,
+  AdminAddUserToGroupCommand,
+} = require('@aws-sdk/client-cognito-identity-provider');
 const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
-const https = require('https');
+const https  = require('https');
+const crypto = require('node:crypto');
+
+const REQUIRED_GROUP = 'game-night-users';
 
 const s3      = new S3Client({ region: process.env.AWS_REGION || 'us-east-2' });
 const cognito = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION || 'us-east-2' });
@@ -89,7 +104,7 @@ exports.handler = async (event) => {
   // ── Verify caller is the host ──
   if (night.hostUserId !== callerId) return respond(403, { error: 'Only the host can do this' }, CORS);
 
-  // ── Invite action: send a single invite email ──────────────────────────────
+  // ── Invite action: provision Cognito user + send invite email ─────────────
   if (action === 'invite') {
     if (!inviteEmail || !inviteEmail.includes('@')) {
       return respond(400, { error: 'Valid email required for invite' }, CORS);
@@ -103,8 +118,23 @@ exports.handler = async (event) => {
       if (attr?.Value) hostName = attr.Value;
     } catch { /* non-fatal */ }
 
+    // Provision Cognito account + group membership.
+    // If the user already exists, AdminCreateUser is skipped — but we still
+    // ensure they're in `game-night-users` so a meal-planner-only user can
+    // RSVP to a game night they're invited to.
+    let provisioned = 'existing';
+    try {
+      provisioned = await ensureGameNightUser(inviteEmail);
+    } catch (e) {
+      console.error(`Cognito provisioning failed for ${inviteEmail}:`, e.message);
+      // Fall through — still send the Postmark invite. If provisioning failed
+      // for a transient reason, the host can retry; if the email was malformed
+      // for Cognito's standards, the friend will see a Sign-In page where they
+      // can request access.
+    }
+
     const dateStr = formatDate(night.date);
-    const ctx = { hostName, dateStr, timeStr: night.time || '', location: night.location || '', description: night.description || '' };
+    const ctx = { hostName, dateStr, timeStr: night.time || '', location: night.location || '', description: night.description || '', isNewAccount: provisioned === 'created' };
     const name = inviteEmail.split('@')[0];
 
     try {
@@ -116,7 +146,7 @@ exports.handler = async (event) => {
         HtmlBody:      buildInviteHtml({ ...ctx, name }),
         MessageStream: 'outbound',
       });
-      return respond(200, { sent: 1 }, CORS);
+      return respond(200, { sent: 1, provisioned }, CORS);
     } catch (e) {
       console.error(`Postmark invite failed for ${inviteEmail}:`, e.message);
       return respond(500, { error: `Failed to send invite: ${e.message}` }, CORS);
@@ -188,6 +218,78 @@ exports.handler = async (event) => {
 
 // ── Helpers ───────────────────────────────────────────────
 
+/**
+ * Find or create a Cognito user for `email` and ensure they're in the
+ * `game-night-users` group.
+ *   - existing user → returns 'existing'  (Cognito does NOT send a welcome
+ *                                          email; user already has credentials)
+ *   - new user      → returns 'created'   (Cognito's invite-message template
+ *                                          fires, substituting {####} with the
+ *                                          generated temporary password)
+ *
+ * Pool config requires AdminCreateUser to include an explicit
+ * TemporaryPassword (the pool's choice-based auth flow does not auto-generate
+ * one). Password meets the pool's policy: 8+ chars, upper+lower+digit+symbol.
+ */
+async function ensureGameNightUser(email) {
+  const list = await cognito.send(new ListUsersCommand({
+    UserPoolId: USER_POOL_ID,
+    Filter:     `email = "${email}"`,
+    Limit:      1,
+  }));
+
+  let username;
+  let result = 'existing';
+
+  if (list.Users && list.Users.length > 0) {
+    username = list.Users[0].Username;
+  } else {
+    const created = await cognito.send(new AdminCreateUserCommand({
+      UserPoolId:             USER_POOL_ID,
+      Username:               crypto.randomUUID(),
+      TemporaryPassword:      generateTempPassword(),
+      UserAttributes: [
+        { Name: 'email',          Value: email },
+        { Name: 'email_verified', Value: 'true' },
+      ],
+      DesiredDeliveryMediums: ['EMAIL'],
+    }));
+    username = created.User.Username;
+    result   = 'created';
+  }
+
+  await cognito.send(new AdminAddUserToGroupCommand({
+    UserPoolId: USER_POOL_ID,
+    Username:   username,
+    GroupName:  REQUIRED_GROUP,
+  }));
+
+  return result;
+}
+
+/**
+ * 18-character temp password meeting the pool's policy. The password is
+ * delivered to the user via Cognito's invite-message template ({#### }
+ * substitution); we never log it, never store it, and never return it.
+ */
+function generateTempPassword() {
+  const upper  = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const lower  = 'abcdefghijkmnpqrstuvwxyz';
+  const digit  = '23456789';
+  const symbol = '!@#$%^&*';
+  const all    = upper + lower + digit + symbol;
+  const pick   = (chars) => chars[crypto.randomInt(0, chars.length)];
+
+  // Force one of each class; fill remainder; shuffle deterministically-randomly
+  const chars = [pick(upper), pick(lower), pick(digit), pick(symbol)];
+  for (let i = chars.length; i < 18; i++) chars.push(pick(all));
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = crypto.randomInt(0, i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join('');
+}
+
 function respond(status, body, headers) {
   return { statusCode: status, headers, body: JSON.stringify(body) };
 }
@@ -201,7 +303,7 @@ function formatDate(dateStr) {
   } catch { return dateStr; }
 }
 
-function buildInviteText({ name, hostName, dateStr, timeStr, location, description }) {
+function buildInviteText({ name, hostName, dateStr, timeStr, location, description, isNewAccount }) {
   const lines = [
     `Hi${name ? ` ${name}` : ''}!`,
     '',
@@ -211,20 +313,22 @@ function buildInviteText({ name, hostName, dateStr, timeStr, location, descripti
       (location ? ` at ${location}` : '') + '.',
   ];
   if (description) lines.push('', description);
-  lines.push(
-    '',
-    `Let ${hostName} know if you can make it:`,
-    APP_URL,
-    '',
-    `First time? You'll need to create a free account to RSVP. The app may take a moment to load.`,
-    '',
-    `If you don't know what this is about, you can safely ignore this message.`,
-  );
+  lines.push('', `Let ${hostName} know if you can make it:`, APP_URL);
+  if (isNewAccount) {
+    lines.push(
+      '',
+      `First time? An email titled "You have been invited to jaetill.com" is on its way separately — it has your temporary password. Use it to sign in once, set your real password, and you'll come right back here to RSVP.`,
+    );
+  }
+  lines.push('', `If you don't know what this is about, you can safely ignore this message.`);
   return lines.join('\n');
 }
 
-function buildInviteHtml({ name, hostName, dateStr, timeStr, location, description }) {
+function buildInviteHtml({ name, hostName, dateStr, timeStr, location, description, isNewAccount }) {
   const when = [dateStr && `<strong>${dateStr}</strong>`, timeStr && `at <strong>${timeStr}</strong>`].filter(Boolean).join(' ');
+  const firstTime = isNewAccount
+    ? `<p style="font-size:13px;color:#64748b;">First time? Look for a separate email titled <em>"You have been invited to jaetill.com"</em> — it has your temporary password. Sign in once, set a real password, and you'll come right back here to RSVP.</p>`
+    : '';
   return `<!DOCTYPE html>
 <html>
 <body style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px 16px;color:#1e293b;">
@@ -239,7 +343,7 @@ function buildInviteHtml({ name, hostName, dateStr, timeStr, location, descripti
       View invitation →
     </a>
   </p>
-  <p style="font-size:13px;color:#64748b;">First time? You'll need to create a free account to RSVP. The app may take a moment to load.</p>
+  ${firstTime}
   <p style="margin-top:28px;font-size:12px;color:#94a3b8;">
     If you don't know what this is about, you can safely ignore this message.
   </p>
