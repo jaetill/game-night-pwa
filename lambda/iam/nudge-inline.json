@@ -1,11 +1,13 @@
 {
-  "_comment": "Inline policy `nudge-inline` on role nudge-lambda-role. Apply via: aws iam put-role-policy --role-name nudge-lambda-role --policy-name nudge-inline --policy-document file://lambda/iam/nudge-inline.json",
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "ReadGameNights",
+      "Sid": "ReadWriteGameNights",
       "Effect": "Allow",
-      "Action": "s3:GetObject",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject"
+      ],
       "Resource": "arn:aws:s3:::jaetill-game-nights/gameNights.json"
     },
     {

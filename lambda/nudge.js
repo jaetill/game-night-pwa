@@ -21,7 +21,7 @@
 
 'use strict';
 
-const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
 const {
   CognitoIdentityProviderClient,
   AdminGetUserCommand,
@@ -109,6 +109,7 @@ exports.handler = async (event) => {
     if (!inviteEmail || !inviteEmail.includes('@')) {
       return respond(400, { error: 'Valid email required for invite' }, CORS);
     }
+    const inviteEmailLc = inviteEmail.toLowerCase();
 
     // Get host display name
     let hostName = callerId;
@@ -117,6 +118,31 @@ exports.handler = async (event) => {
       const attr = u.UserAttributes?.find(a => a.Name === 'name');
       if (attr?.Value) hostName = attr.Value;
     } catch { /* non-fatal */ }
+
+    // Add email to night.invited[] so renderRSVP's gate
+    // (`night.invited.includes(email)`) recognises the new user. Idempotent —
+    // skipped if already present. The frontend host-controls flow already
+    // updates invited[] client-side, but MCP's invite_to_event tool doesn't,
+    // and /invite is the canonical "this person is invited" event regardless
+    // of caller.
+    let inviteListChanged = false;
+    if (!night.invited?.some(e => typeof e === 'string' && e.toLowerCase() === inviteEmailLc)) {
+      night.invited = Array.isArray(night.invited) ? night.invited : [];
+      night.invited.push(inviteEmail);
+      night.lastModified = Date.now();
+      inviteListChanged = true;
+      try {
+        await s3.send(new PutObjectCommand({
+          Bucket:      BUCKET,
+          Key:         'gameNights.json',
+          Body:        JSON.stringify(nights),
+          ContentType: 'application/json',
+        }));
+      } catch (e) {
+        console.error('Failed to persist invited[] update:', e.message);
+        return respond(500, { error: 'Could not update invited list' }, CORS);
+      }
+    }
 
     // Provision Cognito account + group membership.
     // If the user already exists, AdminCreateUser is skipped — but we still
@@ -146,7 +172,7 @@ exports.handler = async (event) => {
         HtmlBody:      buildInviteHtml({ ...ctx, name }),
         MessageStream: 'outbound',
       });
-      return respond(200, { sent: 1, provisioned }, CORS);
+      return respond(200, { sent: 1, provisioned, inviteListChanged }, CORS);
     } catch (e) {
       console.error(`Postmark invite failed for ${inviteEmail}:`, e.message);
       return respond(500, { error: `Failed to send invite: ${e.message}` }, CORS);
