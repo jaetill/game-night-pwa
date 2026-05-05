@@ -1,6 +1,15 @@
 import { getDisplayName } from '../utils/userDirectory.js';
 import { badge, formatDate } from '../ui/elements.js';
 
+// Safe HTML escape for inline interpolation. Never use innerHTML with raw
+// user-supplied strings (location, host display name, description). Routes
+// that already use textContent or DOM append don't need this.
+function escapeHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = String(s ?? '');
+  return div.innerHTML;
+}
+
 export function renderGameNightSummary(night, currentUser) {
   const { day, time } = formatDate(night.date, night.time);
 
@@ -25,8 +34,11 @@ export function renderGameNightSummary(night, currentUser) {
   );
 
   const dateText = document.createElement('div');
-  dateText.innerHTML = `<p class="font-semibold text-gray-900">${day}</p>
-    <p class="text-sm text-gray-500">${time}${canSeeLocation && night.location ? ` · ${night.location.replace(/\n+/g, ', ')}` : ''}</p>`;
+  const locationStr = canSeeLocation && night.location
+    ? ` · ${escapeHtml(night.location.replace(/\n+/g, ', '))}`
+    : '';
+  dateText.innerHTML = `<p class="font-semibold text-gray-900">${escapeHtml(day)}</p>
+    <p class="text-sm text-gray-500">${escapeHtml(time)}${locationStr}</p>`;
   dateRow.appendChild(dateText);
 
   // Current user's own status badge
@@ -54,7 +66,7 @@ export function renderGameNightSummary(night, currentUser) {
   const stats = document.createElement('div');
   stats.className = 'flex items-center gap-3 mt-2 text-xs text-gray-500';
   stats.innerHTML = `
-    <span>👤 ${getDisplayName(night.hostUserId)}</span>
+    <span>👤 ${escapeHtml(getDisplayName(night.hostUserId))}</span>
     <span>·</span>
     <span>🎟 ${attendingCount} going</span>
     ${pendingCount > 0 ? `<span>· ${pendingCount} pending</span>` : ''}

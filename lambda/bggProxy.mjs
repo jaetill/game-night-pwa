@@ -93,9 +93,21 @@ export const handler = async (event) => {
       } catch {
         return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid JSON' }) };
       }
+      // Strip HTML angle brackets from any free-text field. The frontend now
+      // escapes user-supplied strings on render, but this keeps any payload
+      // from ever sitting in S3 and surfacing through a future template that
+      // forgets to escape. Email format is validated separately at the
+      // input level so it never contains angle brackets.
+      const clean = (v) => typeof v === 'string' ? v.replace(/[<>]/g, '') : v;
       const { displayName, bggUsername, contactEmail, phone, address } = profile;
       try {
-        await s3Put(`profiles/${callerId}.json`, { displayName, bggUsername, contactEmail, phone, address });
+        await s3Put(`profiles/${callerId}.json`, {
+          displayName:  clean(displayName),
+          bggUsername:  clean(bggUsername),
+          contactEmail: clean(contactEmail),
+          phone:        clean(phone),
+          address:      clean(address),
+        });
         return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true }) };
       } catch (err) {
         return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: err.message }) };
