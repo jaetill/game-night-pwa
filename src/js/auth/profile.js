@@ -14,7 +14,18 @@ export function getProfile() {
 function persistLocally(profile) {
   localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
   const user = getCurrentUser();
-  if (user) setCurrentUser({ ...user, bggUsername: profile.bggUsername || '' });
+  if (user) {
+    setCurrentUser({
+      ...user,
+      // Once a user fills in displayName via the profile modal, all their
+      // future RSVPs and host operations should use that name. Without this
+      // sync currentUser.name stays at whatever app.js set at sign-in
+      // (claims.name || email || userId), and rsvps[].name keeps showing
+      // the email or UUID instead of the friendly name they chose.
+      name:        profile.displayName || user.name,
+      bggUsername: profile.bggUsername || '',
+    });
+  }
 }
 
 /** Loads profile from S3 (authoritative), falls back to JWT claims, then localStorage. */

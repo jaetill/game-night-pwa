@@ -27,8 +27,8 @@ async function init() {
   // ── App init ───────────────────────────────────────────────
   try {
     const userId = claims['cognito:username'] || claims.sub;
-    const name   = claims.name  || userId;
     const email  = claims.email || '';
+    const name   = claims.name || email || userId;
 
     setCurrentUser({ userId, name, email, bggUsername: '' });
     await loadProfile();
