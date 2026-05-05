@@ -148,7 +148,7 @@ exports.handler = async (event) => {
     // If the user already exists, AdminCreateUser is skipped — but we still
     // ensure they're in `game-night-users` so a meal-planner-only user can
     // RSVP to a game night they're invited to.
-    let provisioned = 'existing';
+    let provisioned = { result: 'existing', tempPassword: null };
     try {
       provisioned = await ensureGameNightUser(inviteEmail);
     } catch (e) {
@@ -160,7 +160,15 @@ exports.handler = async (event) => {
     }
 
     const dateStr = formatDate(night.date);
-    const ctx = { hostName, dateStr, timeStr: night.time || '', location: night.location || '', description: night.description || '', isNewAccount: provisioned === 'created' };
+    const ctx = {
+      hostName, dateStr,
+      timeStr:      night.time     || '',
+      location:     night.location || '',
+      description:  night.description || '',
+      isNewAccount: provisioned.result === 'created',
+      signInEmail:  inviteEmail.toLowerCase(),
+      tempPassword: provisioned.tempPassword,
+    };
     const name = inviteEmail.split('@')[0];
 
     try {
@@ -172,7 +180,7 @@ exports.handler = async (event) => {
         HtmlBody:      buildInviteHtml({ ...ctx, name }),
         MessageStream: 'outbound',
       });
-      return respond(200, { sent: 1, provisioned, inviteListChanged }, CORS);
+      return respond(200, { sent: 1, provisioned: provisioned.result, inviteListChanged }, CORS);
     } catch (e) {
       console.error(`Postmark invite failed for ${inviteEmail}:`, e.message);
       return respond(500, { error: `Failed to send invite: ${e.message}` }, CORS);
@@ -247,50 +255,65 @@ exports.handler = async (event) => {
 /**
  * Find or create a Cognito user for `email` and ensure they're in the
  * `game-night-users` group.
- *   - existing user → returns 'existing'  (Cognito does NOT send a welcome
- *                                          email; user already has credentials)
- *   - new user      → returns 'created'   (Cognito's invite-message template
- *                                          fires, substituting {####} with the
- *                                          generated temporary password)
+ *
+ * Returns:
+ *   { result: 'existing', tempPassword: null }  — caller already has creds
+ *   { result: 'created',  tempPassword: '...' } — caller must email it
+ *
+ * The Username field is a UUID. (The pool's AliasAttributes=['email'] config
+ * forbids email-format Usernames — Cognito rejects with "Username cannot be
+ * of email format, since user pool is configured for email alias." So even
+ * though the Hosted UI shows a non-customizable "Username" label, we can't
+ * make Username=email; instead we make sure the credentials block in our
+ * Postmark email shows the user the literal email + temp password to type.)
+ *
+ * Cognito's default welcome email (sender: no-reply@verificationemail.com) is
+ * suppressed via MessageAction:'SUPPRESS'. The caller is expected to deliver
+ * the returned tempPassword via Postmark, which is from jason@jaetill.com and
+ * passes DKIM/SPF/DMARC — better deliverability than Cognito's default and
+ * means the invitee gets one email instead of two.
  *
  * Pool config requires AdminCreateUser to include an explicit
  * TemporaryPassword (the pool's choice-based auth flow does not auto-generate
- * one). Password meets the pool's policy: 8+ chars, upper+lower+digit+symbol.
+ * one). The generated password meets the pool's policy: 8+ chars,
+ * upper+lower+digit+symbol.
  */
 async function ensureGameNightUser(email) {
+  const emailLc = email.toLowerCase();
   const list = await cognito.send(new ListUsersCommand({
     UserPoolId: USER_POOL_ID,
-    Filter:     `email = "${email}"`,
+    Filter:     `email = "${emailLc}"`,
     Limit:      1,
   }));
 
-  let username;
-  let result = 'existing';
-
   if (list.Users && list.Users.length > 0) {
-    username = list.Users[0].Username;
-  } else {
-    const created = await cognito.send(new AdminCreateUserCommand({
-      UserPoolId:             USER_POOL_ID,
-      Username:               crypto.randomUUID(),
-      TemporaryPassword:      generateTempPassword(),
-      UserAttributes: [
-        { Name: 'email',          Value: email },
-        { Name: 'email_verified', Value: 'true' },
-      ],
-      DesiredDeliveryMediums: ['EMAIL'],
+    await cognito.send(new AdminAddUserToGroupCommand({
+      UserPoolId: USER_POOL_ID,
+      Username:   list.Users[0].Username,
+      GroupName:  REQUIRED_GROUP,
     }));
-    username = created.User.Username;
-    result   = 'created';
+    return { result: 'existing', tempPassword: null };
   }
 
+  const username     = crypto.randomUUID();
+  const tempPassword = generateTempPassword();
+  await cognito.send(new AdminCreateUserCommand({
+    UserPoolId:        USER_POOL_ID,
+    Username:          username,
+    TemporaryPassword: tempPassword,
+    UserAttributes: [
+      { Name: 'email',          Value: emailLc },
+      { Name: 'email_verified', Value: 'true' },
+    ],
+    MessageAction:     'SUPPRESS',
+  }));
   await cognito.send(new AdminAddUserToGroupCommand({
     UserPoolId: USER_POOL_ID,
     Username:   username,
     GroupName:  REQUIRED_GROUP,
   }));
 
-  return result;
+  return { result: 'created', tempPassword };
 }
 
 /**
@@ -329,7 +352,7 @@ function formatDate(dateStr) {
   } catch { return dateStr; }
 }
 
-function buildInviteText({ name, hostName, dateStr, timeStr, location, description, isNewAccount }) {
+function buildInviteText({ name, hostName, dateStr, timeStr, location, description, isNewAccount, signInEmail, tempPassword }) {
   const lines = [
     `Hi${name ? ` ${name}` : ''}!`,
     '',
@@ -339,42 +362,62 @@ function buildInviteText({ name, hostName, dateStr, timeStr, location, descripti
       (location ? ` at ${location}` : '') + '.',
   ];
   if (description) lines.push('', description);
-  lines.push('', `Let ${hostName} know if you can make it:`, APP_URL);
-  if (isNewAccount) {
+  lines.push('', `RSVP at: ${APP_URL}`);
+  if (isNewAccount && tempPassword) {
     lines.push(
       '',
-      `First time? An email titled "You have been invited to jaetill.com" is on its way separately — it has your temporary password. Use it to sign in once, set your real password, and you'll come right back here to RSVP.`,
+      `--- First-time sign-in ---`,
+      `When you click the link, you'll be prompted to sign in. Use:`,
+      `  Username: ${signInEmail}`,
+      `  Temporary password: ${tempPassword}`,
+      ``,
+      `You'll set your own password on first sign-in. The temporary password expires in 7 days.`,
     );
   }
   lines.push('', `If you don't know what this is about, you can safely ignore this message.`);
   return lines.join('\n');
 }
 
-function buildInviteHtml({ name, hostName, dateStr, timeStr, location, description, isNewAccount }) {
+function buildInviteHtml({ name, hostName, dateStr, timeStr, location, description, isNewAccount, signInEmail, tempPassword }) {
   const when = [dateStr && `<strong>${dateStr}</strong>`, timeStr && `at <strong>${timeStr}</strong>`].filter(Boolean).join(' ');
-  const firstTime = isNewAccount
-    ? `<p style="font-size:13px;color:#64748b;">First time? Look for a separate email titled <em>"You have been invited to jaetill.com"</em> — it has your temporary password. Sign in once, set a real password, and you'll come right back here to RSVP.</p>`
-    : '';
+  const credentialBlock = (isNewAccount && tempPassword) ? `
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-top:20px;">
+    <p style="margin:0 0 10px;font-size:14px;font-weight:600;color:#1e293b;">First time signing in? Use these credentials:</p>
+    <table style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;border-collapse:collapse;">
+      <tr><td style="padding:2px 12px 2px 0;color:#64748b;">Username</td><td style="padding:2px 0;color:#1e293b;"><strong>${escapeHtml(signInEmail)}</strong></td></tr>
+      <tr><td style="padding:2px 12px 2px 0;color:#64748b;">Temp password</td><td style="padding:2px 0;color:#1e293b;"><strong>${escapeHtml(tempPassword)}</strong></td></tr>
+    </table>
+    <p style="margin:10px 0 0;font-size:12px;color:#64748b;">You'll set your own password on first sign-in. The temporary password expires in 7 days.</p>
+  </div>` : '';
   return `<!DOCTYPE html>
 <html>
 <body style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px 16px;color:#1e293b;">
   <h2 style="margin:0 0 16px;font-size:20px;">🎲 You're invited to game night!</h2>
   <p>Hi${name ? ` ${name}` : ''}!</p>
-  <p><strong>${hostName}</strong> has invited you to game night${when ? ` ${when}` : ''}${location ? ` at <strong>${location}</strong>` : ''}.</p>
-  ${description ? `<p style="color:#64748b;font-style:italic;">${description}</p>` : ''}
-  <p>Let ${hostName} know if you can make it:</p>
+  <p><strong>${escapeHtml(hostName)}</strong> has invited you to game night${when ? ` ${when}` : ''}${location ? ` at <strong>${escapeHtml(location)}</strong>` : ''}.</p>
+  ${description ? `<p style="color:#64748b;font-style:italic;">${escapeHtml(description)}</p>` : ''}
+  <p>Let ${escapeHtml(hostName)} know if you can make it:</p>
   <p>
     <a href="${APP_URL}"
        style="display:inline-block;background:#4f46e5;color:#fff;padding:10px 22px;border-radius:6px;text-decoration:none;font-weight:600;">
       View invitation →
     </a>
   </p>
-  ${firstTime}
+  ${credentialBlock}
   <p style="margin-top:28px;font-size:12px;color:#94a3b8;">
     If you don't know what this is about, you can safely ignore this message.
   </p>
 </body>
 </html>`;
+}
+
+function escapeHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g,  '&amp;')
+    .replace(/</g,  '&lt;')
+    .replace(/>/g,  '&gt;')
+    .replace(/"/g,  '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function buildText({ name, hostName, dateStr, timeStr, location, description }) {

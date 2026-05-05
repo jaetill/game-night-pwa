@@ -182,16 +182,16 @@ resolve, so prefer Python or `tar -a` for zipping.
 - Collection stored in S3 at `collections/{userId}.json`
 - Cached in localStorage (`bggGames_{userId}`, version key `bggGamesVer_{userId}`, current version v5)
 
-## Email (Postmark + Cognito)
+## Email (Postmark — single-email flow)
 - **Invite** (`POST /invite`, handled by `nudgeNonResponders`):
-  1. Provisions a Cognito user for the invited email if none exists, in the
-     `game-night-users` group. Cognito sends its standard "You have been
-     invited to jaetill.com" email with a temporary password (sender:
-     Cognito's `no-reply@verificationemail.com` since `EmailSendingAccount`
-     on the pool is `COGNITO_DEFAULT` — may land in spam for first-timers).
-  2. Sends a Postmark "You're invited to game night" email from
-     `jason@jaetill.com`. Includes a "First time?" prompt pointing at the
-     separate Cognito welcome email when `provisioned === 'created'`.
+  1. Provisions a Cognito user (UUID username, email alias) if none exists,
+     in the `game-night-users` group. Cognito's default welcome email is
+     **suppressed** via `MessageAction:'SUPPRESS'` — better deliverability
+     and one fewer email for the invitee.
+  2. Sends ONE Postmark "You're invited to game night" email from
+     `jason@jaetill.com`. For new accounts, the email includes a
+     "First time signing in?" credentials block showing the email address
+     and the generated temporary password (which expires in 7 days).
 - **Nudge** (`POST /nudge`): loads `gameNights.json`, finds non-responders,
   resolves emails via Cognito, sends individually via Postmark.
 - Both Postmark sends use `MessageStream: 'outbound'`.
@@ -208,12 +208,21 @@ guard against escalation (e.g. adding a user to `admins`) is enforced in
 Lambda code only — `nudge.js` always passes `GroupName: 'game-night-users'`.
 The full policy lives at `lambda/iam/nudge-inline.json`.
 
-### Pool quirk: temp password is required
-Pool's choice-based auth (`ALLOW_USER_AUTH`) means `AdminCreateUser` rejects
-calls without a `TemporaryPassword`. `nudge.js` generates an 18-char password
-that meets the pool policy and lets Cognito's invite-message template handle
-delivery via the `{####}` substitution. The temp password is never logged,
-stored, or returned to the caller.
+### Pool quirks
+- **Temp password is required.** Pool's choice-based auth (`ALLOW_USER_AUTH`)
+  means `AdminCreateUser` rejects calls without a `TemporaryPassword`.
+  `nudge.js` generates an 18-char password meeting the pool policy and
+  emails it via Postmark.
+- **Username can't be email-format.** `AliasAttributes=['email']` makes
+  Cognito reject any `AdminCreateUser` call where the Username matches the
+  email-address pattern ("Username cannot be of email format, since user
+  pool is configured for email alias"). New users get UUID usernames; the
+  Postmark credentials block displays the email so the invitee knows what
+  to type at the Hosted UI's (non-customizable) "Username" prompt.
+- **Hosted UI label is not customizable.** Per AWS docs the managed-login
+  branding system controls visual styling only, not field labels. The
+  default "Username" label stays — we work around it by showing the email
+  prominently in the invite credentials block.
 
 ## MCP server (`mcp/`)
 A custom MCP server that wraps the Game Night API for use with Claude Desktop
