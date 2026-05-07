@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# Environment files
+.env
+.env.*
+!.env.example
+!.env.template
+
 # Claude Code
 .claude/mcp.json
 .claude/settings.local.json
