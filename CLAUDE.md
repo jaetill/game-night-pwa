@@ -334,12 +334,11 @@ The custom MCP server at `mcp/` is application code — it is NOT touched by the
 | Phase 2 — AI configuration | ✅ Complete (12 agents, 10 commands, 10 hooks, settings.json) |
 | Phase 3 — Quality gates | ✅ Complete (ESLint, Prettier, pre-commit, lint-staged, commitlint, vitest tiered coverage) |
 | Phase 4 — CI workflows | ✅ Complete (claude-pr-review, release-please, deploy.yml augmented with Sentry release step) |
-| Phase 5 — Observability | 🟨 Partial (Sentry frontend init wired; lambda/lib/sentry.js + lambda/lib/logger.js shared modules; per-Lambda integration deferred) |
+| Phase 5 — Observability | ✅ Complete (Sentry frontend init wired; all 8 Lambda handlers wrapped with Sentry.wrapHandler + structured logger on 2026-05-09; tests/lambdaHandlers.test.js guards regressions) |
 | Phase 6 — IaC retrofit | 🟦 Deferred (capture existing AWS as Terraform; ~500 lines; multi-PR effort) |
-| Phase 7 — User feedback Lambda | 🟦 Deferred (depends on Phase 5 + new Lambda deployment) |
+| Phase 7 — User feedback Lambda | 🟦 Deferred (depends on new Lambda deployment) |
 
 After this integration:
-- Run `npm install` to fetch new devDependencies
-- Run `cd lambda && npm install` to fetch `@sentry/aws-serverless`
+- Run `npm install` (root) and `cd lambda && npm install` to fetch all dependencies (already done if Phase 5 wrapping landed locally)
 - Set up Sentry account + DSN, then add to GitHub repo secrets as `VITE_SENTRY_DSN` (frontend) and `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` (release tracking)
-- Add Sentry-related env vars to each Lambda's runtime config when ready to integrate per-Lambda Sentry wrapping
+- Add Lambda env vars to each of the 8 functions: `SENTRY_DSN`, `DEPLOY_ENV=prod`, `RELEASE_VERSION` (Git SHA at deploy), `LOG_LEVEL=INFO`. Without `SENTRY_DSN` the Sentry client is a no-op (handlers still work; structured logger still emits to CloudWatch); with it errors flow to Sentry.

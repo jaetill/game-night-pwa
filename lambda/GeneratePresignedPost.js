@@ -28,6 +28,8 @@
 
 'use strict';
 
+const { Sentry } = require('./lib/sentry');
+const logger = require('./lib/logger');
 const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
 
 const BUCKET = process.env.S3_BUCKET || 'jaetill-game-nights';
@@ -105,7 +107,13 @@ function validateChanges(current, incoming, userId) {
 
 // ── Handler ────────────────────────────────────────────────────────────────
 
-exports.handler = async (event) => {
+exports.handler = Sentry.wrapHandler(async (event, context) => {
+  logger.info('handler.invoked', {
+    request_id: context?.awsRequestId,
+    method: event.httpMethod,
+    resource: event.resource,
+  });
+
   const CORS = corsHeaders(event);
 
   if (event.httpMethod === 'OPTIONS') {
@@ -132,14 +140,15 @@ exports.handler = async (event) => {
     if (!Array.isArray(current)) current = [];
   } catch (err) {
     if (err.name !== 'NoSuchKey') {
-      console.error('Failed to load current data:', err);
+      logger.error('s3.load_failed', { request_id: context?.awsRequestId, key: KEY, error: err.message });
+      Sentry.captureException(err);
       return respond(500, { error: 'Failed to load current data' }, CORS);
     }
   }
 
   const violation = validateChanges(current, incoming, userId);
   if (violation) {
-    console.warn(`Upload rejected for ${userId}: ${violation}`);
+    logger.warn('upload.rejected', { request_id: context?.awsRequestId, user_id: userId, violation });
     return respond(403, { error: violation }, CORS);
   }
 
@@ -151,9 +160,11 @@ exports.handler = async (event) => {
       ContentType: 'application/json',
     }));
   } catch (err) {
-    console.error('S3 put failed:', err);
+    logger.error('s3.put_failed', { request_id: context?.awsRequestId, key: KEY, error: err.message });
+    Sentry.captureException(err);
     return respond(500, { error: err.message }, CORS);
   }
 
+  logger.info('upload.saved', { request_id: context?.awsRequestId, count: incoming.length });
   return respond(200, { saved: incoming.length }, CORS);
-};
+});

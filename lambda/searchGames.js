@@ -11,6 +11,8 @@
 
 'use strict';
 
+const { Sentry } = require('./lib/sentry');
+const logger = require('./lib/logger');
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 
 const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-2' });
@@ -66,7 +68,13 @@ const MAX_RESULTS = 5;
 
 // ── Handler ───────────────────────────────────────────────
 
-exports.handler = async (event) => {
+exports.handler = Sentry.wrapHandler(async (event, context) => {
+  logger.info('handler.invoked', {
+    request_id: context?.awsRequestId,
+    method: event.httpMethod,
+    resource: event.resource,
+  });
+
   const CORS = corsHeaders(event);
 
   if (event.httpMethod === 'OPTIONS') {
@@ -89,7 +97,8 @@ exports.handler = async (event) => {
     games = Array.isArray(parsed) ? parsed : [];
   } catch (e) {
     if (e.name === 'NoSuchKey') return respond(200, { results: [] }, CORS);
-    console.error('S3 load failed', e);
+    logger.error('s3.load_failed', { request_id: context?.awsRequestId, key: `collections/${callerId}.json`, error: e.message });
+    Sentry.captureException(e);
     return respond(500, { error: 'Could not load game collection' }, CORS);
   }
 
@@ -125,4 +134,4 @@ exports.handler = async (event) => {
   }));
 
   return respond(200, { results: shaped }, CORS);
-};
+});

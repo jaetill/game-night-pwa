@@ -19,6 +19,10 @@
 // API Gateway integrations.
 
 import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import sentryModule from './lib/sentry.js';
+import logger from './lib/logger.js';
+
+const { Sentry } = sentryModule;
 
 const BUCKET = process.env.S3_BUCKET || 'jaetill-game-nights';
 const REGION = process.env.AWS_REGION || 'us-east-2';
@@ -60,7 +64,13 @@ async function s3Put(key, data) {
   }));
 }
 
-export const handler = async (event) => {
+export const handler = Sentry.wrapHandler(async (event, context) => {
+  logger.info('handler.invoked', {
+    request_id: context?.awsRequestId,
+    method: event.httpMethod,
+    resource: event.resource,
+  });
+
   const method   = event.httpMethod;
   const resource = event.resource; // '/bgg' or '/profiles'
   const CORS     = corsHeaders(event);
@@ -82,6 +92,8 @@ export const handler = async (event) => {
         const body = raw ?? JSON.stringify({});
         return { statusCode: 200, headers: CORS, body };
       } catch (err) {
+        logger.error('s3.profile_read_failed', { request_id: context?.awsRequestId, user_id: callerId, error: err.message });
+        Sentry.captureException(err);
         return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: err.message }) };
       }
     }
@@ -110,6 +122,8 @@ export const handler = async (event) => {
         });
         return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true }) };
       } catch (err) {
+        logger.error('s3.profile_write_failed', { request_id: context?.awsRequestId, user_id: callerId, error: err.message });
+        Sentry.captureException(err);
         return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: err.message }) };
       }
     }
@@ -129,6 +143,8 @@ export const handler = async (event) => {
       if (raw === null) return { statusCode: 404, headers: CORS, body: JSON.stringify([]) };
       return { statusCode: 200, headers: CORS, body: raw };
     } catch (err) {
+      logger.error('s3.collection_read_failed', { request_id: context?.awsRequestId, user_id: callerId, error: err.message });
+      Sentry.captureException(err);
       return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: err.message }) };
     }
   }
@@ -152,9 +168,11 @@ export const handler = async (event) => {
       await s3Put(`collections/${callerId}.json`, games);
       return { statusCode: 200, headers: CORS, body: JSON.stringify({ saved: games.length }) };
     } catch (err) {
+      logger.error('s3.collection_write_failed', { request_id: context?.awsRequestId, user_id: callerId, error: err.message });
+      Sentry.captureException(err);
       return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: err.message }) };
     }
   }
 
   return { statusCode: 405, headers: CORS, body: JSON.stringify({ error: 'Method not allowed' }) };
-};
+});

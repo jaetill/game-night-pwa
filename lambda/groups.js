@@ -16,6 +16,8 @@
 
 'use strict';
 
+const { Sentry } = require('./lib/sentry');
+const logger = require('./lib/logger');
 const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
 
 const s3     = new S3Client({ region: process.env.AWS_REGION || 'us-east-2' });
@@ -106,7 +108,13 @@ async function handleDelete(userId, body, CORS) {
 
 // ── Main handler ──────────────────────────────────────────
 
-exports.handler = async (event) => {
+exports.handler = Sentry.wrapHandler(async (event, context) => {
+  logger.info('handler.invoked', {
+    request_id: context?.awsRequestId,
+    method: event.httpMethod,
+    resource: event.resource,
+  });
+
   const CORS = corsHeaders(event);
 
   if (event.httpMethod === 'OPTIONS') {
@@ -135,7 +143,8 @@ exports.handler = async (event) => {
 
     return respond(405, { error: 'Method not allowed' }, CORS);
   } catch (e) {
-    console.error('groups handler error:', e);
+    logger.error('handler.error', { request_id: context?.awsRequestId, error: e.message });
+    Sentry.captureException(e);
     return respond(500, { error: 'Internal server error' }, CORS);
   }
-};
+});

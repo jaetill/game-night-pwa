@@ -11,6 +11,8 @@
 
 'use strict';
 
+const { Sentry } = require('./lib/sentry');
+const logger = require('./lib/logger');
 const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
 
 const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-2' });
@@ -39,7 +41,13 @@ function respond(status, body, headers) {
 
 // ── Handler ───────────────────────────────────────────────
 
-exports.handler = async (event) => {
+exports.handler = Sentry.wrapHandler(async (event, context) => {
+  logger.info('handler.invoked', {
+    request_id: context?.awsRequestId,
+    method: event.httpMethod,
+    resource: event.resource,
+  });
+
   const CORS = corsHeaders(event);
 
   if (event.httpMethod === 'OPTIONS') {
@@ -66,7 +74,8 @@ exports.handler = async (event) => {
     if (Array.isArray(parsed)) nights = parsed;
   } catch (e) {
     if (e.name !== 'NoSuchKey') {
-      console.error('S3 load failed', e);
+      logger.error('s3.load_failed', { request_id: context?.awsRequestId, key: 'gameNights.json', error: e.message });
+      Sentry.captureException(e);
       return respond(500, { error: 'Could not load game nights' }, CORS);
     }
     // No file yet — start fresh
@@ -116,9 +125,11 @@ exports.handler = async (event) => {
       ContentType: 'application/json',
     }));
   } catch (e) {
-    console.error('S3 write failed', e);
+    logger.error('s3.write_failed', { request_id: context?.awsRequestId, key: 'gameNights.json', error: e.message });
+    Sentry.captureException(e);
     return respond(500, { error: 'Could not save game night' }, CORS);
   }
 
+  logger.info('event.created', { request_id: context?.awsRequestId, event_id: newEvent.id });
   return respond(201, { id: newEvent.id, event: newEvent }, CORS);
-};
+});

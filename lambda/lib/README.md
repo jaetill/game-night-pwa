@@ -7,9 +7,11 @@ Shared modules for the 8 Lambda functions per platform ADR-0009.
 - `sentry.js` — Sentry AWS Serverless SDK init. Wrap handlers with `Sentry.wrapHandler(...)` to capture errors.
 - `logger.js` — structured JSON logger. Outputs OTEL-compatible fields to CloudWatch Logs.
 
-## Per-Lambda integration (deferred from initial platform integration)
+## Per-Lambda integration
 
-Each handler should be updated to:
+**Status:** all 8 handlers wrapped on 2026-05-09. The pattern below is preserved for reference and for any future Lambdas.
+
+Each handler is updated to:
 
 ```javascript
 const { Sentry } = require('./lib/sentry');   // initializes Sentry on cold start
@@ -49,3 +51,7 @@ For `bggProxy.mjs` (ESM), use `import` instead of `require`.
 ## After integrating
 
 Run `cd lambda && npm install` to fetch `@sentry/aws-serverless`. Then redeploy each function via the [deploy runbook](../../docs/runbooks/deploy.md).
+
+## Verification
+
+`tests/lambdaHandlers.test.js` is a load-time smoke test that ensures every handler module still parses, that `Sentry.init` runs cleanly with empty DSN, and that `exports.handler` (or ESM `handler`) remains a function. Runs as part of `npm test`.

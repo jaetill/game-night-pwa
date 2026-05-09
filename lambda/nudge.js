@@ -21,6 +21,8 @@
 
 'use strict';
 
+const { Sentry } = require('./lib/sentry');
+const logger = require('./lib/logger');
 const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
 const {
   CognitoIdentityProviderClient,
@@ -67,7 +69,13 @@ function corsHeaders(event) {
   };
 }
 
-exports.handler = async (event) => {
+exports.handler = Sentry.wrapHandler(async (event, context) => {
+  logger.info('handler.invoked', {
+    request_id: context?.awsRequestId,
+    method: event.httpMethod,
+    resource: event.resource,
+  });
+
   const secrets = await getSecrets();
   const POSTMARK_KEY = secrets.POSTMARK_API_KEY;
   const CORS = corsHeaders(event);
@@ -94,7 +102,8 @@ exports.handler = async (event) => {
     const text = await obj.Body.transformToString();
     nights = JSON.parse(text);
   } catch (e) {
-    console.error('S3 load failed', e);
+    logger.error('s3.load_failed', { request_id: context?.awsRequestId, key: 'gameNights.json', error: e.message });
+    Sentry.captureException(e);
     return respond(500, { error: 'Could not load game nights' }, CORS);
   }
 
@@ -139,7 +148,8 @@ exports.handler = async (event) => {
           ContentType: 'application/json',
         }));
       } catch (e) {
-        console.error('Failed to persist invited[] update:', e.message);
+        logger.error('s3.put_failed', { request_id: context?.awsRequestId, key: 'gameNights.json', error: e.message });
+        Sentry.captureException(e);
         return respond(500, { error: 'Could not update invited list' }, CORS);
       }
     }
@@ -152,7 +162,8 @@ exports.handler = async (event) => {
     try {
       provisioned = await ensureGameNightUser(inviteEmail);
     } catch (e) {
-      console.error(`Cognito provisioning failed for ${inviteEmail}:`, e.message);
+      logger.error('cognito.provisioning_failed', { request_id: context?.awsRequestId, error: e.message });
+      Sentry.captureException(e);
       // Fall through — still send the Postmark invite. If provisioning failed
       // for a transient reason, the host can retry; if the email was malformed
       // for Cognito's standards, the friend will see a Sign-In page where they
@@ -180,9 +191,11 @@ exports.handler = async (event) => {
         HtmlBody:      buildInviteHtml({ ...ctx, name }),
         MessageStream: 'outbound',
       });
+      logger.info('invite.sent', { request_id: context?.awsRequestId, provisioned: provisioned.result });
       return respond(200, { sent: 1, provisioned: provisioned.result, inviteListChanged }, CORS);
     } catch (e) {
-      console.error(`Postmark invite failed for ${inviteEmail}:`, e.message);
+      logger.error('postmark.invite_failed', { request_id: context?.awsRequestId, error: e.message });
+      Sentry.captureException(e);
       return respond(500, { error: `Failed to send invite: ${e.message}` }, CORS);
     }
   }
@@ -242,13 +255,15 @@ exports.handler = async (event) => {
       });
       sent++;
     } catch (e) {
-      console.error(`Postmark failed for ${email}:`, e.message);
+      logger.error('postmark.nudge_failed', { request_id: context?.awsRequestId, error: e.message });
+      Sentry.captureException(e);
       errors.push({ email, error: e.message });
     }
   }
 
+  logger.info('nudge.complete', { request_id: context?.awsRequestId, sent, total: targets.length, errors: errors.length });
   return respond(200, { sent, total: targets.length, errors }, CORS);
-};
+});
 
 // ── Helpers ───────────────────────────────────────────────
 

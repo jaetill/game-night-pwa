@@ -16,6 +16,8 @@
 
 'use strict';
 
+const { Sentry } = require('./lib/sentry');
+const logger = require('./lib/logger');
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
@@ -47,7 +49,13 @@ function isKeyAllowed(key, callerId) {
   return false;
 }
 
-exports.handler = async (event) => {
+exports.handler = Sentry.wrapHandler(async (event, context) => {
+  logger.info('handler.invoked', {
+    request_id: context?.awsRequestId,
+    method: event.httpMethod,
+    resource: event.resource,
+  });
+
   const CORS = corsHeaders(event);
 
   if (event.httpMethod === 'OPTIONS') {
@@ -67,7 +75,8 @@ exports.handler = async (event) => {
     const url = await getSignedUrl(client, command, { expiresIn: 60 });
     return respond(200, { url }, CORS);
   } catch (err) {
-    console.error('Presign failed:', err);
+    logger.error('presign.failed', { request_id: context?.awsRequestId, key, error: err.message });
+    Sentry.captureException(err);
     return respond(500, { error: err.message }, CORS);
   }
-};
+});
