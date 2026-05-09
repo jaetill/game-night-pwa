@@ -138,7 +138,10 @@ exports.handler = async (event) => {
   }
 
   const violation = validateChanges(current, incoming, userId);
-  if (violation) return respond(403, { error: violation }, CORS);
+  if (violation) {
+    console.warn(`Upload rejected for ${userId}: ${violation}`);
+    return respond(403, { error: violation }, CORS);
+  }
 
   try {
     await s3.send(new PutObjectCommand({
