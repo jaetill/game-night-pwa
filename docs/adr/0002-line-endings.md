@@ -69,9 +69,9 @@ Chosen option: **Option A — `.gitattributes` + renormalize**, because it's the
 
 ## Implementation notes
 
-- `.gitattributes` (this commit): `* text=auto eol=lf` plus explicit `text eol=lf` for `*.sh` and binary markers for common binary formats.
-- After the file lands: `git add --renormalize .` rewrites every file's working-tree state to match the policy.
-- Add the resulting normalization commit's SHA to `.git-blame-ignore-revs` so `git blame` skips it by default for IDEs that respect it.
+- `.gitattributes` (committed alongside this ADR): `* text=auto eol=lf` plus explicit `text eol=lf` for `*.sh` and binary markers for common binary formats.
+- `git add --renormalize .` was run after the file landed. In this case it produced **no** whitespace-only diff because Prettier had already converted the working-tree files to LF before this commit; the index already matched. No `.git-blame-ignore-revs` entry is needed.
+- If a future commit ever does mass-rewrap or mechanical reformat, land it in its own commit and add the SHA to `.git-blame-ignore-revs` so IDEs that respect it skip the noise.
 - This ADR is project-local for now. If the policy proves to be the right default for all platform-adopting projects, it should be promoted to a platform standard or platform-level ADR.
 
 ## Links

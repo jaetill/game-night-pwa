@@ -1,0 +1,14 @@
+name: claude-pr-review
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  ai-review:
+    uses: jaetill/agentic-dev-environment/.github/workflows/claude-pr-review.yml@main
+    secrets: inherit

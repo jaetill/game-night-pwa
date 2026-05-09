@@ -281,3 +281,65 @@ Claude Code picks it up automatically on startup.
 - **Access-token user-pool ops** (e.g. UpdateUserAttributes for the deferred profile sync) require the `aws.cognito.signin.user.admin` scope. Already granted in this client's allowed scopes.
 - `VITE_ADMIN_NAMES` controls who sees host controls — set in GitHub secrets.
 - BGG XML API has CORS restrictions — bggProxy Lambda exists to work around this.
+
+---
+
+## Platform inheritance
+
+This project adopts the [Agentic Dev Environment](https://github.com/jaetill/agentic-dev-environment) platform. The platform's standards (11) and ADRs (12+) define how this project is operated. Project-specific deviations are documented in [docs/adr/0001-platform-adoption.md](docs/adr/0001-platform-adoption.md).
+
+### Inherited platform standards
+
+- [01 Source control](https://github.com/jaetill/agentic-dev-environment/blob/main/docs/standards/01-source-control.md): Conventional Commits + SSH signing + squash merge + Strict branch protection (on `master` per project ADR-0001)
+- [02 CI/CD](https://github.com/jaetill/agentic-dev-environment/blob/main/docs/standards/02-ci-cd.md): AI shipping authority; 5 ADR-gated change categories
+- [03 Testing](https://github.com/jaetill/agentic-dev-environment/blob/main/docs/standards/03-testing.md): tiered coverage; immediate flake fix-or-remove
+- [04 Quality gates](https://github.com/jaetill/agentic-dev-environment/blob/main/docs/standards/04-quality-gates.md): ESLint pragmatic-strict; full security stack
+- [05 Documentation](https://github.com/jaetill/agentic-dev-environment/blob/main/docs/standards/05-documentation.md): MADR 4.x ADRs; 6-section runbooks; MkDocs Material
+- [06 Observability](https://github.com/jaetill/agentic-dev-environment/blob/main/docs/standards/06-observability.md): JSON logs + Sentry + CloudWatch + Grafana
+- [07 Secrets](https://github.com/jaetill/agentic-dev-environment/blob/main/docs/standards/07-secrets.md): 1Password CLI for personal; AWS Secrets Manager for app
+- [08 IaC](https://github.com/jaetill/agentic-dev-environment/blob/main/docs/standards/08-iac.md): OpenTofu (retrofit pending — see Phase 6 of integration plan)
+- [09 Release management](https://github.com/jaetill/agentic-dev-environment/blob/main/docs/standards/09-release-management.md): release-please; auto-merge release PRs
+- [10 AI workflows](https://github.com/jaetill/agentic-dev-environment/blob/main/docs/standards/10-ai-workflows.md): head agent + 12 specialist subagents
+- [11 User feedback](https://github.com/jaetill/agentic-dev-environment/blob/main/docs/standards/11-user-feedback.md): Sentry User Feedback + custom form → GitHub Issues → triage-bot
+
+### Project-specific deviations (per ADR-0001)
+
+- **Default branch:** `master` (not platform-default `main`)
+- **Frontend deploy:** GitHub Pages (not platform-default Vercel)
+- **Backend language:** Node.js CommonJS (not platform-default Python)
+- **AWS region:** `us-east-2` (not platform-default `us-east-1`)
+- **Email:** Postmark (not platform-default SES)
+- **Auth:** shared Cognito user pool (not project-controlled IAM)
+- **`.claude/`:** additive to existing setup; do not rewrite the worktree-based parallel-agent pattern that's already there
+
+### Memory hierarchy
+
+- **Cowork user-spaces memory** (`~/AppData/Roaming/Claude/.../spaces/<id>/memory/`): cross-project knowledge about Jason and his preferences. Persists across all projects.
+- **Project-local `memory/`** (this directory): project-specific working notes (existing — do not modify).
+- **`CLAUDE.md`** (this file): project context for Claude Code; recommended ≤200 lines per ADR-0008 — this file currently exceeds, revisit during a future cleanup.
+
+### AI configuration
+
+The platform's 12 specialist subagents are installed at `.claude/agents/`. The 10 platform slash commands are at `.claude/commands/`. The Mixed-strictness hook policy is at `.claude/settings.json` + `.claude/hooks/`. The existing `.claude/worktrees/` setup remains untouched. The project's `.claude/mcp.json` (gitignored) and `.claude/settings.local.json` (gitignored) are also untouched.
+
+### `mcp/` (existing)
+
+The custom MCP server at `mcp/` is application code — it is NOT touched by the platform integration. It continues to be configured via `.claude/mcp.json` (gitignored).
+
+### Platform integration status (2026-05-09)
+
+| Phase | Status |
+|---|---|
+| Phase 1 — Documentation | ✅ Complete (docs/, mkdocs.yml, docs.yml workflow) |
+| Phase 2 — AI configuration | ✅ Complete (12 agents, 10 commands, 10 hooks, settings.json) |
+| Phase 3 — Quality gates | ✅ Complete (ESLint, Prettier, pre-commit, lint-staged, commitlint, vitest tiered coverage) |
+| Phase 4 — CI workflows | ✅ Complete (claude-pr-review, release-please, deploy.yml augmented with Sentry release step) |
+| Phase 5 — Observability | 🟨 Partial (Sentry frontend init wired; lambda/lib/sentry.js + lambda/lib/logger.js shared modules; per-Lambda integration deferred) |
+| Phase 6 — IaC retrofit | 🟦 Deferred (capture existing AWS as Terraform; ~500 lines; multi-PR effort) |
+| Phase 7 — User feedback Lambda | 🟦 Deferred (depends on Phase 5 + new Lambda deployment) |
+
+After this integration:
+- Run `npm install` to fetch new devDependencies
+- Run `cd lambda && npm install` to fetch `@sentry/aws-serverless`
+- Set up Sentry account + DSN, then add to GitHub repo secrets as `VITE_SENTRY_DSN` (frontend) and `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` (release tracking)
+- Add Sentry-related env vars to each Lambda's runtime config when ready to integrate per-Lambda Sentry wrapping

@@ -1,0 +1,37 @@
+# Per platform Standard 04 — ≤10s budget on a typical commit.
+# Full lint/test battery runs in CI; pre-commit is fast checks only.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: '\.claude/worktrees/.*'
+      - id: end-of-file-fixer
+        exclude: '\.claude/worktrees/.*'
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: check-merge-conflict
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.2
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
+    rev: v9.16.0
+    hooks:
+      - id: commitlint
+        stages: [commit-msg]
+        additional_dependencies: ['@commitlint/config-conventional']
+
+  - repo: local
+    hooks:
+      - id: lint-staged
+        name: lint-staged (eslint + prettier on changed files only)
+        entry: npx lint-staged
+        language: system
+        types: [text]
+        pass_filenames: false

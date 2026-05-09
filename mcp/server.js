@@ -7,8 +7,15 @@
  * the user opening a browser.
  *
  * Configuration (environment variables):
- *   GAME_NIGHT_API_KEY  — required: your personal API key (X-API-Key header)
- *   GAME_NIGHT_API_URL  — optional: overrides the default prod API Gateway URL
+ *   GAME_NIGHT_API_KEY   — required: your personal API key (X-API-Key header)
+ *   GAME_NIGHT_USERNAME  — required: your Cognito username (e.g. "jaetill"),
+ *                          used to read your BGG collection from S3 for
+ *                          server-side enrichment of game IDs to titles.
+ *   GAME_NIGHT_API_URL   — optional: overrides the default prod API Gateway URL
+ *   AWS_PROFILE          — optional: AWS profile for boto3-equivalent S3 reads
+ *                          (mirrors meal-planner MCP pattern). Uses default
+ *                          credential chain if unset.
+ *   AWS_REGION           — optional: defaults to us-east-2.
  *
  * Auth dependencies (Phases 1–4 must be deployed):
  *   /create-event  — X-API-Key (Phase 4 authorizer)
@@ -16,14 +23,27 @@
  *   /groups        — X-API-Key (Phase 4 authorizer)
  *   /get-token     — X-API-Key (Phase 4 authorizer must cover this route too)
  *   /invite        — X-API-Key (Phase 4 authorizer must cover this route too)
+ *
+ * Enrichment pattern:
+ *   The collection (BGG game library) is read directly from S3 once at first
+ *   use, then cached for the process lifetime. Game IDs in event records are
+ *   resolved to titles via this cache before being returned to the LLM. This
+ *   addresses the "foreign-key without enrichment" anti-pattern: never hand
+ *   the LLM opaque IDs and expect it to translate.
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 
 const API_BASE = (process.env.GAME_NIGHT_API_URL || 'https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod').replace(/\/$/, '');
 const API_KEY  = process.env.GAME_NIGHT_API_KEY;
+const USERNAME = process.env.GAME_NIGHT_USERNAME;
+const REGION   = process.env.AWS_REGION || 'us-east-2';
+const BUCKET   = 'jaetill-game-nights';
+
+const s3 = new S3Client({ region: REGION });
 
 // ── API client ────────────────────────────────────────────────────────────────
 
@@ -76,6 +96,70 @@ async function fetchGameNights() {
   if (!res.ok) throw new Error(`Failed to download game nights: ${res.status}`);
   const nights = await res.json();
   return Array.isArray(nights) ? nights : [];
+}
+
+// ── BGG collection cache (for ID → title enrichment) ─────────────────────────
+//
+// Read the collection ONCE per process from S3 directly (mirrors meal-planner
+// MCP's pattern of using AWS creds for reads, API key for writes). Cache the
+// id→title map in module scope. Lazy: only fetched the first time enrichment
+// is needed.
+//
+// Tradeoff: stale data for the lifetime of the MCP process. Acceptable because
+// (a) collections change rarely (BGG re-import is manual), (b) MCP server
+// restarts per Claude Code session, so a fresh fetch happens per session.
+
+let _collectionCache = null;
+
+async function getCollection() {
+  if (_collectionCache !== null) return _collectionCache;
+
+  if (!USERNAME) {
+    // Degrade gracefully: skip enrichment if username isn't configured.
+    // Caller should treat empty map as "enrichment unavailable" and fall back
+    // to bare IDs. We log the gap once so the user can fix it.
+    console.error('GAME_NIGHT_USERNAME not set — skipping BGG collection load. Game IDs will not be enriched with titles.');
+    _collectionCache = {};
+    return _collectionCache;
+  }
+
+  try {
+    const obj  = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: `collections/${USERNAME}.json` }));
+    const body = await obj.Body.transformToString();
+    const collection = JSON.parse(body);
+
+    // Build an id→title map. Collection items have shape:
+    //   { id, title, thumbnail, minPlayers, maxPlayers, ... }
+    const map = {};
+    if (Array.isArray(collection)) {
+      for (const game of collection) {
+        if (game.id && game.title) map[game.id] = game.title;
+      }
+    }
+    _collectionCache = map;
+  } catch (e) {
+    if (e.name === 'NoSuchKey') {
+      console.error(`No BGG collection found at collections/${USERNAME}.json. Game IDs will not be enriched with titles.`);
+    } else {
+      console.error('Failed to load BGG collection from S3:', e.message);
+    }
+    _collectionCache = {};
+  }
+
+  return _collectionCache;
+}
+
+/**
+ * Resolve a list of BGG game IDs to a list of `{id, title}` pairs.
+ * Unknown IDs (not in the collection) get a placeholder title so the LLM
+ * still sees structured data instead of bare integers.
+ */
+async function enrichGameIds(gameIds) {
+  const map = await getCollection();
+  return gameIds.map(id => ({
+    id,
+    title: map[id] || `Unknown game (BGG ID ${id})`,
+  }));
 }
 
 // ── MCP server setup ──────────────────────────────────────────────────────────
@@ -495,13 +579,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         const gameIds = Object.keys(night.selectedGames || {});
+        // ── Foreign-key enrichment: resolve BGG IDs to titles ──
+        // Without this, the LLM sees bare integers and describes games as
+        // "game 123" — useless for a human. Enrich at the server layer.
+        const enrichedGames = await enrichGameIds(gameIds);
+        const gamesText = enrichedGames.length
+          ? enrichedGames.map(g => `${g.title} (BGG ID ${g.id})`).join(', ')
+          : 'none';
+
         const rsvps   = (night.rsvps    || []).map(r => r.userId || r);
         const lines   = [
           `Event ID:  ${night.id}`,
           `Date:      ${night.date}${night.time ? ` at ${night.time}` : ''}`,
           night.location    ? `Location:  ${night.location}`               : null,
           night.description ? `Notes:     ${night.description}`            : null,
-          `Games:     ${gameIds.join(', ') || 'none'}`,
+          `Games:     ${gamesText}`,
           `Invited:   ${(night.invited  || []).join(', ') || 'none'}`,
           `RSVP'd:    ${rsvps.join(', ')                  || 'none'}`,
           `Declined:  ${(night.declined || []).join(', ') || 'none'}`,
