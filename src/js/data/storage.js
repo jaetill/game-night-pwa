@@ -78,33 +78,27 @@ function syncGameNights(nights) {
  * The Lambda validates that the caller is authorised to make each change.
  */
 export async function pushGameNightsToCloud(nights) {
-  try {
-    const res = await authFetch(`${API_BASE}/upload-token`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(nights),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `Upload failed: ${res.status}`);
-    }
-    console.log('✅ Game nights uploaded to cloud.');
-  } catch (err) {
-    console.warn('❌ Failed to push to cloud:', err.message);
+  const res = await authFetch(`${API_BASE}/upload-token`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(nights),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Upload failed: ${res.status}`);
   }
+  console.log('✅ Game nights uploaded to cloud.');
 }
 
 /**
- * Saves nights to both local and cloud, ensuring structure consistency.
+ * Saves nights to cloud first; only commits to localStorage on success so a
+ * failed upload doesn't leave local state ahead of cloud. Throws on failure —
+ * callers catch and show toastError.
  */
 export async function saveGameNights(nights) {
   const sanitized = nights.map(sanitizeNight);
-  try {
-    syncGameNights(sanitized);
-    await pushGameNightsToCloud(sanitized);
-  } catch (err) {
-    console.warn('💾 saveGameNights failed:', err);
-  }
+  await pushGameNightsToCloud(sanitized);
+  syncGameNights(sanitized);
 }
 
 /**

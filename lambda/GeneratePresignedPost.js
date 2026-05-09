@@ -40,7 +40,10 @@ const ALLOWED_ORIGINS = new Set([
   'https://jaetill.github.io',
 ]);
 
-const HOST_ONLY = ['date', 'time', 'location', 'description', 'snacks', 'invited'];
+// Note: `invited` is NOT host-only. Non-hosts need to remove their own email
+// from `invited` when they RSVP/decline — without this, the upload was rejected
+// 403 and the entire save silently failed (storage.js used to swallow the error).
+const HOST_ONLY = ['date', 'time', 'location', 'description', 'snacks'];
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
