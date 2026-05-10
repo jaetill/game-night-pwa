@@ -11,9 +11,23 @@
 
 'use strict';
 
+const crypto = require('node:crypto');
 const { Sentry } = require('./lib/sentry');
 const logger = require('./lib/logger');
 const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
+
+/**
+ * Generate an event ID. 8-char timestamp prefix (base36) + 8 hex chars of
+ * cryptographic randomness, e.g. `m9k3z7q1-1a2b3c4d`. The previous version
+ * used Math.random which is not cryptographically random — predictable IDs
+ * could enable enumeration if a BOLA vulnerability is ever introduced
+ * elsewhere. Defense-in-depth per security-review finding on PR #3.
+ */
+function generateEventId() {
+  return Date.now().toString(36) + '-' + crypto.randomBytes(4).toString('hex');
+}
+
+module.exports.generateEventId = generateEventId;
 
 const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-2' });
 
@@ -100,7 +114,7 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
 
   // ── Build new event ──
   const newEvent = {
-    id:            Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    id:            generateEventId(),
     date:          date,
     time:          time          || '',
     location:      location      || '',
