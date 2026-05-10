@@ -46,6 +46,7 @@ Hosted at **https://gamenights.jaetill.com** (GitHub Pages frontend, AWS backend
 | `searchGames` | `searchGames-lambda-role` | Search user's BGG collection (API key auth) |
 | `groups` | `groups-lambda-role` | Manage invitation groups (API key auth) |
 | `apiKeyAuthorizer` | `apiKeyAuthorizer-lambda-role` | REQUEST authorizer: validates X-API-Key via SSM |
+| `feedback` | `feedback-lambda-role` (TBD on first deploy) | User feedback → GitHub Issue (Standard 11) |
 
 ## Lambda env vars
 | Function | Var | Source | Purpose |
@@ -55,6 +56,10 @@ Hosted at **https://gamenights.jaetill.com** (GitHub Pages frontend, AWS backend
 | `nudgeNonResponders` | `COGNITO_USER_POOL_ID` | env var | `us-east-2_xneeJzaDJ` |
 | `nudgeNonResponders` | `S3_BUCKET` | env var | `jaetill-game-nights` |
 | `nudgeNonResponders` | `APP_URL` | env var | `https://gamenights.jaetill.com/` |
+| `feedback` | `GITHUB_TOKEN` | Secrets Manager: `game-night/prod/github-token` | GitHub PAT with `issues:write` for filing feedback issues |
+| `feedback` | `GITHUB_REPO_OWNER` | env var | `jaetill` |
+| `feedback` | `GITHUB_REPO_NAME` | env var | `game-night-pwa` |
+| `feedback` | `GITHUB_SECRET_ID` | env var | Defaults to `game-night/prod/github-token` |
 
 ### Secrets Manager caching
 Secrets fetched from Secrets Manager are cached in-memory on first access (cold
@@ -85,6 +90,7 @@ Lambda (JWKS via `aws-jwt-verify`, API keys in a module-scoped Map).
 | POST | `/create-event` | createEvent | MCP | Create a new game night event |
 | GET | `/search-games` | searchGames | MCP | Search caller's BGG collection |
 | GET, POST, DELETE | `/groups` | groups | browser, MCP | Manage saved invitation groups |
+| POST | `/feedback` | feedback | browser (public) | User feedback → GitHub Issue (no auth; rate-limited per IP) |
 
 ### API key management
 Keys are stored in SSM Parameter Store at `/game-night/api-keys/{key}` (SecureString).
@@ -154,7 +160,11 @@ ui/toast.js                       — toast notifications
 ### Lambda packaging
 All Lambda source lives in `lambda/`. Most handlers are deployed as a single-file
 zip (Lambda's Node 22 runtime includes `@aws-sdk/*` and `@aws-sdk/s3-request-presigner`).
-**Exception:** `apiKeyAuthorizer` bundles `aws-jwt-verify` from `lambda/node_modules/`.
+**Exceptions:**
+- `apiKeyAuthorizer` bundles `aws-jwt-verify` from `lambda/node_modules/`.
+- All handlers now require `lambda/lib/sentry.js` + `lambda/lib/logger.js`, which depend on `@sentry/aws-serverless` from `lambda/node_modules/`.
+- `feedback` additionally bundles `@octokit/rest`.
+
 `lambda/package.json` and `lambda/package-lock.json` are committed; run
 `cd lambda && npm install` after a fresh clone to regenerate `node_modules/`
 before zipping.
@@ -174,6 +184,7 @@ resolve, so prefer Python or `tar -a` for zipping.
 | `GeneratePresignedGetUrl` | `GeneratePresignedGetUrl.handler` | `lambda/GeneratePresignedGetUrl.js` |
 | `GeneratePresignedPost` | `GeneratePresignedPost.handler` | `lambda/GeneratePresignedPost.js` |
 | `bggProxy` | `bggProxy.handler` | `lambda/bggProxy.mjs` |
+| `feedback` | `feedback.handler` | `lambda/feedback.js` + `node_modules/@octokit/rest/` |
 
 ## BGG integration
 - User enters BGG username in profile modal
@@ -336,7 +347,7 @@ The custom MCP server at `mcp/` is application code — it is NOT touched by the
 | Phase 4 — CI workflows | ✅ Complete (claude-pr-review, release-please, deploy.yml augmented with Sentry release step) |
 | Phase 5 — Observability | ✅ Complete (Sentry frontend init wired; all 8 Lambda handlers wrapped with Sentry.wrapHandler + structured logger on 2026-05-09; tests/lambdaHandlers.test.js guards regressions) |
 | Phase 6 — IaC retrofit | 🟦 Deferred (capture existing AWS as Terraform; ~500 lines; multi-PR effort) |
-| Phase 7 — User feedback Lambda | 🟦 Deferred (depends on new Lambda deployment) |
+| Phase 7 — User feedback Lambda | ✅ Code complete on 2026-05-09. lambda/feedback.js + tests/feedback.test.js (18 tests) + lambda/iam/feedback-inline.json + src/js/feedback.js widget. Requires API Gateway POST /feedback route + GitHub PAT in Secrets Manager `game-night/prod/github-token` to activate. |
 
 After this integration:
 - Run `npm install` (root) and `cd lambda && npm install` to fetch all dependencies (already done if Phase 5 wrapping landed locally)

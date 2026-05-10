@@ -32,7 +32,67 @@ Per `CLAUDE.md`, Lambdas are NOT in the deploy.yml workflow — they're deployed
      --region us-east-2
    ```
 
-3. **Verify** by invoking the function or hitting its API Gateway route and observing CloudWatch Logs (and Sentry once Phase 5 lands).
+3. **For `feedback` (first-time deploy):** see the [Feedback Lambda first-deploy](#feedback-lambda-first-deploy-phase-7) section below.
+
+4. **Verify** by invoking the function or hitting its API Gateway route and observing CloudWatch Logs and Sentry events.
+
+## Feedback Lambda first-deploy (Phase 7)
+
+The `feedback` Lambda is new in Phase 7 — initial deploy requires creating the function, IAM role, Secrets Manager secret, and API Gateway route. After that, it follows the standard manual-deploy procedure above.
+
+### Prerequisites
+- A GitHub fine-grained PAT with `issues:write` scope on `jaetill/game-night-pwa`. Generate at https://github.com/settings/tokens.
+- AWS CLI authenticated as `jaetill-dev`.
+
+### Steps
+1. **Store the GitHub token in Secrets Manager:**
+   ```bash
+   aws secretsmanager create-secret \
+     --name game-night/prod/github-token \
+     --secret-string '{"GITHUB_TOKEN":"ghp_..."}' \
+     --region us-east-2
+   ```
+
+2. **Create the IAM role:**
+   ```bash
+   # Trust policy: lambda.amazonaws.com
+   aws iam create-role --role-name feedback-lambda-role \
+     --assume-role-policy-document file://docs/runbooks/trust-policy-lambda.json
+   aws iam put-role-policy --role-name feedback-lambda-role \
+     --policy-name feedback-inline \
+     --policy-document file://lambda/iam/feedback-inline.json
+   ```
+   (If `trust-policy-lambda.json` doesn't exist yet, copy the standard Lambda assume-role trust policy from any existing function's role.)
+
+3. **Bundle and create the function:**
+   ```bash
+   cd lambda && npm install
+   cd ..
+   python build/zip.py /tmp/feedback.zip lambda  # bundles lambda/ + node_modules (incl. @octokit/rest)
+   aws lambda create-function \
+     --function-name feedback \
+     --runtime nodejs22.x \
+     --role arn:aws:iam::<acct>:role/feedback-lambda-role \
+     --handler feedback.handler \
+     --zip-file fileb:///tmp/feedback.zip \
+     --timeout 10 \
+     --memory-size 256 \
+     --environment "Variables={GITHUB_REPO_OWNER=jaetill,GITHUB_REPO_NAME=game-night-pwa,GITHUB_SECRET_ID=game-night/prod/github-token,DEPLOY_ENV=prod,LOG_LEVEL=INFO}" \
+     --region us-east-2
+   ```
+
+4. **Add the API Gateway route** (no authorizer — public endpoint):
+   - In the AWS console: API Gateway → `pufsqfvq8g` → Resources → POST /feedback → integrate with the `feedback` Lambda → no authorizer (NONE).
+   - Add OPTIONS for CORS preflight using the standard mock integration that mirrors `Access-Control-Allow-*` headers.
+   - Deploy the API to the `prod` stage.
+
+5. **Smoke test:**
+   ```bash
+   curl -X POST https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod/feedback \
+     -H 'Content-Type: application/json' \
+     -d '{"type":"other","description":"first deploy smoke test from runbook"}'
+   ```
+   Expect `201` with a feedback ID. A new GitHub Issue should appear with `feedback:user-submitted` + `type:other` labels.
 
 ## Verification
 

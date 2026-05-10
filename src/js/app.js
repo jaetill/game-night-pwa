@@ -5,6 +5,9 @@ import { loadProfile } from './auth/profile.js';
 import { buildDirectoryFromNights } from './utils/userDirectory.js';
 import { toastError } from './ui/toast.js';
 import { isAuthenticated, startLogin, parseIdToken } from './auth.js';
+// Side-effect import: mounts the "💬 Feedback" button (Standard 11 Tier 2).
+// Available before auth so unauthenticated users can also report issues.
+import './feedback.js';
 
 const PORTAL_URL     = 'https://jaetill.com';
 const REQUIRED_GROUP = 'game-night-users';

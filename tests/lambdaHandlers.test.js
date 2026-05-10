@@ -27,6 +27,7 @@ const cjsHandlers = [
   'createEvent',
   'searchGames',
   'groups',
+  'feedback',
 ];
 
 describe('lambda handlers load', () => {
