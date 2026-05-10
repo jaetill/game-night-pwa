@@ -12,13 +12,17 @@ description = "Acknowledged false positives reviewed 2026-05-10"
 
 # Files that legitimately contain key-shaped content for testing/documentation.
 paths = [
-  # Pre-existing test HTML files that were removed from the working tree but
-  # remain in git history. Contained AWS-access-key-IDs in S3 presigned URLs
-  # generated during early prototyping (June 2025). The presigned URLs have
-  # long since expired; access key IDs are identifiers, not secrets (the
-  # signing key was never in the URL).
+  # Files that were removed from the working tree but remain in git history.
+  # Contained AWS-access-key-IDs embedded in S3 presigned URLs generated
+  # during early prototyping (June 2025). The presigned URLs have long since
+  # expired; access key IDs are identifiers (not secrets) — the signing key
+  # was never in the URL.
   '''^testPostUpload\.html$''',
   '''^s3-upload-test\.html$''',
+  # Legacy root-level app.js, replaced by src/js/app.js during the modular
+  # restructure (commits 18f65c2..0af1590, 2025). Last contained the same
+  # presigned-URL test fixture before being deleted. Not in the working tree.
+  '''^app\.js$''',
 ]
 
 # Patterns that match deliberate test/example values, not real credentials.
