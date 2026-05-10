@@ -1,10 +1,11 @@
 import { ownedGames, saveGameNights } from '../data/index.js';
 import { joinGame, withdrawFromGame, isGameFull } from '../utils/index.js';
-import { renderGameNights } from './renderGameNights.js';
 import { isHost } from '../auth/permissions.js';
 import { getDisplayName } from '../utils/userDirectory.js';
 import { btn } from '../ui/elements.js';
 import { toastSuccess, toastError, toastInfo } from '../ui/toast.js';
+
+import { renderGameNights } from './renderGameNights.js';
 
 // Deterministic hue from a string so the same person always gets the same color
 function nameHue(str) {

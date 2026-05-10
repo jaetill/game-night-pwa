@@ -1,7 +1,8 @@
 import { getProfile, saveProfile } from '../auth/profile.js';
 import { getGroups, loadGroups, saveGroup, deleteGroup } from '../auth/groups.js';
-import { openImportModal } from './renderImportModal.js';
 import { toastSuccess, toastError } from '../ui/toast.js';
+
+import { openImportModal } from './renderImportModal.js';
 
 export async function openProfileModal() {
   const modal = document.getElementById('profileModal');

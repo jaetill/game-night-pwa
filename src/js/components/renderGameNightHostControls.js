@@ -1,9 +1,6 @@
-import { openGameSelectionModal } from './gameSelectionModal.js';
 import { syncAndRender } from '../utils/index.js';
 import { saveGameNights } from '../data/index.js';
-import { renderGameNightForm } from './renderGameNightForm.js';
 import { getCurrentUser } from '../auth/userStore.js';
-import { renderGameNights } from './renderGameNights.js';
 import { btn, input } from '../ui/elements.js';
 import { toastSuccess, toastError, toastInfo } from '../ui/toast.js';
 import { DEBUG_MODE } from '../config.js';
@@ -11,6 +8,10 @@ import { injectPreviewData, clearPreviewData, hasPreviewData } from '../utils/pr
 import { getDisplayName } from '../utils/userDirectory.js';
 import { authFetch } from '../utils/authFetch.js';
 import { getGroups, saveGroup } from '../auth/groups.js';
+
+import { renderGameNights } from './renderGameNights.js';
+import { renderGameNightForm } from './renderGameNightForm.js';
+import { openGameSelectionModal } from './gameSelectionModal.js';
 
 const API_BASE = 'https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod';
 

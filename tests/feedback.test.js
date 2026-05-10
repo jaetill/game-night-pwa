@@ -66,10 +66,10 @@ const VALID_BODY = {
 };
 
 describe('lambda/feedback.js — handler', () => {
-  let logSpy;
-
   beforeEach(() => {
-    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    // Silence the structured logger so test output stays readable;
+    // restoreAllMocks() in afterEach unwinds the spy.
+    vi.spyOn(console, 'log').mockImplementation(() => {});
   });
 
   afterEach(() => {

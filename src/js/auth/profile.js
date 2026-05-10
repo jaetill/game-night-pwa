@@ -1,6 +1,7 @@
 import { parseIdToken } from '../auth.js';
-import { getCurrentUser, setCurrentUser } from './userStore.js';
 import { authFetch } from '../utils/authFetch.js';
+
+import { getCurrentUser, setCurrentUser } from './userStore.js';
 
 const PROFILE_KEY = 'userProfile';
 const API_BASE    = 'https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod';

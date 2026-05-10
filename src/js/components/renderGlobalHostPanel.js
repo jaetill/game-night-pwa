@@ -1,9 +1,10 @@
-import { renderGameNightForm } from './renderGameNightForm.js';
-import { renderGameNights } from './renderGameNights.js';
 import { getCurrentUser } from '../auth/userStore.js';
 import { loadGameNights, saveGameNights } from '../data/index.js';
 import { btn } from '../ui/elements.js';
 import { toastError } from '../ui/toast.js';
+
+import { renderGameNights } from './renderGameNights.js';
+import { renderGameNightForm } from './renderGameNightForm.js';
 
 export function renderGlobalHostPanel() {
   let panel = document.getElementById('schedulerSection');

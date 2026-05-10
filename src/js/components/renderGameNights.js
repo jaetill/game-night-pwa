@@ -1,11 +1,12 @@
+import { isHost } from '../auth/permissions.js';
+import { btn } from '../ui/elements.js';
+
 import { renderGameNightSummary } from './renderGameNightSummary.js';
 import { renderRSVP, renderAttendeeGroups } from './renderRSVP.js';
 import { renderSuggestions } from './renderSuggestions.js';
 import { renderSelectedGames } from './renderSelectedGames.js';
 import { renderHostGameControls, renderHostActions } from './renderGameNightHostControls.js';
 import { renderFood } from './renderFood.js';
-import { isHost } from '../auth/permissions.js';
-import { btn } from '../ui/elements.js';
 
 // Persisted across re-renders so expansion state survives syncAndRender calls.
 const expandedNightIds = new Set();
