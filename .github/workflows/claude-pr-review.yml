@@ -61,6 +61,53 @@ jobs:
             --allowed-tools Bash,Read,Glob,Grep
             --append-system-prompt "Follow the platform standards in docs/standards/."
 
+  functional-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm ci --prefix lambda
+      - name: Run functional-tester agent
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          show_full_output: true
+          prompt: |
+            Act as the functional-tester subagent defined in .claude/agents/functional-tester.md.
+
+            Steps:
+            1. Run the project's test suite: `npm test 2>&1 | tee /tmp/test-output.txt`
+            2. Inspect /tmp/test-output.txt for pass/fail counts and failure classification.
+            3. If failures exist, classify each per the agent spec:
+               REAL BUG / TEST BUG / ENVIRONMENT / FLAKE.
+               For REAL BUG: read the failing test + the code it tests
+               (use `git diff origin/${{ github.base_ref }}...HEAD` for diff context).
+            4. Post a SINGLE PR comment via:
+                 gh pr comment ${{ github.event.pull_request.number }} --body-file -
+               (read body from stdin via heredoc).
+
+            The comment must:
+              - Lead with `## Functional Test Run (claude-sonnet-4-6)`
+              - State pass/fail counts and total runtime
+              - For each failure: classification, file:line, suspected cause, reproduction command
+              - End with a one-line verdict: PASS, FAIL (blocking), or FAIL (non-blocking due to environment)
+              - Say "All tests pass." if there are no failures
+          claude_args: |
+            --model claude-sonnet-4-6
+            --permission-mode bypassPermissions
+            --allowed-tools Bash,Read,Glob,Grep
+            --append-system-prompt "Follow the platform standards in docs/standards/."
+
   security-review:
     runs-on: ubuntu-latest
     timeout-minutes: 15
