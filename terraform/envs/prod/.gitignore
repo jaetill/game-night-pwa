@@ -1,0 +1,20 @@
+# Local OpenTofu / Terraform artifacts.
+# NOTE: .terraform.lock.hcl IS committed (provider version pinning travels
+# with the repo per OpenTofu / Terraform docs).
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+plan.bin
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+# .tfvars files often contain secrets; ignore by default. If a *.tfvars file
+# is intentionally non-secret and meant to be shared, override per-file.
+*.auto.tfvars
+*.tfvars

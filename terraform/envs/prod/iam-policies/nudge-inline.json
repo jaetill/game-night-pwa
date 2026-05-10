@@ -1,0 +1,30 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "ReadWriteGameNights",
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetObject",
+                "s3:PutObject"
+            ],
+            "Resource": "arn:aws:s3:::jaetill-game-nights/gameNights.json"
+        },
+        {
+            "Sid": "ReadCognitoUser",
+            "Effect": "Allow",
+            "Action": "cognito-idp:AdminGetUser",
+            "Resource": "arn:aws:cognito-idp:us-east-2:214599503944:userpool/us-east-2_xneeJzaDJ"
+        },
+        {
+            "Sid": "ProvisionInvitedUsers",
+            "Effect": "Allow",
+            "Action": [
+                "cognito-idp:ListUsers",
+                "cognito-idp:AdminCreateUser",
+                "cognito-idp:AdminAddUserToGroup"
+            ],
+            "Resource": "arn:aws:cognito-idp:us-east-2:214599503944:userpool/us-east-2_xneeJzaDJ"
+        }
+    ]
+}
