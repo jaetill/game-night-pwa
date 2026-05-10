@@ -32,10 +32,21 @@ jobs:
           # only one needs to be set.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # use_sticky_comment creates a PR comment that Claude writes its
+          # findings into via the mcp__github_comment__update_claude_comment
+          # tool. Without it, the agent runs but has no comment to write to
+          # and the work is discarded. (Inline file/line findings are buffered
+          # via the inline-comment tool and posted by the post-action step.)
+          use_sticky_comment: true
           prompt: |
             Act as the code-reviewer subagent defined in .claude/agents/code-reviewer.md.
             Review the diff between origin/${{ github.base_ref }} and HEAD.
-            Post findings as a PR review comment per the agent's output format.
+
+            Post your top-level summary by calling the
+            mcp__github_comment__update_claude_comment tool. For specific
+            file/line findings, use mcp__github_inline_comment__create_inline_comment.
+            Group findings by severity (Critical / High / Medium / Low / Nit)
+            per the agent's output format.
           claude_args: |
             --model claude-sonnet-4-6
             --append-system-prompt "Follow the platform standards in docs/standards/."
@@ -54,10 +65,15 @@ jobs:
           # only one needs to be set.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          use_sticky_comment: true
           prompt: |
             Act as the security-reviewer subagent defined in .claude/agents/security-reviewer.md.
             Run a security review on the diff between origin/${{ github.base_ref }} and HEAD.
-            Post findings as a PR review comment grouped by severity.
+
+            Post your top-level summary by calling the
+            mcp__github_comment__update_claude_comment tool. For specific
+            file/line findings, use mcp__github_inline_comment__create_inline_comment.
+            Group findings by severity (Critical / High / Medium / Low).
           claude_args: |
             --model claude-sonnet-4-6
             --append-system-prompt "Follow the platform standards in docs/standards/."
@@ -85,10 +101,16 @@ jobs:
             categories="$categories destructive-migration"
           fi
 
-          # New external dep (heuristic: any new top-level dep added in package.json)
+          # New external dep — inspect only added lines that look like a
+          # dependency entry (excludes top-level keys like "version", "name",
+          # "description", "main", which release-please bumps regularly and
+          # which previously caused false-positive new-external-dep flags).
           changed_manifest=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E 'package\.json|pyproject\.toml|Cargo\.toml|go\.mod' || true)
           if [[ -n "$changed_manifest" ]]; then
-            if git diff origin/${{ github.base_ref }}...HEAD -- $changed_manifest | grep -E '^\+\s*"[^"]+":\s*"\^?[0-9]' >/dev/null; then
+            if git diff origin/${{ github.base_ref }}...HEAD -- $changed_manifest \
+                 | grep -E '^\+\s*"[^"]+":\s*"\^?[0-9]' \
+                 | grep -Ev '^\+\s*"(version|name|description|main|module|types|license|author|homepage|repository|bugs|engines|private)":' \
+                 >/dev/null; then
               requires_adr=true
               categories="$categories new-external-dep"
             fi
@@ -154,11 +176,21 @@ jobs:
           # only one needs to be set.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          use_sticky_comment: true
           prompt: |
             Act as the architect subagent defined in .claude/agents/architect.md (headless mode).
             This PR contains changes in ADR-gated categories: ${{ needs.destructive-change-check.outputs.categories }}.
-            Draft a paired ADR in MADR 4.x format addressing the categories.
-            Submit as a PR commit adding `docs/adr/NNNN-*.md` with `Status: Proposed`.
+
+            First, inspect the diff to confirm the gating is correct. If the
+            categorization is a false positive (e.g. release-please bumping
+            `"version"` looks like new-external-dep but isn't), say so via
+            mcp__github_comment__update_claude_comment and stop — do not
+            commit a no-op ADR.
+
+            Otherwise, draft a paired ADR in MADR 4.x format addressing the
+            real categories and commit it as `docs/adr/NNNN-*.md` with
+            `Status: Proposed`. Post a brief summary of what you drafted via
+            mcp__github_comment__update_claude_comment.
           claude_args: |
             --model claude-opus-4-6
             --append-system-prompt "Follow MADR 4.x format with the platform's three documented extensions."
