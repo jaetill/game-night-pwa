@@ -82,10 +82,12 @@ jobs:
           # Ensure the incident:p0 label exists (idempotent).
           gh label create incident:p0 --color B60205 --description "Synchronous incident — incident-responder agent paged" 2>/dev/null || true
           gh label create source:sentry --color 1D76DB --description "Issue created by a Sentry alert" 2>/dev/null || true
-          # Create the issue and capture its number.
-          number=$(gh issue create --title "$T" --body "$B" --label "incident:p0,source:sentry,smoke-test" --json number --jq .number)
+          # Create the issue. `gh issue create` prints the issue URL on
+          # stdout; extract the trailing number.
+          url=$(gh issue create --title "$T" --body "$B" --label "incident:p0,source:sentry,smoke-test")
+          number=${url##*/}
           echo "issue_number=$number" >> "$GITHUB_OUTPUT"
-          echo "Created smoke-test issue #$number"
+          echo "Created smoke-test issue #$number ($url)"
       - name: Resolve target issue number
         id: target
         env:
