@@ -206,42 +206,32 @@ resource "aws_iam_role_policy" "github_deploy" {
 }
 
 # ════════════════════════════════════════════════════════════════════════════
-# AWS-console-generated managed policies attached to bggProxy /
-# GeneratePresignedGetUrl / GeneratePresignedPost. Imported as customer-
-# managed policies to preserve names; can be replaced with inline policies
-# in a future cleanup pass once the retrofit is stable.
+# Logs policies for bggProxy / GeneratePresignedGetUrl / GeneratePresignedPost.
+#
+# These were originally console-generated AWSLambdaBasicExecutionRole-* managed
+# policies (with auto-generated UUID-suffixed names). Refactored to inline
+# policies for naming consistency with the other 6 lambda roles, which all use
+# inline `*-logs` policies.
+#
+# Terraform creates the new inline policies before destroying the old managed
+# policies + attachments, so the role always has logs permissions throughout
+# the apply (no permission gap).
 # ════════════════════════════════════════════════════════════════════════════
 
-resource "aws_iam_policy" "bggProxy_basic_exec" {
-  name   = "AWSLambdaBasicExecutionRole-23457392-080c-49c2-849d-db688eae1193"
-  path   = "/service-role/"
-  policy = file("${path.module}/iam-policies/managed-bggProxy-basic-exec.json")
-  # description is unset on the live policy; setting it forces replacement.
+resource "aws_iam_role_policy" "bggProxy_logs" {
+  name   = "bggProxy-logs"
+  role   = aws_iam_role.bggProxy.id
+  policy = file("${path.module}/iam-policies/bggProxy-logs.json")
 }
 
-resource "aws_iam_role_policy_attachment" "bggProxy_basic_exec" {
-  role       = aws_iam_role.bggProxy.name
-  policy_arn = aws_iam_policy.bggProxy_basic_exec.arn
+resource "aws_iam_role_policy" "GeneratePresignedGetUrl_logs" {
+  name   = "GeneratePresignedGetUrl-logs"
+  role   = aws_iam_role.GeneratePresignedGetUrl.id
+  policy = file("${path.module}/iam-policies/GeneratePresignedGetUrl-logs.json")
 }
 
-resource "aws_iam_policy" "GeneratePresignedGetUrl_basic_exec" {
-  name   = "AWSLambdaBasicExecutionRole-334872a5-7c1a-48f2-bc15-8fb429e8188e"
-  path   = "/service-role/"
-  policy = file("${path.module}/iam-policies/managed-GeneratePresignedGetUrl-basic-exec.json")
-}
-
-resource "aws_iam_role_policy_attachment" "GeneratePresignedGetUrl_basic_exec" {
-  role       = aws_iam_role.GeneratePresignedGetUrl.name
-  policy_arn = aws_iam_policy.GeneratePresignedGetUrl_basic_exec.arn
-}
-
-resource "aws_iam_policy" "GeneratePresignedPost_basic_exec" {
-  name   = "AWSLambdaBasicExecutionRole-499b99fb-9404-4328-a2c2-d0c8ce501ce8"
-  path   = "/service-role/"
-  policy = file("${path.module}/iam-policies/managed-GeneratePresignedPost-basic-exec.json")
-}
-
-resource "aws_iam_role_policy_attachment" "GeneratePresignedPost_basic_exec" {
-  role       = aws_iam_role.GeneratePresignedPost.name
-  policy_arn = aws_iam_policy.GeneratePresignedPost_basic_exec.arn
+resource "aws_iam_role_policy" "GeneratePresignedPost_logs" {
+  name   = "GeneratePresignedPost-logs"
+  role   = aws_iam_role.GeneratePresignedPost.id
+  policy = file("${path.module}/iam-policies/GeneratePresignedPost-logs.json")
 }
