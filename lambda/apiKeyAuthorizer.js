@@ -110,6 +110,23 @@ async function authenticateApiKey(apiKey, methodArn, context) {
   return allow(userId, methodArn);
 }
 
+// aws-jwt-verify error names that represent expected user-driven failures.
+// Other errors (e.g. JWKS endpoint outages, network) are unexpected and should
+// surface as Sentry events even though we still return Deny to API Gateway.
+const EXPECTED_JWT_ERRORS = new Set([
+  'JwtExpiredError',
+  'JwtInvalidClaimError',
+  'JwtInvalidIssuerError',
+  'JwtInvalidAudienceError',
+  'JwtInvalidScopeError',
+  'JwtInvalidSignatureError',
+  'JwtInvalidSignatureAlgorithmError',
+  'JwtNotBeforeError',
+  'JwtParseError',
+  'JwtWithoutValidKidError',
+  'KidNotFoundInJwksError',
+]);
+
 async function authenticateJwt(authHeader, methodArn, context) {
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
   if (!token) return deny(methodArn);
@@ -118,7 +135,14 @@ async function authenticateJwt(authHeader, methodArn, context) {
   try {
     payload = await idTokenVerifier.verify(token);
   } catch (e) {
-    logger.info('auth.jwt_invalid', { request_id: context?.awsRequestId, error: e.message });
+    if (EXPECTED_JWT_ERRORS.has(e.name)) {
+      // User-driven: bad/expired/wrong-issuer token. Info-level only.
+      logger.info('auth.jwt_invalid', { request_id: context?.awsRequestId, error_name: e.name });
+    } else {
+      // Unexpected: JWKS fetch failure, network, etc. Capture so we notice.
+      logger.error('auth.jwt_verify_failed', { request_id: context?.awsRequestId, error_name: e.name, error: e.message });
+      Sentry.captureException(e);
+    }
     return deny(methodArn);
   }
 

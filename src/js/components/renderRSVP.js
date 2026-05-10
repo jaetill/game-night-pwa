@@ -6,7 +6,7 @@ import { sanitizeNight } from '../data/storage.js';
 import { DEBUG_MODE } from '../config.js';
 import { getDisplayName } from '../utils/userDirectory.js';
 import { btn } from '../ui/elements.js';
-import { toastSuccess, toastError } from '../ui/toast.js';
+import { toastSuccess, toastError, toastInfo } from '../ui/toast.js';
 
 export function renderRSVP(night, nights, currentUser) {
   const wrapper = document.createElement('div');

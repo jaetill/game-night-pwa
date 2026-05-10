@@ -18,7 +18,55 @@ const LOG_LEVEL = (process.env.LOG_LEVEL || 'INFO').toUpperCase();
 const LEVELS = { DEBUG: 10, INFO: 20, WARN: 30, ERROR: 40, FATAL: 50 };
 const minLevel = LEVELS[LOG_LEVEL] || LEVELS.INFO;
 
-const PII_FIELDS = ['email', 'displayName', 'phone', 'password', 'temporaryPassword'];
+// Top-level field names that should always be redacted. Names match what the
+// codebase actually uses (e.g. `tempPassword`, not `temporaryPassword` — see
+// nudge.js); add more as new fields appear.
+const PII_FIELDS = [
+  'email',
+  'inviteEmail',
+  'signInEmail',
+  'contactEmail',
+  'displayName',
+  'name',
+  'phone',
+  'address',
+  'bggUsername',
+  'password',
+  'tempPassword',
+  'temporaryPassword',
+  'token',
+  'apiKey',
+  'authorization',
+];
+
+// Regex patterns scrubbed inside string values (e.g. an email embedded in an
+// upstream error message that ends up in `error: e.message`). Keep these tight
+// to avoid mangling unrelated text.
+const VALUE_SCRUBBERS = [
+  // Emails
+  [/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, '[REDACTED_EMAIL]'],
+  // Bearer tokens / JWT-shaped strings (3 base64url segments)
+  [/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[REDACTED_JWT]'],
+];
+
+function scrubString(value) {
+  let out = value;
+  for (const [pattern, replacement] of VALUE_SCRUBBERS) {
+    out = out.replace(pattern, replacement);
+  }
+  return out;
+}
+
+function scrubFields(record) {
+  for (const [key, value] of Object.entries(record)) {
+    if (PII_FIELDS.includes(key) && value !== undefined) {
+      record[key] = '[REDACTED]';
+    } else if (typeof value === 'string') {
+      record[key] = scrubString(value);
+    }
+  }
+  return record;
+}
 
 function emit(level, msg, fields) {
   if (LEVELS[level] < minLevel) return;
@@ -32,12 +80,9 @@ function emit(level, msg, fields) {
     'deployment.environment': ENV,
     ...fields,
   };
-  // Scrub PII fields per ADR-0006
-  for (const piiField of PII_FIELDS) {
-    if (record[piiField] !== undefined) {
-      record[piiField] = '[REDACTED]';
-    }
-  }
+  // Scrub PII per ADR-0006: redact named fields, scrub email/JWT patterns
+  // inside string values (catches upstream errors that echo input back).
+  scrubFields(record);
   console.log(JSON.stringify(record));
 }
 

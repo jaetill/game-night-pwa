@@ -13,6 +13,7 @@ export default [
     ignores: [
       'node_modules/',
       'dist/',
+      'build/', // generated Lambda zip staging dirs — not source
       'site/',
       'coverage/',
       'lambda/node_modules/',
@@ -87,6 +88,17 @@ export default [
     rules: {
       'no-console': 'off',
       'max-lines-per-function': 'off',
+    },
+  },
+  {
+    // Root-level config files (vite.config.js, vitest.config.js, etc.) run in
+    // a Node ESM context. Without this block they fall under the default
+    // recommended config and miss `URL`, `process`, `import.meta`, etc.
+    files: ['*.config.js', '*.config.mjs'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: { ...globals.node, ...globals.es2022 },
     },
   },
 ];
