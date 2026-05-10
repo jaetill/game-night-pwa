@@ -162,10 +162,14 @@ function createHandler(deps = {}) {
       return respond(405, { error: 'method_not_allowed' }, CORS);
     }
 
-    // Rate limit by source IP
-    const ip = event.requestContext?.identity?.sourceIp ||
-               event.headers?.['x-forwarded-for']?.split(',')[0]?.trim() ||
-               'unknown';
+    // Rate limit by source IP. Only trust API Gateway's identity.sourceIp,
+    // which AWS populates from the TCP-level peer and the caller cannot
+    // spoof. X-Forwarded-For is client-controlled and was previously used
+    // as a fallback — that fallback was dead in production (sourceIp is
+    // always set under API Gateway v1 Lambda proxy) but trivially bypassed
+    // the limiter if this handler were ever invoked outside that context
+    // (ALB, local dev, test harness). Removed.
+    const ip = event.requestContext?.identity?.sourceIp || 'unknown';
 
     const rl = checkRateLimit(ip);
     if (!rl.allowed) {
