@@ -56,6 +56,8 @@ jobs:
               - Say "No issues found." if there's nothing actionable
           claude_args: |
             --model claude-sonnet-4-6
+            --permission-mode bypassPermissions
+            --allowed-tools Bash,Read,Glob,Grep
             --append-system-prompt "Follow the platform standards in docs/standards/."
 
   security-review:
@@ -89,6 +91,8 @@ jobs:
               - Say "No security issues found." if there's nothing actionable
           claude_args: |
             --model claude-sonnet-4-6
+            --permission-mode bypassPermissions
+            --allowed-tools Bash,Read,Glob,Grep
             --append-system-prompt "Follow the platform standards in docs/standards/."
 
   destructive-change-check:
@@ -204,4 +208,6 @@ jobs:
             PR comment summarizing what you drafted (also via `gh pr comment`).
           claude_args: |
             --model claude-opus-4-6
+            --permission-mode bypassPermissions
+            --allowed-tools Bash,Read,Write,Edit,Glob,Grep
             --append-system-prompt "Follow MADR 4.x format with the platform's three documented extensions."
