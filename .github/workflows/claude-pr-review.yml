@@ -11,6 +11,13 @@ on:
   pull_request:
     branches: [master]
 
+# Cancel any in-flight runs for the same PR when a new event arrives — most
+# common case is a rapid synchronize sequence (test-writer pushes after the
+# first run starts). Stops parallel jobs from piling up.
+concurrency:
+  group: claude-pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   pull-requests: write
@@ -19,6 +26,11 @@ permissions:
 
 jobs:
   code-review:
+    # Skip on bot-initiated runs (e.g. test-writer pushed new tests, triggering
+    # synchronize with github.actor=claude[bot]). The action itself rejects bot
+    # runs with "Workflow initiated by non-human actor" — short-circuit at the
+    # workflow level instead so PR status checks stay green.
+    if: github.actor != 'claude[bot]' && !endsWith(github.actor, '[bot]')
     runs-on: ubuntu-latest
     timeout-minutes: 15   # generous; reviews typically run 2–5 min
     steps:
@@ -62,6 +74,7 @@ jobs:
             --append-system-prompt "Follow the platform standards in docs/standards/."
 
   functional-test:
+    if: github.actor != 'claude[bot]' && !endsWith(github.actor, '[bot]')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -109,6 +122,7 @@ jobs:
             --append-system-prompt "Follow the platform standards in docs/standards/."
 
   test-writer:
+    if: github.actor != 'claude[bot]' && !endsWith(github.actor, '[bot]')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -183,6 +197,7 @@ jobs:
             --append-system-prompt "Follow the platform standards in docs/standards/. Use vitest, happy-dom for DOM tests, no new test deps."
 
   security-review:
+    if: github.actor != 'claude[bot]' && !endsWith(github.actor, '[bot]')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -344,7 +359,10 @@ jobs:
 
   invoke-architect-if-gated:
     needs: destructive-change-check
-    if: needs.destructive-change-check.outputs.requires-adr == 'true'
+    if: |
+      needs.destructive-change-check.outputs.requires-adr == 'true'
+      && github.actor != 'claude[bot]'
+      && !endsWith(github.actor, '[bot]')
     runs-on: ubuntu-latest
     timeout-minutes: 20   # slightly higher; architect drafts + commits an ADR
     steps:
