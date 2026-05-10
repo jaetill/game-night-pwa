@@ -199,10 +199,53 @@ resource "aws_iam_role_policy" "searchGames_s3" {
 }
 
 # ── game-night-github-deploy ────────────────────────────────────────────────
+# The deploy role needs lambda:UpdateFunctionCode on the 9 game-night
+# Lambdas, NOT on every Lambda in the account. The AWS account is shared
+# with meal-planner and jaetill-portal — wildcarding to `function:*` (the
+# original setting) meant a compromised GitHub Actions OIDC token could
+# overwrite Lambda code in those other applications. The list below is
+# rendered from the aws_lambda_function resources we already manage, so it
+# stays in sync automatically when functions are added or removed.
+data "aws_iam_policy_document" "github_deploy" {
+  statement {
+    sid    = "S3DeployArtifacts"
+    effect = "Allow"
+    actions = [
+      "s3:PutObject",
+      "s3:GetObject",
+      "s3:ListBucket",
+    ]
+    resources = [
+      "arn:aws:s3:::jaetill-game-nights",
+      "arn:aws:s3:::jaetill-game-nights/*",
+    ]
+  }
+
+  statement {
+    sid    = "LambdaUpdateGameNightOnly"
+    effect = "Allow"
+    actions = [
+      "lambda:UpdateFunctionCode",
+      "lambda:GetFunction",
+    ]
+    resources = [
+      aws_lambda_function.apiKeyAuthorizer.arn,
+      aws_lambda_function.bggProxy.arn,
+      aws_lambda_function.createEvent.arn,
+      aws_lambda_function.feedback.arn,
+      aws_lambda_function.GeneratePresignedGetUrl.arn,
+      aws_lambda_function.GeneratePresignedPost.arn,
+      aws_lambda_function.groups.arn,
+      aws_lambda_function.nudgeNonResponders.arn,
+      aws_lambda_function.searchGames.arn,
+    ]
+  }
+}
+
 resource "aws_iam_role_policy" "github_deploy" {
   name   = "deploy"
   role   = aws_iam_role.github_deploy.id
-  policy = file("${path.module}/iam-policies/github-deploy.json")
+  policy = data.aws_iam_policy_document.github_deploy.json
 }
 
 # ════════════════════════════════════════════════════════════════════════════

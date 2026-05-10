@@ -20,6 +20,7 @@ permissions:
 jobs:
   code-review:
     runs-on: ubuntu-latest
+    timeout-minutes: 15   # generous; reviews typically run 2–5 min
     steps:
       - uses: actions/checkout@v4
         with:
@@ -62,6 +63,7 @@ jobs:
 
   security-review:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -106,14 +108,24 @@ jobs:
           fetch-depth: 0
       - id: detect
         name: Detect ADR-gated changes
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
           # Static detection rules per ADR-0003. Categories: destructive-migration,
           # new-external-dep, security-relevant, api-contract, schema.
+          #
+          # All patterns operate on ADDED lines only (grep '^+' before content
+          # checks) so we don't flag a PR that merely deletes a code comment
+          # containing 'DROP TABLE' or unmaps an auth handler.
           requires_adr=false
           categories=""
 
           # destructive migration (DROP TABLE / ALTER TABLE DROP COLUMN / TRUNCATE)
-          if git diff origin/${{ github.base_ref }}...HEAD | grep -E '\bDROP TABLE\b|\bALTER TABLE.*DROP COLUMN\b|\bTRUNCATE\b' >/dev/null; then
+          # — only on added/changed lines, not deletions or unchanged context.
+          if git diff "origin/${BASE_REF}...HEAD" \
+              | grep -E '^\+' \
+              | grep -E '\bDROP TABLE\b|\bALTER TABLE.*DROP COLUMN\b|\bTRUNCATE\b' \
+              >/dev/null; then
             requires_adr=true
             categories="$categories destructive-migration"
           fi
@@ -122,9 +134,16 @@ jobs:
           # dependency entry (excludes top-level keys like "version", "name",
           # "description", "main", which release-please bumps regularly and
           # which previously caused false-positive new-external-dep flags).
-          changed_manifest=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E 'package\.json|pyproject\.toml|Cargo\.toml|go\.mod' || true)
-          if [[ -n "$changed_manifest" ]]; then
-            if git diff origin/${{ github.base_ref }}...HEAD -- $changed_manifest \
+          #
+          # Use an array for manifest paths so paths with spaces are handled
+          # correctly under `set -e` / shell word-splitting.
+          mapfile -t changed_manifest < <(
+            git diff --name-only "origin/${BASE_REF}...HEAD" \
+              | grep -E 'package\.json|pyproject\.toml|Cargo\.toml|go\.mod' \
+              || true
+          )
+          if [[ ${#changed_manifest[@]} -gt 0 ]]; then
+            if git diff "origin/${BASE_REF}...HEAD" -- "${changed_manifest[@]}" \
                  | grep -E '^\+\s*"[^"]+":\s*"\^?[0-9]' \
                  | grep -Ev '^\+\s*"(version|name|description|main|module|types|license|author|homepage|repository|bugs|engines|private)":' \
                  >/dev/null; then
@@ -133,22 +152,29 @@ jobs:
             fi
           fi
 
-          # Security-relevant paths
-          security_paths=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E 'auth/|authn/|authz/|session/|secret/|crypto/|permission/' || true)
+          # Security-relevant paths — narrow to BACKEND auth infrastructure
+          # (Lambda handlers, IAM policy JSON, JWT/secret helpers). Frontend
+          # UI components under src/js/auth/ (permission display, profile UI)
+          # are intentionally excluded — they don't change the security model.
+          security_paths=$(
+            git diff --name-only "origin/${BASE_REF}...HEAD" \
+              | grep -E '^lambda/.*[Aa]uth|^lambda/iam/|^lambda/lib/(resolveCallerId|sentry|secret|crypto)' \
+              || true
+          )
           if [[ -n "$security_paths" ]]; then
             requires_adr=true
             categories="$categories security-relevant"
           fi
 
           # Schema changes
-          schema_changes=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E 'schema\.|migrations/|models/' || true)
+          schema_changes=$(git diff --name-only "origin/${BASE_REF}...HEAD" | grep -E 'schema\.|migrations/|models/' || true)
           if [[ -n "$schema_changes" ]]; then
             requires_adr=true
             categories="$categories schema"
           fi
 
           # API contract changes
-          api_changes=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E 'openapi\.(yml|yaml|json)|api/' || true)
+          api_changes=$(git diff --name-only "origin/${BASE_REF}...HEAD" | grep -E 'openapi\.(yml|yaml|json)|api/' || true)
           if [[ -n "$api_changes" ]]; then
             requires_adr=true
             categories="$categories api-contract"
@@ -160,9 +186,15 @@ jobs:
       - name: Label PR if ADR-gated
         if: steps.detect.outputs.requires-adr == 'true'
         uses: actions/github-script@v7
+        env:
+          # Pass through env: rather than interpolating ${{ }} into the JS
+          # body, per GitHub's hardening guide. The detector's output is
+          # currently a space-separated whitelist of category names, but
+          # treating any step output as untrusted is the safer default.
+          CATEGORIES: ${{ steps.detect.outputs.categories }}
         with:
           script: |
-            const categories = "${{ steps.detect.outputs.categories }}".trim().split(/\s+/);
+            const categories = (process.env.CATEGORIES || '').trim().split(/\s+/).filter(Boolean);
             const labels = categories.map(c => `requires-adr:${c}`);
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
@@ -181,6 +213,7 @@ jobs:
     needs: destructive-change-check
     if: needs.destructive-change-check.outputs.requires-adr == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20   # slightly higher; architect drafts + commits an ADR
     steps:
       - uses: actions/checkout@v4
         with:
