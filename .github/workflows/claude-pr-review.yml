@@ -1,7 +1,22 @@
 name: claude-pr-review
+
+# Disabled — original referenced
+# `jaetill/agentic-dev-environment/.github/workflows/claude-pr-review.yml@main`
+# as a reusable workflow, but that platform repo is local-only (not pushed to
+# GitHub), so the reference 404'd at startup.
+#
+# Re-enabling requires building out the actual review flow inline:
+#   1. Fetch PR diff via `gh pr diff`
+#   2. Send to the Anthropic API with a code-review prompt
+#   3. Post comments via `gh pr comment` or the Reviews API
+#   4. Wire up an ANTHROPIC_API_KEY repo secret
+#
+# That's a real project on its own — not a "fix during the platform-CI sweep"
+# task. Keeping the file with a workflow_dispatch trigger so it can be
+# manually re-enabled later, but no triggers wired to PRs yet.
+
 on:
-  pull_request:
-    branches: [master]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -9,6 +24,9 @@ permissions:
   issues: write
 
 jobs:
-  ai-review:
-    uses: jaetill/agentic-dev-environment/.github/workflows/claude-pr-review.yml@main
-    secrets: inherit
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "claude-pr-review is currently a stub."
+          echo "See workflow file header for re-enabling instructions."
