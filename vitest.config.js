@@ -9,7 +9,13 @@ export default defineConfig({
     environment: 'happy-dom',
     globals: true,
     include: ['tests/**/*.{test,spec}.{js,mjs}', 'src/**/*.{test,spec}.{js,mjs}'],
-    exclude: ['node_modules/**', '.claude/worktrees/**', 'lambda/node_modules/**', 'mcp/node_modules/**'],
+    exclude: [
+      'node_modules/**',
+      '.claude/worktrees/**',
+      'lambda/node_modules/**',
+      'mcp/node_modules/**',
+      'tests/e2e/**',   // Playwright owns these; vitest can't run them
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'json', 'lcov'],

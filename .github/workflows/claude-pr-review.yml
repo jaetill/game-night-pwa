@@ -196,6 +196,76 @@ jobs:
             --allowed-tools Bash,Read,Write,Edit,Glob,Grep
             --append-system-prompt "Follow the platform standards in docs/standards/. Use vitest, happy-dom for DOM tests, no new test deps."
 
+  e2e-test:
+    if: github.actor != 'claude[bot]' && !endsWith(github.actor, '[bot]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright browser + system deps
+        run: npx playwright install --with-deps chromium
+      - name: Run e2e suite (captures output for agent)
+        id: e2e
+        run: |
+          set +e
+          npx playwright test --reporter=list > /tmp/e2e-output.txt 2>&1
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+          cat /tmp/e2e-output.txt
+      - name: Run e2e-tester agent
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          show_full_output: true
+          prompt: |
+            Act as the e2e-tester subagent defined in .claude/agents/e2e-tester.md.
+
+            The Playwright suite has already run. Its output is at
+            /tmp/e2e-output.txt and its exit code was ${{ steps.e2e.outputs.exit }}.
+
+            Steps:
+            1. Read /tmp/e2e-output.txt — count pass/fail, identify each failure.
+            2. For each failing spec, classify per the agent spec:
+               REAL BUG / TEST BUG / ENVIRONMENT / FLAKE.
+               - REAL BUG: read the failing spec + the application code it
+                 exercises (use `git diff origin/${{ github.base_ref }}...HEAD`
+                 for what changed in this PR).
+               - TEST BUG: the spec's assertion is wrong (e.g. asserts on a
+                 URL format that legitimately changed).
+               - ENVIRONMENT: dev server didn't start, browser couldn't reach
+                 localhost, etc.
+               - FLAKE: passes on rerun. Per ADR-0004 §6, do NOT recommend
+                 quarantine — recommend fix or remove.
+            3. Post a SINGLE PR comment via:
+                 gh pr comment ${{ github.event.pull_request.number }} --body-file -
+
+            The comment must:
+              - Lead with `## End-to-End Test Run (claude-sonnet-4-6)`
+              - State pass/fail counts and total runtime
+              - For each failure: classification, file:line, suspected cause
+              - End with verdict: PASS, FAIL (blocking), or FAIL (env-only)
+              - Say "All e2e specs pass." if everything is green
+          claude_args: |
+            --model claude-sonnet-4-6
+            --permission-mode bypassPermissions
+            --allowed-tools Bash,Read,Glob,Grep
+            --append-system-prompt "Follow the platform standards in docs/standards/."
+      - name: Upload Playwright report on failure
+        if: failure() || steps.e2e.outputs.exit != '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
   doc-keeper:
     if: github.actor != 'claude[bot]' && !endsWith(github.actor, '[bot]')
     runs-on: ubuntu-latest
