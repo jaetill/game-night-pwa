@@ -198,6 +198,85 @@ resource "aws_iam_role_policy" "searchGames_s3" {
   policy = file("${path.module}/iam-policies/searchGames-s3-access.json")
 }
 
+# ════════════════════════════════════════════════════════════════════════════
+# game-night-iac-drift — read-only role for the claude-drift-detector
+# workflow. Used to run `tofu plan` against terraform/envs/prod and detect
+# infrastructure drift. Strictly scoped:
+#   - ReadOnlyAccess (AWS-managed) so refresh can introspect every resource
+#     type we manage without enumerating actions per service.
+#   - S3 + DynamoDB scoped to ONLY the tfstate bucket + lock table.
+# The deploy role (above) is NOT reused — separating drift-detection from
+# deploy keeps the deploy role's blast radius minimal even if compromised.
+# ════════════════════════════════════════════════════════════════════════════
+resource "aws_iam_role" "iac_drift" {
+  name               = "game-night-iac-drift"
+  assume_role_policy = data.aws_iam_policy_document.iac_drift_trust.json
+  description        = "Read-only OIDC role for tofu plan drift detection"
+}
+
+data "aws_iam_policy_document" "iac_drift_trust" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    principals {
+      type        = "Federated"
+      identifiers = ["arn:aws:iam::${var.aws_account_id}:oidc-provider/token.actions.githubusercontent.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:sub"
+      values   = ["repo:jaetill/game-night-pwa:ref:refs/heads/master"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "iac_drift_read_only" {
+  role       = aws_iam_role.iac_drift.name
+  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+}
+
+data "aws_iam_policy_document" "iac_drift_tfstate" {
+  statement {
+    sid    = "TFStateRead"
+    effect = "Allow"
+    actions = [
+      "s3:GetObject",
+      "s3:ListBucket",
+    ]
+    resources = [
+      "arn:aws:s3:::jaetill-tfstate",
+      "arn:aws:s3:::jaetill-tfstate/*",
+    ]
+  }
+
+  statement {
+    sid    = "TFStateLockRead"
+    effect = "Allow"
+    actions = [
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:DeleteItem",
+    ]
+    # tofu plan needs Put/Delete for the brief lock during refresh. Could be
+    # avoided with `tofu plan -lock=false` but that risks a concurrent apply
+    # racing the plan. Keep the lock; scope dynamodb to the one table.
+    resources = [
+      "arn:aws:dynamodb:${var.aws_region}:${var.aws_account_id}:table/terraform-state-lock",
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "iac_drift_tfstate" {
+  name   = "tfstate-access"
+  role   = aws_iam_role.iac_drift.id
+  policy = data.aws_iam_policy_document.iac_drift_tfstate.json
+}
+
 # ── game-night-github-deploy ────────────────────────────────────────────────
 # The deploy role needs lambda:UpdateFunctionCode on the 9 game-night
 # Lambdas, NOT on every Lambda in the account. The AWS account is shared
