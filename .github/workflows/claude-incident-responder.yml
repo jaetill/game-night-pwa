@@ -1,38 +1,47 @@
 name: claude-incident-responder
 # Invokes the incident-responder subagent (.claude/agents/incident-responder.md)
-# on prod alerts forwarded from Sentry via repository_dispatch.
+# on prod alerts.
 #
-# The agent triages the alert (reads CloudWatch logs, recent deploys, Sentry
-# context), attempts mitigation guidance, files an `incident:p0` issue if the
-# event is real and unresolved, and drafts a postmortem skeleton.
+# Triggers on issue creation with the `incident:p0` label. Sentry's native
+# GitHub integration creates issues for triggered alerts; we configure it to
+# apply the `incident:p0` label, which this workflow listens for. Using
+# native integrations on both ends avoids the custom-Lambda glue that the
+# initial design called for.
 #
-# This is the ONLY platform agent meant to interrupt synchronously. Treat its
-# output as page-worthy.
+# The agent triages (reads the Sentry-shaped issue body, recent deploys,
+# CloudWatch context links), attempts mitigation guidance, updates the
+# issue with severity classification and suggested actions, and drafts a
+# postmortem skeleton in a comment.
 #
-# Triggers:
-#   - repository_dispatch event_type=sentry-alert  (forwarded from Sentry)
-#   - workflow_dispatch                            (manual smoke test)
+# This is the ONLY platform agent meant to interrupt synchronously. Treat
+# its output as page-worthy.
 #
-# Setup required (one-time, per project — see docs/runbooks/sentry-alerts.md
-# for the step-by-step on the Sentry side):
-#   1. Create a GitHub PAT with `repo` scope; store as Sentry org secret.
-#   2. In Sentry, Settings → Developer Settings → New Internal Integration:
-#        Name: GitHub repository_dispatch
-#        Webhook URL: https://api.github.com/repos/jaetill/game-night-pwa/dispatches
-#        Headers: Authorization: token <PAT>; Accept: application/vnd.github+json
-#        Body template (Custom): {"event_type":"sentry-alert","client_payload":<sentry-payload>}
-#   3. In each Sentry alert rule, add an action: "Send a notification via
-#      an integration" → select the integration created in step 2.
+# Setup required (one-time per project — see docs/runbooks/sentry-alerts.md):
+#   1. In Sentry, Settings → Integrations → GitHub → install (or already
+#      installed via the repo's GitHub App).
+#   2. In Sentry, configure the project's alert rules to use action
+#      "Create a GitHub Issue" → repo: jaetill/game-night-pwa → labels:
+#      `incident:p0,source:sentry`.
+#   3. Ensure the `incident:p0` label exists in the repo (created on first
+#      manual smoke test if absent).
 
 on:
-  repository_dispatch:
-    types: [sentry-alert, pagerduty-alert]
+  issues:
+    types: [opened, labeled]
   workflow_dispatch:
     inputs:
-      simulated_payload:
-        description: 'JSON payload to simulate a Sentry alert (for smoke testing)'
+      simulated_title:
+        description: 'Title for the simulated incident issue (smoke test)'
         required: false
-        default: '{"alert":"smoke-test","level":"info","project":"game-night-pwa","message":"Manual workflow_dispatch — no real incident."}'
+        default: 'Smoke test: incident-responder wiring'
+      simulated_body:
+        description: 'Body for the simulated issue'
+        required: false
+        default: |
+          source: sentry-smoke-test
+          level: info
+          project: game-night-pwa
+          message: This issue was opened via workflow_dispatch to verify the incident-responder wiring. No real incident.
 
 permissions:
   contents: read
@@ -40,42 +49,57 @@ permissions:
   pull-requests: write
   id-token: write
 
-# Cancel stale invocations for the same alert key — if Sentry retries we
-# don't want N duplicate incident issues.
+# Don't cancel an in-flight triage; let it complete and post its findings
+# even if a duplicate alert comes in.
 concurrency:
-  group: incident-${{ github.event.client_payload.alert || github.run_id }}
-  cancel-in-progress: false   # let an in-flight triage finish; don't abort it
+  group: incident-${{ github.event.issue.number || github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   triage:
+    # Run only when the issue has (or was just labeled with) `incident:p0`.
+    # The `opened` event always runs; the `labeled` event runs only when
+    # the `incident:p0` label is the one being applied. For workflow_dispatch
+    # the agent path handles its own smoke-test logic.
+    if: |
+      github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'issues' && github.event.action == 'opened' && contains(github.event.issue.labels.*.name, 'incident:p0'))
+      || (github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'incident:p0')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Write alert payload to disk
+      - name: Open a smoke-test issue (workflow_dispatch only)
+        id: smoke
+        if: github.event_name == 'workflow_dispatch'
         env:
-          # Pass payload via env to avoid heredoc / quoting hell with the
-          # ${{ }} interpolation. github.event.client_payload is null for
-          # workflow_dispatch — fall back to the simulated payload there.
-          PAYLOAD_JSON: ${{ github.event_name == 'workflow_dispatch' && inputs.simulated_payload || toJSON(github.event.client_payload) }}
-          TRIGGER: ${{ github.event_name }}
-          DISPATCH_TYPE: ${{ github.event.action }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          T: ${{ inputs.simulated_title }}
+          B: ${{ inputs.simulated_body }}
         run: |
-          mkdir -p /tmp/incident
-          printf '%s' "$PAYLOAD_JSON" > /tmp/incident/payload.json
-          if [[ "$TRIGGER" == "workflow_dispatch" ]]; then
-            echo "TRIGGER=workflow_dispatch (smoke test)" > /tmp/incident/context.txt
+          # Ensure the incident:p0 label exists (idempotent).
+          gh label create incident:p0 --color B60205 --description "Synchronous incident — incident-responder agent paged" 2>/dev/null || true
+          gh label create source:sentry --color 1D76DB --description "Issue created by a Sentry alert" 2>/dev/null || true
+          # Create the issue and capture its number.
+          number=$(gh issue create --title "$T" --body "$B" --label "incident:p0,source:sentry,smoke-test" --json number --jq .number)
+          echo "issue_number=$number" >> "$GITHUB_OUTPUT"
+          echo "Created smoke-test issue #$number"
+      - name: Resolve target issue number
+        id: target
+        env:
+          ISSUE_FROM_EVENT: ${{ github.event.issue.number }}
+          ISSUE_FROM_SMOKE: ${{ steps.smoke.outputs.issue_number }}
+        run: |
+          if [[ -n "$ISSUE_FROM_SMOKE" ]]; then
+            echo "number=$ISSUE_FROM_SMOKE" >> "$GITHUB_OUTPUT"
           else
-            echo "TRIGGER=$TRIGGER type=$DISPATCH_TYPE" > /tmp/incident/context.txt
+            echo "number=$ISSUE_FROM_EVENT" >> "$GITHUB_OUTPUT"
           fi
-          echo "--- payload.json ---"
-          cat /tmp/incident/payload.json
-          echo
-          echo "--- context.txt ---"
-          cat /tmp/incident/context.txt
       - name: Run incident-responder agent
+        env:
+          ISSUE_NUMBER: ${{ steps.target.outputs.number }}
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -84,45 +108,44 @@ jobs:
           prompt: |
             Act as the incident-responder subagent defined in .claude/agents/incident-responder.md.
 
-            An alert has been forwarded to this workflow. The payload is at
-            /tmp/incident/payload.json and the trigger context is at
-            /tmp/incident/context.txt.
+            An incident issue has been filed. Issue number is in the env var
+            ISSUE_NUMBER. Read it via:
+              gh issue view "$ISSUE_NUMBER" --json title,body,labels
 
             Steps:
-            1. Read both files. Determine severity (P0 / P1 / P2 / info).
-            2. If the payload's `alert` field is `smoke-test`, post a brief
-               comment confirming the wiring works and STOP — do not file
-               an incident issue for a smoke test.
+            1. Read the issue body. The body is either a Sentry-generated
+               alert (look for fields like `level`, `project`, `culprit`,
+               URLs to sentry.io) or a smoke-test payload (look for
+               `source: sentry-smoke-test` or the `smoke-test` label).
+            2. If smoke test: post a comment confirming the wiring works,
+               then close it via `gh issue close $ISSUE_NUMBER`. STOP.
             3. For real alerts:
                a. Pull recent deploy info: `gh run list --workflow=deploy.yml --branch=master --limit=3`
-               b. Inspect CloudWatch logs context if the project allows
-                  (you have `gh` but not AWS CLI in this workflow — note
-                  CloudWatch links rather than fetching them; the human
-                  will follow up).
-               c. Classify the failure category and pick the right runbook
-                  (docs/runbooks/) if one exists.
-            4. File an incident issue:
-                 gh issue create \
-                   --title "P0: <one-line summary>" \
-                   --label "incident:p0,severity:major" \
-                   --body-file -
-               Body should follow the incident format in the agent spec:
-               - **Detected**: timestamp + source
-               - **Symptom**: what's breaking, blast radius
-               - **Hypothesis**: most likely cause (cite recent deploy if recent)
-               - **Mitigation suggested**: rollback / scale / restart
-               - **Owner**: page Jason (he is the only on-call)
-               - **Next checks**: specific CloudWatch / Sentry links to inspect
-            5. Post a comment on the issue with mitigation guidance.
-
-            For ANY trigger, also post a summary to the workflow run log so
-            the audit trail is intact.
+               b. Classify severity (P0 / P1 / P2). Sentry alert rules
+                  should only fire this workflow for P0/P1; if the issue
+                  looks lower-severity, note it but proceed.
+               c. Identify probable cause (cite a recent deploy if within
+                  the last 60 min; otherwise note as "pre-existing or
+                  external dependency").
+               d. Pick the right runbook (docs/runbooks/) if one matches.
+            4. Update the issue body with a triage block via `gh issue edit`:
+                 ## Triage (incident-responder)
+                 - **Severity**: P0 | P1 | P2
+                 - **Symptom**: <one line>
+                 - **Probable cause**: <recent deploy SHA + timestamp, or "unknown / external">
+                 - **Mitigation suggested**: <rollback / scale / restart / no-action>
+                 - **Owner**: @jaetill
+                 - **Runbook**: <link to docs/runbooks/X.md or "none">
+                 - **Next checks**: <CloudWatch query, Sentry issue URL, etc.>
+            5. Post a comment with a postmortem skeleton (Detected / Impact /
+               Timeline / Root cause / Action items) — leave it for the
+               human to fill in after resolution.
 
             Constraints:
-              - Do NOT attempt mitigation actions automatically (no aws cli
-                in this workflow). Surface recommended actions; the human
-                executes.
-              - Do NOT close the incident issue. Only the human closes.
+              - Do NOT attempt mitigation actions (no AWS CLI here).
+                Surface recommendations; the human executes.
+              - Do NOT close the issue unless it's a smoke test.
+              - Do NOT remove the incident:p0 label.
           claude_args: |
             --model claude-sonnet-4-6
             --permission-mode bypassPermissions

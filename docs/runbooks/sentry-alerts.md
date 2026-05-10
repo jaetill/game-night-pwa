@@ -7,75 +7,57 @@ project; once wired, alerts route automatically.
 
 ```
 Sentry alert rule fires
-  → Sentry Internal Integration webhook
-    → POST https://api.github.com/repos/jaetill/game-night-pwa/dispatches
-      → GitHub repository_dispatch event (type: sentry-alert)
+  → Sentry's native GitHub integration creates an issue in the repo
+    with labels `incident:p0,source:sentry`
+      → GitHub `issues.opened` event with label `incident:p0`
         → .github/workflows/claude-incident-responder.yml
-          → incident-responder agent triages + files issue
+          → incident-responder agent triages the issue,
+            edits in a triage block, posts a postmortem skeleton
 ```
+
+No custom Lambda, no PAT, no repository_dispatch. Sentry's native GitHub
+integration does the heavy lifting; both sides use their built-in features
+as designed.
 
 ## One-time setup
 
-### 1. Create GitHub PAT (or use a fine-grained token)
-
-- Settings → Developer settings → Personal access tokens → Tokens (classic)
-- Scopes needed: **`repo`** (full control of private repos, for `dispatches` endpoint)
-- Copy the token; you'll paste it into Sentry next.
-
-Lifetime: rotate annually. Add to a calendar reminder.
-
-### 2. Create the Sentry Internal Integration
+### 1. Install Sentry's GitHub integration (if not already installed)
 
 In Sentry:
 
-- Settings → Developer Settings → New Internal Integration
-- **Name**: `GitHub repository_dispatch (game-night-pwa)`
-- **Webhook URL**:
-  ```
-  https://api.github.com/repos/jaetill/game-night-pwa/dispatches
-  ```
-- **Permissions**: Issue & Event → Read (so Sentry can include event context)
-- **Webhooks** section: enable, then add custom headers:
-  ```
-  Authorization: token <PAT-from-step-1>
-  Accept: application/vnd.github+json
-  X-GitHub-Api-Version: 2022-11-28
-  ```
-- **Body template** (Custom JSON):
-  ```json
-  {
-    "event_type": "sentry-alert",
-    "client_payload": {
-      "alert": "{{rule.label}}",
-      "level": "{{event.level}}",
-      "project": "{{project.slug}}",
-      "message": "{{event.title}}",
-      "url": "{{event.url}}",
-      "environment": "{{event.environment}}",
-      "release": "{{event.release}}",
-      "tags": "{{event.tags}}"
-    }
-  }
-  ```
+- Settings → Integrations → search "GitHub" → **Install**
+- Follow the OAuth flow; grant Sentry access to the `jaetill/game-night-pwa`
+  repository (you can scope to specific repos)
 
-Save the integration. Sentry will show a token — you don't need it for this
-flow (the integration calls out, not in), but save it anyway in 1Password.
+The integration's GitHub App needs `Issues: write` and `Contents: read`
+on the repo — Sentry handles the install automatically.
 
-### 3. Attach to alert rules
+### 2. Ensure the labels exist
 
-For each alert rule that should page the agent:
+The workflow's `workflow_dispatch` smoke test creates them automatically
+on first run, but you can pre-create them via:
+
+```bash
+gh label create incident:p0 --color B60205 --description "Synchronous incident — incident-responder agent paged"
+gh label create source:sentry --color 1D76DB --description "Issue created by a Sentry alert"
+```
+
+### 3. Configure alert rules in Sentry
+
+For each Sentry alert rule that should page the agent:
 
 - Alerts → select the rule → Actions
-- Add: **Send a notification via an integration** → select the integration
-  you just created
+- Add: **Create a GitHub Issue**
+  - **Repo**: `jaetill/game-night-pwa`
+  - **Labels** (comma-separated): `incident:p0,source:sentry`
+  - **Assignee**: optional; leave blank or set to yourself
 
 Recommended starting set:
 - **P0**: `event.level == fatal AND count > 5 in 5min` (sustained fatals)
 - **P0**: `error rate > 50% in 5min` (deploy went bad)
-- **P1**: `event.level == error AND first_seen` (new error class)
 
-P2 / info-level Sentry events should NOT trigger this workflow — the agent
-is for synchronous interrupts only. Use Sentry's email digest for those.
+Anything below P0 — issue digest emails are fine; don't dump them all into
+GitHub as `incident:p0` or you'll desensitize yourself to the label.
 
 ## Smoke testing
 
@@ -85,37 +67,50 @@ The workflow has a `workflow_dispatch` trigger for testing without Sentry:
 gh workflow run claude-incident-responder.yml
 ```
 
-Or with a custom payload:
+This opens a synthetic issue with labels `incident:p0,source:sentry,smoke-test`,
+triggers the agent (which recognizes the `smoke-test` label and short-
+circuits), and then closes the issue.
 
-```bash
-gh workflow run claude-incident-responder.yml \
-  -f simulated_payload='{"alert":"smoke-test","level":"info","project":"game-night-pwa","message":"manual test"}'
-```
-
-The agent recognizes `alert: smoke-test` and exits without filing an
-incident issue — just confirms the wiring is intact.
-
-To test a *real* incident path, set `alert` to anything other than
-`smoke-test`. The agent will file an `incident:p0` issue. Delete it after
-verifying.
+To test the real-incident path, open an issue manually with the
+`incident:p0` label and a Sentry-shaped body. The agent will read it,
+add a triage block, and post a postmortem skeleton.
 
 ## Failure modes
 
-- **GitHub returns 422** on the dispatches POST → `event_type` malformed or
-  client_payload too large (max 10 unique top-level keys, max ~64KB).
-  Trim the body template.
-- **Token expired** → 401 from GitHub. Rotate PAT and update the Sentry
-  integration's Authorization header.
-- **Workflow doesn't trigger** → check `repository_dispatch` `types:`
-  matches what Sentry sends. Both must be `sentry-alert`.
-- **Agent posts but doesn't file an issue** → check the payload's `alert`
-  field. If it's `smoke-test`, that's correct behavior (the agent short-
-  circuits to avoid filing fake P0s).
+- **No issue gets created when an alert fires** → check Sentry's
+  Settings → Integrations → GitHub → "View installation" — the integration
+  may have been suspended (GitHub App tokens can expire after long
+  inactivity).
+- **Issue created but agent doesn't run** → verify the label is exactly
+  `incident:p0` (case-sensitive); check the workflow's run history for the
+  `issues.opened` event.
+- **Agent runs on every new issue regardless of label** → the `if:`
+  condition in the workflow is misconfigured; check
+  `contains(github.event.issue.labels.*.name, 'incident:p0')`.
+
+## What the agent does NOT do
+
+- Execute mitigation actions (no AWS CLI in the workflow)
+- Close the incident issue (the human owns the close)
+- Remove the `incident:p0` label
+
+If mitigation is automated elsewhere, the agent surfaces the recommended
+action and the human (or a separate automation) executes it.
 
 ## Cross-app reuse
 
 Same recipe for meal-planner, jaetill-portal, etc.:
-- One Sentry Internal Integration per repo (Sentry doesn't support
-  multi-repo dispatch in one integration).
-- Same body template; just change the project name.
-- Each repo gets its own copy of `claude-incident-responder.yml`.
+1. Install Sentry's GitHub integration on the repo (probably already
+   shared via the org install).
+2. Copy `.github/workflows/claude-incident-responder.yml` to the new repo.
+3. Configure each Sentry project's alert rules to "Create a GitHub Issue"
+   in the corresponding repo with the same label set.
+
+## Migration history
+
+The original design called for Sentry → `repository_dispatch` via a
+custom webhook with a PAT. Abandoned because Sentry's Internal Integration
+webhook system doesn't support the custom headers / body templates that
+GitHub's `/dispatches` endpoint requires. If you find PATs named
+`sentry-dispatch-*` in 1Password or unused Internal Integrations in
+Sentry, they're vestigial — safe to delete.

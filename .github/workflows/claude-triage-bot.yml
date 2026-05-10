@@ -18,10 +18,15 @@ permissions:
 
 jobs:
   triage:
-    # Skip if the issue was just opened by claude[bot] itself (e.g.
-    # dep-watcher's weekly issue or drift-detector's drift report — those
-    # are pre-classified and don't need re-triage).
-    if: github.actor != 'claude[bot]' && !endsWith(github.actor, '[bot]')
+    # Skip if:
+    #  - the issue was opened by a bot (dep-watcher, drift-detector, feedback
+    #    Lambda — those are pre-classified and don't need re-triage)
+    #  - the issue is labeled incident:p0 (incident-responder owns those —
+    #    triage-bot would just duplicate the work)
+    if: |
+      github.actor != 'claude[bot]'
+      && !endsWith(github.actor, '[bot]')
+      && !contains(github.event.issue.labels.*.name, 'incident:p0')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
