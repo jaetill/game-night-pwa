@@ -135,7 +135,9 @@ describe('lambda/feedback.js — handler', () => {
     expect(res.statusCode).toBe(201);
     const body = JSON.parse(res.body);
     expect(body.id).toMatch(/^FB-\d{4}-000042$/);
-    expect(body.issue_url).toContain('issues/42');
+    // Response intentionally omits issue_url — see lambda/feedback.js
+    // (security-review LOW: don't leak internal repo structure to anon callers).
+    expect(body.issue_url).toBeUndefined();
     expect(ok.captured.length).toBe(1);
     expect(ok.captured[0].title).toContain('[bug]');
     expect(ok.captured[0].labels).toEqual(expect.arrayContaining(['feedback:user-submitted', 'type:bug']));
