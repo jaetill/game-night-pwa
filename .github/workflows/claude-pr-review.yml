@@ -26,6 +26,10 @@ jobs:
       - name: Run code-reviewer agent
         uses: anthropics/claude-code-action@v1
         with:
+          # Prefer the OAuth token (counts against the Claude Max subscription)
+          # when present; fall back to a pay-per-token API key. Either works;
+          # only one needs to be set.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
             Act as the code-reviewer subagent defined in .claude/agents/code-reviewer.md.
@@ -44,6 +48,10 @@ jobs:
       - name: Run security-reviewer agent
         uses: anthropics/claude-code-action@v1
         with:
+          # Prefer the OAuth token (counts against the Claude Max subscription)
+          # when present; fall back to a pay-per-token API key. Either works;
+          # only one needs to be set.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
             Act as the security-reviewer subagent defined in .claude/agents/security-reviewer.md.
@@ -140,6 +148,10 @@ jobs:
       - name: Run architect agent for ADR drafting
         uses: anthropics/claude-code-action@v1
         with:
+          # Prefer the OAuth token (counts against the Claude Max subscription)
+          # when present; fall back to a pay-per-token API key. Either works;
+          # only one needs to be set.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
             Act as the architect subagent defined in .claude/agents/architect.md (headless mode).
