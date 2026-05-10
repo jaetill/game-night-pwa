@@ -1,0 +1,70 @@
+name: claude-drift-detector
+# Invokes the drift-detector subagent (.claude/agents/drift-detector.md) to
+# run `tofu plan` against terraform/envs/prod and file an issue if
+# infrastructure has drifted from the committed config (someone touched
+# AWS via console / awscli outside of OpenTofu).
+#
+# Schedule: daily at 13:00 UTC. Manual via workflow_dispatch.
+
+on:
+  schedule:
+    - cron: '0 13 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write   # for both Anthropic OIDC and AWS OIDC
+
+jobs:
+  drift-detect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: opentofu/setup-opentofu@v1
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::214599503944:role/game-night-github-deploy
+          aws-region: us-east-2
+      - name: tofu init
+        run: tofu -chdir=terraform/envs/prod init
+      - name: tofu plan (capture)
+        run: |
+          set +e
+          tofu -chdir=terraform/envs/prod plan -detailed-exitcode -no-color > /tmp/plan.txt 2>&1
+          echo "PLAN_EXIT=$?" >> "$GITHUB_ENV"
+        # detailed-exitcode: 0=no-changes, 1=error, 2=changes-present
+      - name: Run drift-detector agent
+        if: env.PLAN_EXIT == '2'   # only invoke the agent if drift detected
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          show_full_output: true
+          prompt: |
+            Act as the drift-detector subagent defined in .claude/agents/drift-detector.md.
+
+            `tofu plan` returned exit code 2 (drift detected). Plan output is
+            at /tmp/plan.txt.
+
+            Steps:
+            1. Read /tmp/plan.txt and summarize the drift:
+               - Which resources changed
+               - Whether the change is benign (e.g. timestamp tag refresh) or
+                 substantive (e.g. IAM policy modified out-of-band)
+               - Suggested action: import to state, revert in AWS, or update
+                 the .tf to match reality
+            2. Check if a `drift` issue is already open:
+                 gh issue list --label drift --state open --json number,title
+               If yes, UPDATE it. If no, OPEN one with label `drift`.
+            3. Issue body:
+               - Lead with `## Infrastructure Drift Detected`
+               - Include the relevant excerpt from /tmp/plan.txt
+               - Recommend action per resource
+          claude_args: |
+            --model claude-sonnet-4-6
+            --permission-mode bypassPermissions
+            --allowed-tools Bash,Read,Glob,Grep
+            --append-system-prompt "Follow the platform standards in docs/standards/."

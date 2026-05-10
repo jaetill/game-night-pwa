@@ -196,6 +196,64 @@ jobs:
             --allowed-tools Bash,Read,Write,Edit,Glob,Grep
             --append-system-prompt "Follow the platform standards in docs/standards/. Use vitest, happy-dom for DOM tests, no new test deps."
 
+  doc-keeper:
+    if: github.actor != 'claude[bot]' && !endsWith(github.actor, '[bot]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run doc-keeper agent
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          show_full_output: true
+          prompt: |
+            Act as the doc-keeper subagent defined in .claude/agents/doc-keeper.md.
+
+            Steps:
+            1. Inspect the diff: `git diff origin/${{ github.base_ref }}...HEAD`.
+            2. Determine whether the changes warrant doc updates:
+               - New Lambda, route, env var, or AWS resource → CLAUDE.md table
+                 (Lambda functions, env vars, API routes, etc.) needs updating
+               - New ADR-worthy decision → check docs/adr/ has a corresponding
+                 entry (don't draft one; that's the architect's job)
+               - Behavioral change to user-facing feature → README or
+                 docs/runbooks/ may need a touch
+               - Pure refactor / test additions / dependency bumps → no doc
+                 changes needed
+            3. If doc updates are needed AND the change is mechanical (table
+               row, config line, env var entry), make the edit and commit it
+               to the PR head branch:
+                 git config user.name 'claude[bot]'
+                 git config user.email '41898282+claude[bot]@users.noreply.github.com'
+                 git add CLAUDE.md docs/
+                 git commit -m 'docs: update for PR changes (doc-keeper agent)'
+                 git push
+            4. If doc updates need judgment (rewriting a section, drafting a
+               runbook), DO NOT commit — list the recommended changes in the
+               PR comment instead.
+            5. Post a SINGLE PR comment via:
+                 gh pr comment ${{ github.event.pull_request.number }} --body-file -
+
+            The comment must:
+              - Lead with `## Doc Keeper (claude-sonnet-4-6)`
+              - List doc files updated (or "No doc updates needed.")
+              - List recommended manual doc changes if any
+
+            Constraints:
+              - Do NOT modify production code under any circumstance
+              - Do NOT touch docs/adr/ — ADRs are the architect's domain
+          claude_args: |
+            --model claude-sonnet-4-6
+            --permission-mode bypassPermissions
+            --allowed-tools Bash,Read,Write,Edit,Glob,Grep
+            --append-system-prompt "Follow the platform standards in docs/standards/. Don't write ADRs."
+
   security-review:
     if: github.actor != 'claude[bot]' && !endsWith(github.actor, '[bot]')
     runs-on: ubuntu-latest
