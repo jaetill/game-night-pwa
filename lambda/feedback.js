@@ -19,7 +19,11 @@
 const { Sentry } = require('./lib/sentry');
 const logger = require('./lib/logger');
 const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
-const { Octokit } = require('@octokit/rest');
+
+// @octokit/rest is ESM-only since v18+; CJS cannot `require()` it directly.
+// We dynamic-import it lazily inside getOctokit() so the rest of the module
+// can stay CommonJS (consistent with the other 7 handlers). Tests bypass this
+// path entirely by passing a mock class via createHandler({ Octokit }).
 
 const REGION = process.env.AWS_REGION || 'us-east-2';
 const REPO_OWNER = process.env.GITHUB_REPO_OWNER || 'jaetill';
@@ -113,7 +117,6 @@ function respond(status, body, headers) {
 
 function createHandler(deps = {}) {
   const smClient = deps.smClient || new SecretsManagerClient({ region: REGION });
-  const OctokitCtor = deps.Octokit || Octokit;
   const checkRateLimit = deps.checkRateLimit || makeRateLimiter();
 
   let _secrets;
@@ -125,12 +128,19 @@ function createHandler(deps = {}) {
     return _secrets;
   }
 
+  // Tests inject a mock class via deps.Octokit; production lazily resolves
+  // the real ESM-only Octokit on first GitHub call.
+  let _octokitClass = deps.Octokit;
   let _octokit;
   async function getOctokit() {
     if (!_octokit) {
+      if (!_octokitClass) {
+        const mod = await import('@octokit/rest');
+        _octokitClass = mod.Octokit;
+      }
       const { GITHUB_TOKEN } = await getSecrets();
       if (!GITHUB_TOKEN) throw new Error('GITHUB_TOKEN missing from Secrets Manager value');
-      _octokit = new OctokitCtor({ auth: GITHUB_TOKEN });
+      _octokit = new _octokitClass({ auth: GITHUB_TOKEN });
     }
     return _octokit;
   }
