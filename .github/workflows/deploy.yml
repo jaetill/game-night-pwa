@@ -18,7 +18,13 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - name: Install root dependencies
+        run: npm ci
+      - name: Install lambda dependencies
+        # tests/lambdaHandlers.test.js + lambdaHandlersChildProcess.test.js
+        # load each handler from lambda/, which requires lambda/node_modules
+        # (e.g. @sentry/aws-serverless, @octokit/rest, aws-jwt-verify).
+        run: npm ci --prefix lambda
       - run: npm test
 
   build:
