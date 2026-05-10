@@ -55,18 +55,26 @@ jobs:
         with:
           fetch-depth: 0
       - name: Write alert payload to disk
+        env:
+          # Pass payload via env to avoid heredoc / quoting hell with the
+          # ${{ }} interpolation. github.event.client_payload is null for
+          # workflow_dispatch — fall back to the simulated payload there.
+          PAYLOAD_JSON: ${{ github.event_name == 'workflow_dispatch' && inputs.simulated_payload || toJSON(github.event.client_payload) }}
+          TRIGGER: ${{ github.event_name }}
+          DISPATCH_TYPE: ${{ github.event.action }}
         run: |
           mkdir -p /tmp/incident
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo '${{ inputs.simulated_payload }}' > /tmp/incident/payload.json
+          printf '%s' "$PAYLOAD_JSON" > /tmp/incident/payload.json
+          if [[ "$TRIGGER" == "workflow_dispatch" ]]; then
             echo "TRIGGER=workflow_dispatch (smoke test)" > /tmp/incident/context.txt
           else
-            cat <<'EOF' > /tmp/incident/payload.json
-            ${{ toJSON(github.event.client_payload) }}
-            EOF
-            echo "TRIGGER=${{ github.event_name }} type=${{ github.event.action }}" > /tmp/incident/context.txt
+            echo "TRIGGER=$TRIGGER type=$DISPATCH_TYPE" > /tmp/incident/context.txt
           fi
+          echo "--- payload.json ---"
           cat /tmp/incident/payload.json
+          echo
+          echo "--- context.txt ---"
+          cat /tmp/incident/context.txt
       - name: Run incident-responder agent
         uses: anthropics/claude-code-action@v1
         with:
