@@ -108,6 +108,80 @@ jobs:
             --allowed-tools Bash,Read,Glob,Grep
             --append-system-prompt "Follow the platform standards in docs/standards/."
 
+  test-writer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Check out the PR head branch so commits push back to it.
+          ref: ${{ github.event.pull_request.head.ref }}
+          # Use a token that can push to the PR branch. GITHUB_TOKEN
+          # has write to contents per the workflow-level permissions block.
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm ci --prefix lambda
+      - name: Run test-writer agent
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          show_full_output: true
+          prompt: |
+            Act as the test-writer subagent defined in .claude/agents/test-writer.md.
+
+            Steps:
+            1. List the changed source files in this PR:
+                 git diff --name-only origin/${{ github.base_ref }}...HEAD \
+                   | grep -E '^(lambda/.*\.(js|mjs)|src/js/.*\.js)$' \
+                   | grep -v -E '\.test\.|\.spec\.' || true
+            2. For each changed source file, check whether a corresponding
+               tests/<name>.test.js (or tests/<name>Tests.test.js) exists
+               and whether it covers the diff's added/changed behavior.
+            3. Write missing tests using vitest + happy-dom (frontend) or
+               plain vitest (lambda). Match the existing patterns in
+               tests/*.test.js. Use the project's existing test conventions —
+               don't introduce a new framework or factory library.
+            4. Run `npm test` to verify the new tests pass; if anything
+               fails, treat it as a real bug per the agent spec — DO NOT
+               modify production code; instead post a finding-style comment
+               and stop.
+            5. Commit the new test files to the PR head branch:
+                 git config user.name 'claude[bot]'
+                 git config user.email '41898282+claude[bot]@users.noreply.github.com'
+                 git add tests/
+                 git commit -m 'test: add coverage for changes (test-writer agent)'
+                 git push
+            6. Post a SINGLE PR comment via:
+                 gh pr comment ${{ github.event.pull_request.number }} --body-file -
+
+            The comment must:
+              - Lead with `## Test Coverage (claude-sonnet-4-6)`
+              - List each test file written and the cases added
+              - State whether new tests pass on `npm test`
+              - End with `No new tests needed.` if coverage was already adequate
+              - End with `Manual tests recommended:` followed by a list if the
+                changes touched code paths the agent couldn't write a clean
+                test for (e.g. tightly coupled to AWS SDK, integration-only)
+
+            Constraints:
+              - Do NOT modify production code under any circumstance.
+              - Do NOT add new test dependencies (no new npm packages).
+              - Skip terraform/, docs/, .github/, .claude/ — those are not
+                code that benefits from unit tests.
+          claude_args: |
+            --model claude-sonnet-4-6
+            --permission-mode bypassPermissions
+            --allowed-tools Bash,Read,Write,Edit,Glob,Grep
+            --append-system-prompt "Follow the platform standards in docs/standards/. Use vitest, happy-dom for DOM tests, no new test deps."
+
   security-review:
     runs-on: ubuntu-latest
     timeout-minutes: 15
