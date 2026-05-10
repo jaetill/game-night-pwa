@@ -79,9 +79,10 @@ jobs:
           T: ${{ inputs.simulated_title }}
           B: ${{ inputs.simulated_body }}
         run: |
-          # Ensure the incident:p0 label exists (idempotent).
+          # Ensure required labels exist (idempotent).
           gh label create incident:p0 --color B60205 --description "Synchronous incident — incident-responder agent paged" 2>/dev/null || true
           gh label create source:sentry --color 1D76DB --description "Issue created by a Sentry alert" 2>/dev/null || true
+          gh label create smoke-test --color CCCCCC --description "Workflow smoke-test artifact; safe to close" 2>/dev/null || true
           # Create the issue. `gh issue create` prints the issue URL on
           # stdout; extract the trailing number.
           url=$(gh issue create --title "$T" --body "$B" --label "incident:p0,source:sentry,smoke-test")
