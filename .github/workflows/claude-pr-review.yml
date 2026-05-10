@@ -32,21 +32,28 @@ jobs:
           # only one needs to be set.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          # use_sticky_comment creates a PR comment that Claude writes its
-          # findings into via the mcp__github_comment__update_claude_comment
-          # tool. Without it, the agent runs but has no comment to write to
-          # and the work is discarded. (Inline file/line findings are buffered
-          # via the inline-comment tool and posted by the post-action step.)
-          use_sticky_comment: true
+          # The action's sticky-comment / buffered-inline-comment flow is
+          # designed for @claude-mention triggers; on bare pull_request events
+          # the post step reports "No buffered inline comments" and nothing
+          # gets posted. Bypass that by having the agent shell out to `gh pr
+          # comment` directly, which is reliable on every event type.
+          show_full_output: true
           prompt: |
             Act as the code-reviewer subagent defined in .claude/agents/code-reviewer.md.
-            Review the diff between origin/${{ github.base_ref }} and HEAD.
 
-            Post your top-level summary by calling the
-            mcp__github_comment__update_claude_comment tool. For specific
-            file/line findings, use mcp__github_inline_comment__create_inline_comment.
-            Group findings by severity (Critical / High / Medium / Low / Nit)
-            per the agent's output format.
+            Review the diff between origin/${{ github.base_ref }} and HEAD.
+            Run `git diff origin/${{ github.base_ref }}...HEAD` to get the diff,
+            then read whatever surrounding files you need for context.
+
+            When done, post a SINGLE PR comment with your findings via:
+              gh pr comment ${{ github.event.pull_request.number }} --body-file -
+            (read the body from stdin via a heredoc).
+
+            The comment must:
+              - Lead with `## Code Review (claude-sonnet-4-6)`
+              - Group findings by severity: Critical / High / Medium / Low / Nit
+              - Cite file paths and line numbers
+              - Say "No issues found." if there's nothing actionable
           claude_args: |
             --model claude-sonnet-4-6
             --append-system-prompt "Follow the platform standards in docs/standards/."
@@ -60,20 +67,26 @@ jobs:
       - name: Run security-reviewer agent
         uses: anthropics/claude-code-action@v1
         with:
-          # Prefer the OAuth token (counts against the Claude Max subscription)
-          # when present; fall back to a pay-per-token API key. Either works;
-          # only one needs to be set.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          use_sticky_comment: true
+          show_full_output: true
           prompt: |
             Act as the security-reviewer subagent defined in .claude/agents/security-reviewer.md.
-            Run a security review on the diff between origin/${{ github.base_ref }} and HEAD.
 
-            Post your top-level summary by calling the
-            mcp__github_comment__update_claude_comment tool. For specific
-            file/line findings, use mcp__github_inline_comment__create_inline_comment.
-            Group findings by severity (Critical / High / Medium / Low).
+            Run a security review on the diff between origin/${{ github.base_ref }}
+            and HEAD. Get the diff via `git diff origin/${{ github.base_ref }}...HEAD`
+            and read whatever surrounding files you need for context.
+
+            When done, post a SINGLE PR comment with your findings via:
+              gh pr comment ${{ github.event.pull_request.number }} --body-file -
+            (read the body from stdin via a heredoc).
+
+            The comment must:
+              - Lead with `## Security Review (claude-sonnet-4-6)`
+              - Group findings by severity: Critical / High / Medium / Low
+              - Focus on injection, authn/authz, secrets, IAM scope, input validation
+              - Cite file paths and line numbers
+              - Say "No security issues found." if there's nothing actionable
           claude_args: |
             --model claude-sonnet-4-6
             --append-system-prompt "Follow the platform standards in docs/standards/."
@@ -171,26 +184,24 @@ jobs:
       - name: Run architect agent for ADR drafting
         uses: anthropics/claude-code-action@v1
         with:
-          # Prefer the OAuth token (counts against the Claude Max subscription)
-          # when present; fall back to a pay-per-token API key. Either works;
-          # only one needs to be set.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          use_sticky_comment: true
+          show_full_output: true
           prompt: |
             Act as the architect subagent defined in .claude/agents/architect.md (headless mode).
+
             This PR contains changes in ADR-gated categories: ${{ needs.destructive-change-check.outputs.categories }}.
 
-            First, inspect the diff to confirm the gating is correct. If the
-            categorization is a false positive (e.g. release-please bumping
-            `"version"` looks like new-external-dep but isn't), say so via
-            mcp__github_comment__update_claude_comment and stop — do not
-            commit a no-op ADR.
+            First, inspect the diff (`git diff origin/${{ github.base_ref }}...HEAD`)
+            to confirm the gating is correct. If the categorization is a false
+            positive, post a single PR comment via:
+              gh pr comment ${{ github.event.pull_request.number }} --body-file -
+            saying so, then stop — do not commit a no-op ADR.
 
             Otherwise, draft a paired ADR in MADR 4.x format addressing the
-            real categories and commit it as `docs/adr/NNNN-*.md` with
-            `Status: Proposed`. Post a brief summary of what you drafted via
-            mcp__github_comment__update_claude_comment.
+            real categories. Commit it as `docs/adr/NNNN-*.md` with
+            `Status: Proposed` and push to the PR's head branch. Then post a
+            PR comment summarizing what you drafted (also via `gh pr comment`).
           claude_args: |
             --model claude-opus-4-6
             --append-system-prompt "Follow MADR 4.x format with the platform's three documented extensions."
