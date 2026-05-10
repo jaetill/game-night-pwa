@@ -120,14 +120,26 @@ jobs:
           requires_adr=false
           categories=""
 
-          # destructive migration (DROP TABLE / ALTER TABLE DROP COLUMN / TRUNCATE)
-          # — only on added/changed lines, not deletions or unchanged context.
-          if git diff "origin/${BASE_REF}...HEAD" \
-              | grep -E '^\+' \
-              | grep -E '\bDROP TABLE\b|\bALTER TABLE.*DROP COLUMN\b|\bTRUNCATE\b' \
-              >/dev/null; then
-            requires_adr=true
-            categories="$categories destructive-migration"
+          # destructive migration (DROP TABLE / ALTER TABLE DROP COLUMN / TRUNCATE).
+          # Scope to SQL files and migration directories — without this, the
+          # grep matches its own pattern definition in this workflow file
+          # whenever the workflow itself is edited (the classic "regex matches
+          # itself" problem). Real destructive DDL lives in .sql files or in
+          # migrations/ directories under the project's convention.
+          migration_files=$(
+            git diff --name-only "origin/${BASE_REF}...HEAD" \
+              | grep -E '\.sql$|^(.*/)?migrations/' \
+              || true
+          )
+          if [[ -n "$migration_files" ]]; then
+            # shellcheck disable=SC2086  # paths from grep won't contain spaces in this repo
+            if git diff "origin/${BASE_REF}...HEAD" -- $migration_files \
+                 | grep -E '^\+' \
+                 | grep -E '\bDROP TABLE\b|\bALTER TABLE.*DROP COLUMN\b|\bTRUNCATE\b' \
+                 >/dev/null; then
+              requires_adr=true
+              categories="$categories destructive-migration"
+            fi
           fi
 
           # New external dep — inspect only added lines that look like a
