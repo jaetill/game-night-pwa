@@ -24,3 +24,6 @@ Per platform [ADR-0008](https://github.com/jaetill/agentic-dev-environment/blob/
 ## Index
 
 - [ADR-0001 — Adopt Agentic Dev Environment platform](0001-platform-adoption.md) (Accepted)
+- [ADR-0002 — Line endings policy](0002-line-endings.md) (Accepted)
+- [ADR-0003 — Security hardening for LOW findings](0003-security-hardening-low-findings.md) (Proposed)
+- [ADR-0013 — Autonomous Team Architecture](0013-autonomous-team-architecture.md) (Proposed)
