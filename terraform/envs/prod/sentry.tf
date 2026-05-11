@@ -20,38 +20,34 @@
 #   3. tofu plan — read diff, back-fill the conditions / actions block
 #      below to match. Iterate until plan shows 0 changes.
 #
-# Until imported, the resource block below is a SKELETON — uncomment +
-# fill in after the import succeeds.
-
+# ⚠️ Import attempt 2026-05-10: BLOCKED — Sentry-side API migration.
+#
+# The production alert rule "Prod error → GitHub incident:p0" lives at
+#   https://jaetill.sentry.io/monitors/alerts/3410028/
+# which is Sentry's new unified "Monitor" framework. It does NOT appear in
+# any of the three public API endpoints the jianyuan provider knows how to
+# query:
+#
+#   GET /api/0/projects/jaetill/game-night-pwa/rules/    → []  (legacy Issue Alerts)
+#   GET /api/0/organizations/jaetill/alert-rules/        → []  (Metric Alerts)
+#   GET /api/0/organizations/jaetill/monitors/3410028/   → 404 (Cron Monitors)
+#
+# When jianyuan/sentry adds a resource type for the new Monitor framework,
+# uncomment the block below, run:
+#   tofu import sentry_issue_alert.prod_error_to_github jaetill/game-night-pwa/<ID>
+# and iterate `tofu plan` until 0 diff.
+#
+# Until then the rule is UI-managed. Drift-detector won't catch UI changes
+# to it. If you (or a future-you) modify the rule, leave a note in this
+# file's history so the next IaC pass doesn't fight the UI state.
+#
 # resource "sentry_issue_alert" "prod_error_to_github" {
 #   organization = "jaetill"
 #   project      = "game-night-pwa"
 #   name         = "Prod error → GitHub incident:p0"
-#
-#   action_match  = "any"   # fire if ANY trigger matches
-#   filter_match  = "all"   # all filters must match
-#   frequency     = 60      # action throttle (minutes)
-#   environment   = "prod"
-#
-#   conditions = jsonencode([
-#     { id = "sentry.rules.conditions.first_seen_event.FirstSeenEventCondition" },
-#     { id = "sentry.rules.conditions.regression_event.RegressionEventCondition" },
-#     # Add more triggers as configured in the UI (escalation, etc.).
-#   ])
-#
-#   filters = jsonencode([
-#     {
-#       id    = "sentry.rules.filters.issue_category.IssueCategoryFilter"
-#       value = "1"   # 1 = error
-#     },
-#   ])
-#
-#   actions = jsonencode([
-#     {
-#       id           = "sentry.integrations.github.notify_action.GitHubCreateTicketAction"
-#       integration  = "<github-integration-id>"  # from API
-#       repo         = "game-night-pwa"
-#       labels       = "incident:p0, source:sentry"
-#     },
-#   ])
+#   action_match = "any"
+#   filter_match = "all"
+#   frequency    = 60
+#   conditions = jsonencode([])
+#   actions    = jsonencode([])
 # }
