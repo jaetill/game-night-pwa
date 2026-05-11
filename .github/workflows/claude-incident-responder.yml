@@ -108,6 +108,13 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           show_full_output: true
+          # Sentry's GitHub App creates the incident issue as actor
+          # `sentry[bot]`. The action's default safety guard refuses to
+          # run on bot-initiated events (loop-prevention). Explicitly
+          # whitelist sentry[bot] so the alert-to-triage chain completes.
+          # claude[bot] still gets blocked (the workflow-level if: skips
+          # those before this step is even reached).
+          allowed_bots: 'sentry[bot]'
           prompt: |
             Act as the incident-responder subagent defined in .claude/agents/incident-responder.md.
 
