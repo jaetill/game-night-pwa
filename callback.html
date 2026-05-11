@@ -11,6 +11,9 @@
     <div class="text-3xl mb-3">🎲</div>
     <p id="status" class="text-gray-700">Signing you in…</p>
   </div>
+  <!-- Sentry init must load before callback.js so errors during the
+       OAuth code-exchange are captured. No-op if VITE_SENTRY_DSN unset. -->
+  <script type="module" src="./src/js/sentry.js"></script>
   <script type="module" src="./src/js/callback.js"></script>
 </body>
 </html>
