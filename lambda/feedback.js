@@ -244,10 +244,12 @@ function createHandler(deps = {}) {
         type: body.type,
         issue_number: result.data.number,
       });
+      // Don't leak the GitHub issue URL to anonymous callers — it discloses
+      // the internal repo name + issue number. The `id` (FB-YYYY-NNNNNN) is
+      // an opaque identifier the user can quote in follow-up correspondence.
       return respond(201, {
         id,
         status: 'received',
-        issue_url: result.data.html_url,
       }, CORS);
     } catch (err) {
       logger.error('feedback.github_failed', {

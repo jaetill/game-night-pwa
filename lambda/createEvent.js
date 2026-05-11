@@ -17,11 +17,18 @@ const logger = require('./lib/logger');
 const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
 
 /**
- * Generate an event ID. 8-char timestamp prefix (base36) + 8 hex chars of
- * cryptographic randomness, e.g. `m9k3z7q1-1a2b3c4d`. The previous version
- * used Math.random which is not cryptographically random — predictable IDs
- * could enable enumeration if a BOLA vulnerability is ever introduced
- * elsewhere. Defense-in-depth per security-review finding on PR #3.
+ * Generate an event ID: base36-encoded `Date.now()` + a hyphen + 8 hex
+ * chars of cryptographic randomness, e.g. `m9k3z7q1-1a2b3c4d`.
+ *
+ * The 32-bit random suffix (`crypto.randomBytes(4)`) is the security
+ * property — it makes IDs unguessable, so a BOLA bug elsewhere can't be
+ * exploited via enumeration.
+ *
+ * Tradeoff: the timestamp prefix discloses the creation time at
+ * millisecond resolution. For a friend-group app this is fine — events
+ * are not security-sensitive metadata. If event IDs are ever returned to
+ * untrusted callers in a different context (e.g. a public API), swap the
+ * prefix for additional random bytes.
  */
 function generateEventId() {
   return Date.now().toString(36) + '-' + crypto.randomBytes(4).toString('hex');
