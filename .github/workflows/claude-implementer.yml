@@ -1,0 +1,318 @@
+name: claude-implementer
+# Phase B of ADR-0013 — invokes the implementer agent in one of two modes:
+#
+# Mode A (initial implementation): triggered when an issue gains the
+#   `ready-for-implementer` label. Agent creates a feature branch, writes
+#   code + tests, opens a PR.
+#
+# Mode B (fix iteration): triggered when a PR authored by claude[bot]
+#   receives a review with state REQUEST_CHANGES from code-reviewer or
+#   security-reviewer (i.e. our gate steps failed). Agent reads feedback,
+#   addresses each finding, pushes a new commit to the same branch.
+#
+# Hard guardrails (per ADR-0013):
+#   - 50 LOC / 3 files / 1 component scope cap (enforced in agent prompt)
+#   - Max 3 fix-iteration attempts before escalation
+#   - Daily activation cap (TODO: enforce in workflow)
+#   - Never commits to master (enforced by branch protection + agent prompt)
+#   - Never modifies terraform/ (iac-implementer handles those)
+
+on:
+  issues:
+    types: [labeled]
+  pull_request_review:
+    types: [submitted]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to implement (for manual dispatch / testing)'
+        required: false
+        type: string
+
+permissions:
+  contents: write       # branch creation + push
+  pull-requests: write  # PR creation
+  issues: write         # commenting on the issue
+  id-token: write       # claude-code-action OIDC
+
+# Cancel previous runs for the same issue; if a new label triggers a re-run,
+# the older one's work is stale.
+concurrency:
+  group: implementer-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: false   # don't kill mid-implementation
+
+jobs:
+  # ── Mode A: initial implementation ──────────────────────────────────────
+  initial:
+    if: |
+      github.event_name == 'issues'
+      && github.event.action == 'labeled'
+      && github.event.label.name == 'ready-for-implementer'
+      && !contains(github.event.issue.labels.*.name, 'scope:iac')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Use GITHUB_TOKEN for push permissions (already write per
+          # workflow-level permissions block).
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm ci --prefix lambda
+      - name: Configure git author
+        run: |
+          git config user.name 'claude[bot]'
+          git config user.email '41898282+claude[bot]@users.noreply.github.com'
+      - name: Run implementer agent (Mode A — initial)
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          show_full_output: true
+          prompt: |
+            Act as the `implementer` subagent (see .claude/agents/implementer.md).
+            You are operating in **Mode A — initial implementation**.
+
+            The work item is issue #${{ github.event.issue.number }} which
+            just received the `ready-for-implementer` label.
+
+            Read the issue:
+              gh issue view ${{ github.event.issue.number }} --json title,body,labels
+
+            Follow your spec's Mode A process exactly:
+              1. Read the issue body in full.
+              2. Check the scope cap (>50 LOC, >3 files, cross-component).
+                 If exceeded, post the refusal comment and stop.
+              3. Read the relevant code in context.
+              4. Plan the minimal change.
+              5. Create branch `impl/<slug>-${{ github.event.issue.number }}`.
+              6. Write the code change.
+              7. Write tests that would fail without the fix.
+              8. Run `npm test`, `npm run lint`, `npm run typecheck` (if defined).
+              9. Iterate locally until clean.
+             10. Commit (SSH-signed via the git config from earlier; the
+                 runner has the GitHub App's signing identity).
+             11. Push the branch.
+             12. Open a PR with title `<type>(<component>): <description>`
+                 and the body sections from your spec (What changed / Why /
+                 How tested / Closes #${{ github.event.issue.number }}).
+             13. Stop.
+
+            Hard rules:
+              - Never commit to master.
+              - Never modify terraform/ (that's iac-implementer).
+              - Never modify .github/workflows/ unless the issue has `scope:ci`.
+              - If at any point you cannot proceed safely, post a comment
+                on the issue explaining and stop. Do not push broken code.
+          claude_args: |
+            --model claude-sonnet-4-6
+            --permission-mode bypassPermissions
+            --allowed-tools Bash,Read,Write,Edit,Glob,Grep
+            --append-system-prompt "Follow the platform standards in docs/standards/. Adhere strictly to the implementer agent's scope cap and authority rules per .claude/agents/implementer.md."
+
+  # ── Mode A: IaC implementation (separate agent) ─────────────────────────
+  initial-iac:
+    if: |
+      github.event_name == 'issues'
+      && github.event.action == 'labeled'
+      && github.event.label.name == 'ready-for-implementer'
+      && contains(github.event.issue.labels.*.name, 'scope:iac')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: opentofu/setup-opentofu@v1
+      - name: Configure AWS credentials (read-only iac-drift role)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::214599503944:role/game-night-iac-drift
+          aws-region: us-east-2
+      - name: Configure git author
+        run: |
+          git config user.name 'claude[bot]'
+          git config user.email '41898282+claude[bot]@users.noreply.github.com'
+      - name: Run iac-implementer agent
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          show_full_output: true
+          prompt: |
+            Act as the `iac-implementer` subagent (.claude/agents/iac-implementer.md).
+            You are operating in **Mode A — initial IaC implementation**.
+
+            Work item: issue #${{ github.event.issue.number }} with label `scope:iac`.
+
+            Read the issue:
+              gh issue view ${{ github.event.issue.number }} --json title,body,labels
+
+            Follow your spec's Mode A process exactly. Critical rules:
+              - cd terraform/envs/prod
+              - Run `tofu init`, `tofu validate`, `tofu plan`
+              - NEVER run `tofu apply` or `tofu destroy`
+              - NEVER modify state directly
+              - Open the PR with the full `tofu plan` output in the body
+              - If destructive-change-detector would flag this change, check
+                for a paired Accepted ADR; if none, post a comment and stop.
+              - Scope cap: max 5 resources per PR.
+
+            After opening the PR, stop. A human runs `tofu apply` after
+            merge.
+          claude_args: |
+            --model claude-sonnet-4-6
+            --permission-mode bypassPermissions
+            --allowed-tools Bash,Read,Write,Edit,Glob,Grep
+            --append-system-prompt "Follow the platform standards in docs/standards/. Adhere strictly to the iac-implementer agent's scope cap and authority rules per .claude/agents/iac-implementer.md."
+
+  # ── Mode B: fix iteration ───────────────────────────────────────────────
+  fix-iteration:
+    # Triggered when a review of state REQUEST_CHANGES lands on a PR
+    # authored by claude[bot]. This is the iteration loop from ADR-0013.
+    #
+    # Note: we override the bot-skip guard here. Normally we skip bot
+    # actors to prevent loops, but the implementer's whole job is to
+    # respond to bot review feedback. The 3-attempt cap (enforced in the
+    # agent prompt) bounds the loop.
+    if: |
+      github.event_name == 'pull_request_review'
+      && github.event.review.state == 'changes_requested'
+      && github.event.pull_request.user.login == 'claude[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm ci --prefix lambda
+      - name: Configure git author
+        run: |
+          git config user.name 'claude[bot]'
+          git config user.email '41898282+claude[bot]@users.noreply.github.com'
+      - name: Count prior fix attempts on this branch
+        id: count
+        run: |
+          # Count commits on this branch authored by claude[bot] that
+          # contain "address review feedback" in the message — those are
+          # prior fix iterations.
+          attempts=$(git log --author='claude\[bot\]' --grep='address review feedback' --oneline | wc -l)
+          echo "attempts=$attempts" >> "$GITHUB_OUTPUT"
+          echo "Prior fix attempts: $attempts"
+      - name: Escalate if at cap
+        if: steps.count.outputs.attempts >= '3'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr comment ${PR_NUMBER} --body "I've made 3 attempts to address review feedback without converging. Escalating to @jaetill for direction. Stopping autonomous fix iteration per ADR-0013."
+          exit 0
+      - name: Run implementer agent (Mode B — fix)
+        if: steps.count.outputs.attempts < '3'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          show_full_output: true
+          # Override the default bot-skip safety because we WANT to act on
+          # bot-initiated review events here. The 3-attempt cap above is
+          # the loop guard.
+          allowed_bots: 'claude[bot]'
+          prompt: |
+            Act as the `implementer` subagent.
+            You are operating in **Mode B — fix iteration**.
+
+            PR: #${{ github.event.pull_request.number }}
+            Head branch: ${{ github.event.pull_request.head.ref }}
+            Prior attempts on this branch: ${{ steps.count.outputs.attempts }}
+
+            Read the latest reviewer comments:
+              gh pr view ${{ github.event.pull_request.number }} --json comments
+
+            Look specifically for the most recent comments starting with
+            `## Code Review` and `## Security Review`. Each enumerates
+            findings with severity. Address every Critical and High
+            finding; address Medium findings if they're easy to fix in
+            scope.
+
+            Process:
+              1. For each finding, read the file/line cited.
+              2. Apply a minimal fix.
+              3. Run npm test to verify nothing regresses.
+              4. Commit with message:
+                 `fix(<component>): address review feedback — <description>`
+              5. Push to the same branch.
+              6. Post a brief comment on the PR listing one bullet per
+                 finding with what you changed.
+
+            Hard rules same as Mode A.
+          claude_args: |
+            --model claude-sonnet-4-6
+            --permission-mode bypassPermissions
+            --allowed-tools Bash,Read,Write,Edit,Glob,Grep
+            --append-system-prompt "Follow the platform standards in docs/standards/. You are operating in Mode B per .claude/agents/implementer.md."
+
+  # ── Manual dispatch (workflow_dispatch) — for smoke testing ─────────────
+  manual-dispatch:
+    if: |
+      github.event_name == 'workflow_dispatch'
+      && inputs.issue_number != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci && npm ci --prefix lambda
+      - name: Configure git author
+        run: |
+          git config user.name 'claude[bot]'
+          git config user.email '41898282+claude[bot]@users.noreply.github.com'
+      - name: Run implementer agent (manual dispatch)
+        env:
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          show_full_output: true
+          prompt: |
+            Manual dispatch for testing — same as Mode A but the issue
+            number comes from workflow_dispatch input.
+
+            Issue number: ${{ inputs.issue_number }}
+
+            Follow the Mode A process from .claude/agents/implementer.md.
+          claude_args: |
+            --model claude-sonnet-4-6
+            --permission-mode bypassPermissions
+            --allowed-tools Bash,Read,Write,Edit,Glob,Grep
+            --append-system-prompt "Follow the platform standards in docs/standards/. Adhere strictly to .claude/agents/implementer.md."
