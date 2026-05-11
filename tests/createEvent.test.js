@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { generateEventId } = require('../lambda/createEvent.js');
+const { generateEventId, handler } = require('../lambda/createEvent.js');
 
 describe('generateEventId', () => {
   it('returns a string', () => {
@@ -68,5 +68,83 @@ describe('generateEventId', () => {
     generateEventId();
     expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
+  });
+});
+
+// ── Handler tests ──────────────────────────────────────────────────────────
+// Two categories:
+//   1. Source-level regression guard: asserts the handler source does not call
+//      toUpperCase() on generateEventId(). vi.mock can't intercept CJS require()
+//      calls made via createRequire (vitest only intercepts ESM imports), so the
+//      behavioral test for the 201-with-lowercase-ID path uses source analysis.
+//   2. Input-validation tests for paths that return BEFORE any S3 call — these
+//      run against the real handler without needing an S3 mock.
+
+function makeHandlerEvent(body, opts = {}) {
+  return {
+    httpMethod: 'POST',
+    resource: '/create-event',
+    headers: { origin: 'https://gamenights.jaetill.com', ...(opts.headers || {}) },
+    requestContext: { authorizer: { userId: opts.userId || 'testhost' } },
+    body: JSON.stringify(body),
+  };
+}
+
+const CTX = { awsRequestId: 'test-req-id' };
+
+describe('createEvent handler — source regression guard', () => {
+  it('event ID is not uppercased: generateEventId() result must not have toUpperCase() applied', () => {
+    // This test directly guards against the regression where the handler calls
+    // generateEventId().toUpperCase(), which would produce IDs like
+    // 'M9K3Z7-1A2B3C4D' instead of the expected lowercase 'm9k3z7-1a2b3c4d'.
+    // Client-side code compares IDs case-sensitively; uppercase IDs break lookups.
+    const { readFileSync } = require('node:fs');
+    const source = readFileSync(
+      require.resolve('../lambda/createEvent.js'),
+      'utf-8',
+    );
+    expect(source).not.toMatch(/generateEventId\(\)\.toUpperCase\(\)/);
+  });
+});
+
+describe('createEvent handler — input validation (no S3 needed)', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns 200 with CORS Allow-Methods for OPTIONS preflight', async () => {
+    const res = await handler(
+      { httpMethod: 'OPTIONS', headers: { origin: 'https://gamenights.jaetill.com' }, requestContext: {}, body: null },
+      CTX,
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['Access-Control-Allow-Methods']).toContain('POST');
+  });
+
+  it('returns 401 when the authorizer userId is absent', async () => {
+    const res = await handler(
+      { httpMethod: 'POST', headers: {}, requestContext: {}, body: '{"date":"2026-06-01"}' },
+      CTX,
+    );
+    expect(res.statusCode).toBe(401);
+    expect(JSON.parse(res.body).error).toBe('Unauthorized');
+  });
+
+  it('returns 400 for an unparseable JSON body', async () => {
+    const res = await handler(
+      { httpMethod: 'POST', headers: {}, requestContext: { authorizer: { userId: 'u1' } }, body: 'not-json' },
+      CTX,
+    );
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 400 when the date field is missing', async () => {
+    const res = await handler(makeHandlerEvent({ time: '19:00' }), CTX);
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('date is required');
   });
 });
