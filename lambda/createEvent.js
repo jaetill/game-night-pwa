@@ -121,7 +121,7 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
 
   // ── Build new event ──
   const newEvent = {
-    id:            generateEventId(),
+    id:            generateEventId().toUpperCase(),
     date:          date,
     time:          time          || '',
     location:      location      || '',
