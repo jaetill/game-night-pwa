@@ -41,6 +41,13 @@ jobs:
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
           VITE_ADMIN_NAMES: ${{ secrets.VITE_ADMIN_NAMES }}
+          # Sentry browser SDK is initialized only if VITE_SENTRY_DSN is
+          # present at build time (src/js/sentry.js no-ops without it).
+          # VITE_DEPLOY_ENV / VITE_RELEASE_VERSION are optional metadata
+          # that show up on Sentry events for filtering.
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+          VITE_DEPLOY_ENV: production
+          VITE_RELEASE_VERSION: ${{ github.sha }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
