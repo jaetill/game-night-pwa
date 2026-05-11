@@ -80,7 +80,7 @@ jobs:
             --permission-mode bypassPermissions
             --allowed-tools Bash,Read,Glob,Grep
             --append-system-prompt "Follow the platform standards in docs/standards/."
-      - name: Enforce gate (fail if VERDICT: BLOCK)
+      - name: "Enforce gate (fail if VERDICT BLOCK)"
         # Reads the most recent code-review comment and fails the job
         # if it ends with "VERDICT: BLOCK". This makes the job a real
         # gating status check, not advisory.
@@ -393,7 +393,7 @@ jobs:
             --permission-mode bypassPermissions
             --allowed-tools Bash,Read,Glob,Grep
             --append-system-prompt "Follow the platform standards in docs/standards/."
-      - name: Enforce gate (fail if VERDICT: BLOCK)
+      - name: "Enforce gate (fail if VERDICT BLOCK)"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
