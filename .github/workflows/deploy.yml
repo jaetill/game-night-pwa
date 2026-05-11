@@ -30,8 +30,14 @@ jobs:
   build:
     needs: test
     runs-on: ubuntu-latest
+    env:
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+      SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history for `releases set-commits --auto`
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -43,11 +49,40 @@ jobs:
           VITE_ADMIN_NAMES: ${{ secrets.VITE_ADMIN_NAMES }}
           # Sentry browser SDK is initialized only if VITE_SENTRY_DSN is
           # present at build time (src/js/sentry.js no-ops without it).
-          # VITE_DEPLOY_ENV / VITE_RELEASE_VERSION are optional metadata
-          # that show up on Sentry events for filtering.
+          # VITE_RELEASE_VERSION must equal the release name we create in
+          # Sentry below so frontend events match the uploaded source maps.
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
           VITE_DEPLOY_ENV: production
           VITE_RELEASE_VERSION: ${{ github.sha }}
+
+      # ── Sentry release + source map upload (BEFORE pages-artifact) ──
+      # Has to run pre-artifact so we can strip the .map files out of dist/
+      # afterwards. GitHub Pages should serve the minified JS only; Sentry
+      # keeps the maps server-side for deobfuscation.
+      - name: Upload source maps to Sentry
+        if: env.SENTRY_AUTH_TOKEN != ''
+        uses: getsentry/action-release@v1
+        with:
+          version: ${{ github.sha }}
+          environment: prod
+          sourcemaps: ./dist
+          # set_commits=auto associates the release with all commits since
+          # the previous release. Sentry then says "this error first appeared
+          # in commit X" on the issue page.
+          set_commits: auto
+          finalize: true
+      - name: Strip source maps from dist/ before publish
+        if: always()
+        run: |
+          # Delete .map files and remove their //# sourceMappingURL= references
+          # from sibling .js/.css so browsers don't 404-spam the console
+          # looking for them.
+          find dist -name '*.map' -type f -delete
+          find dist -name '*.js' -type f -exec sed -i '/\/\/# sourceMappingURL=/d' {} +
+          find dist -name '*.css' -type f -exec sed -i '/\/\*# sourceMappingURL=/d' {} +
+          echo "Source maps stripped. Remaining files:"
+          find dist -name '*.map' -o -name '*.js' | head -20
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
@@ -63,27 +98,3 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-  # Platform integration (per ADR-0009): Sentry release tracking on every deploy.
-  # Skips gracefully if SENTRY_AUTH_TOKEN secret is not configured.
-  #
-  # Note: GitHub Actions does NOT permit `secrets.X` in step-level `if:`
-  # conditions. The pattern below promotes the secret to job-level env so the
-  # `if` can read `env.SENTRY_AUTH_TOKEN` instead. This avoids the workflow-
-  # validation failure that hit every push for the first half of the session.
-  sentry-release:
-    needs: deploy
-    runs-on: ubuntu-latest
-    continue-on-error: true   # Don't fail the workflow if Sentry isn't wired yet
-    env:
-      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-      SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-      SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Sentry release
-        if: env.SENTRY_AUTH_TOKEN != ''
-        uses: getsentry/action-release@v1
-        with:
-          version: ${{ github.sha }}
-          environment: prod
-          sourcemaps: ./dist

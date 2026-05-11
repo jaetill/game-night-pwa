@@ -103,6 +103,11 @@ jobs:
       - name: Run incident-responder agent
         env:
           ISSUE_NUMBER: ${{ steps.target.outputs.number }}
+          # Pass Sentry API access to the agent so it can fetch full event
+          # context (breadcrumbs, user count, recent occurrences) rather
+          # than relying only on the truncated GitHub issue body.
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -130,23 +135,33 @@ jobs:
             2. If smoke test: post a comment confirming the wiring works,
                then close it via `gh issue close $ISSUE_NUMBER`. STOP.
             3. For real alerts:
-               a. Pull recent deploy info: `gh run list --workflow=deploy.yml --branch=master --limit=3`
-               b. Classify severity (P0 / P1 / P2). Sentry alert rules
-                  should only fire this workflow for P0/P1; if the issue
-                  looks lower-severity, note it but proceed.
-               c. Identify probable cause (cite a recent deploy if within
+               a. Extract the Sentry issue ID from the GitHub issue body.
+                  Sentry's integration writes a line like
+                  `Sentry Issue: [GAME-NIGHT-PWA-N](https://....sentry.io/issues/<id>/)`.
+                  Grep for the URL and pull out `<id>`.
+               b. If you got an ID and SENTRY_AUTH_TOKEN is set, fetch full
+                  Sentry context (a JSON blob with breadcrumbs, user count,
+                  release, tags, recent events):
+                    curl -s -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
+                      "https://sentry.io/api/0/organizations/$SENTRY_ORG/issues/<id>/"
+                  Use this for richer triage than the GitHub issue body alone.
+               c. Pull recent deploy info: `gh run list --workflow=deploy.yml --branch=master --limit=3`
+               d. Classify severity (P0 / P1 / P2).
+               e. Identify probable cause (cite a recent deploy if within
                   the last 60 min; otherwise note as "pre-existing or
-                  external dependency").
-               d. Pick the right runbook (docs/runbooks/) if one matches.
+                  external dependency"). Cross-reference the Sentry
+                  release tag with the deploy SHA — they should match.
+               f. Pick the right runbook (docs/runbooks/) if one matches.
             4. Update the issue body with a triage block via `gh issue edit`:
                  ## Triage (incident-responder)
                  - **Severity**: P0 | P1 | P2
                  - **Symptom**: <one line>
+                 - **Affected users**: <count from Sentry API, or "unknown">
                  - **Probable cause**: <recent deploy SHA + timestamp, or "unknown / external">
                  - **Mitigation suggested**: <rollback / scale / restart / no-action>
                  - **Owner**: @jaetill
                  - **Runbook**: <link to docs/runbooks/X.md or "none">
-                 - **Next checks**: <CloudWatch query, Sentry issue URL, etc.>
+                 - **Next checks**: <CloudWatch query, Sentry issue URL, specific log filters>
             5. Post a comment with a postmortem skeleton (Detected / Impact /
                Timeline / Root cause / Action items) — leave it for the
                human to fill in after resolution.
