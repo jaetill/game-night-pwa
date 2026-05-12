@@ -30,7 +30,12 @@ jobs:
     # synchronize with github.actor=claude[bot]). The action itself rejects bot
     # runs with "Workflow initiated by non-human actor" — short-circuit at the
     # workflow level instead so PR status checks stay green.
-    if: github.actor != 'claude[bot]' && !endsWith(github.actor, '[bot]')
+    # Bot-skip guard intentionally removed per the autonomous-team
+    # architecture (ADR-0013). Implementer-authored PRs (actor: claude[bot])
+    # MUST be reviewed; otherwise branch protection's required checks
+    # report SKIPPED, which GitHub treats as satisfied, which would let
+    # bot-authored PRs bypass review entirely. The 3-attempt cap on the
+    # implementer's fix-iteration job is the real loop guard, not this.
     runs-on: ubuntu-latest
     timeout-minutes: 15   # generous; reviews typically run 2–5 min
     steps:
@@ -51,6 +56,11 @@ jobs:
           # gets posted. Bypass that by having the agent shell out to `gh pr
           # comment` directly, which is reliable on every event type.
           show_full_output: true
+          # Allow runs initiated by claude[bot] (i.e. implementer-authored
+          # PRs and synchronize events from agent commits). Loop prevention
+          # is done by the implementer's 3-attempt cap, not by skipping
+          # bot-initiated runs here.
+          allowed_bots: 'claude[bot]'
           prompt: |
             Act as the code-reviewer subagent defined in .claude/agents/code-reviewer.md.
 
@@ -180,7 +190,12 @@ jobs:
           echo "Code review: no blocking findings. Job passing."
 
   functional-test:
-    if: github.actor != 'claude[bot]' && !endsWith(github.actor, '[bot]')
+    # Bot-skip guard intentionally removed per the autonomous-team
+    # architecture (ADR-0013). Implementer-authored PRs (actor: claude[bot])
+    # MUST be reviewed; otherwise branch protection's required checks
+    # report SKIPPED, which GitHub treats as satisfied, which would let
+    # bot-authored PRs bypass review entirely. The 3-attempt cap on the
+    # implementer's fix-iteration job is the real loop guard, not this.
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -201,6 +216,11 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           show_full_output: true
+          # Allow runs initiated by claude[bot] (i.e. implementer-authored
+          # PRs and synchronize events from agent commits). Loop prevention
+          # is done by the implementer's 3-attempt cap, not by skipping
+          # bot-initiated runs here.
+          allowed_bots: 'claude[bot]'
           prompt: |
             Act as the functional-tester subagent defined in .claude/agents/functional-tester.md.
 
@@ -228,7 +248,12 @@ jobs:
             --append-system-prompt "Follow the platform standards in docs/standards/."
 
   test-writer:
-    if: github.actor != 'claude[bot]' && !endsWith(github.actor, '[bot]')
+    # Bot-skip guard intentionally removed per the autonomous-team
+    # architecture (ADR-0013). Implementer-authored PRs (actor: claude[bot])
+    # MUST be reviewed; otherwise branch protection's required checks
+    # report SKIPPED, which GitHub treats as satisfied, which would let
+    # bot-authored PRs bypass review entirely. The 3-attempt cap on the
+    # implementer's fix-iteration job is the real loop guard, not this.
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -254,6 +279,11 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           show_full_output: true
+          # Allow runs initiated by claude[bot] (i.e. implementer-authored
+          # PRs and synchronize events from agent commits). Loop prevention
+          # is done by the implementer's 3-attempt cap, not by skipping
+          # bot-initiated runs here.
+          allowed_bots: 'claude[bot]'
           prompt: |
             Act as the test-writer subagent defined in .claude/agents/test-writer.md.
 
@@ -303,7 +333,12 @@ jobs:
             --append-system-prompt "Follow the platform standards in docs/standards/. Use vitest, happy-dom for DOM tests, no new test deps."
 
   e2e-test:
-    if: github.actor != 'claude[bot]' && !endsWith(github.actor, '[bot]')
+    # Bot-skip guard intentionally removed per the autonomous-team
+    # architecture (ADR-0013). Implementer-authored PRs (actor: claude[bot])
+    # MUST be reviewed; otherwise branch protection's required checks
+    # report SKIPPED, which GitHub treats as satisfied, which would let
+    # bot-authored PRs bypass review entirely. The 3-attempt cap on the
+    # implementer's fix-iteration job is the real loop guard, not this.
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -331,6 +366,11 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           show_full_output: true
+          # Allow runs initiated by claude[bot] (i.e. implementer-authored
+          # PRs and synchronize events from agent commits). Loop prevention
+          # is done by the implementer's 3-attempt cap, not by skipping
+          # bot-initiated runs here.
+          allowed_bots: 'claude[bot]'
           prompt: |
             Act as the e2e-tester subagent defined in .claude/agents/e2e-tester.md.
 
@@ -373,7 +413,12 @@ jobs:
           retention-days: 7
 
   doc-keeper:
-    if: github.actor != 'claude[bot]' && !endsWith(github.actor, '[bot]')
+    # Bot-skip guard intentionally removed per the autonomous-team
+    # architecture (ADR-0013). Implementer-authored PRs (actor: claude[bot])
+    # MUST be reviewed; otherwise branch protection's required checks
+    # report SKIPPED, which GitHub treats as satisfied, which would let
+    # bot-authored PRs bypass review entirely. The 3-attempt cap on the
+    # implementer's fix-iteration job is the real loop guard, not this.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -388,6 +433,11 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           show_full_output: true
+          # Allow runs initiated by claude[bot] (i.e. implementer-authored
+          # PRs and synchronize events from agent commits). Loop prevention
+          # is done by the implementer's 3-attempt cap, not by skipping
+          # bot-initiated runs here.
+          allowed_bots: 'claude[bot]'
           prompt: |
             Act as the doc-keeper subagent defined in .claude/agents/doc-keeper.md.
 
@@ -431,7 +481,12 @@ jobs:
             --append-system-prompt "Follow the platform standards in docs/standards/. Don't write ADRs."
 
   security-review:
-    if: github.actor != 'claude[bot]' && !endsWith(github.actor, '[bot]')
+    # Bot-skip guard intentionally removed per the autonomous-team
+    # architecture (ADR-0013). Implementer-authored PRs (actor: claude[bot])
+    # MUST be reviewed; otherwise branch protection's required checks
+    # report SKIPPED, which GitHub treats as satisfied, which would let
+    # bot-authored PRs bypass review entirely. The 3-attempt cap on the
+    # implementer's fix-iteration job is the real loop guard, not this.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -444,6 +499,11 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           show_full_output: true
+          # Allow runs initiated by claude[bot] (i.e. implementer-authored
+          # PRs and synchronize events from agent commits). Loop prevention
+          # is done by the implementer's 3-attempt cap, not by skipping
+          # bot-initiated runs here.
+          allowed_bots: 'claude[bot]'
           prompt: |
             Act as the security-reviewer subagent defined in .claude/agents/security-reviewer.md.
 
@@ -702,10 +762,9 @@ jobs:
 
   invoke-architect-if-gated:
     needs: destructive-change-check
-    if: |
-      needs.destructive-change-check.outputs.requires-adr == 'true'
-      && github.actor != 'claude[bot]'
-      && !endsWith(github.actor, '[bot]')
+    # Bot-skip removed per ADR-0013 — implementer-authored PRs that
+    # trip destructive-change-detector still need an ADR drafted.
+    if: needs.destructive-change-check.outputs.requires-adr == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20   # slightly higher; architect drafts + commits an ADR
     steps:
@@ -718,6 +777,11 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           show_full_output: true
+          # Allow runs initiated by claude[bot] (i.e. implementer-authored
+          # PRs and synchronize events from agent commits). Loop prevention
+          # is done by the implementer's 3-attempt cap, not by skipping
+          # bot-initiated runs here.
+          allowed_bots: 'claude[bot]'
           prompt: |
             Act as the architect subagent defined in .claude/agents/architect.md (headless mode).
 
