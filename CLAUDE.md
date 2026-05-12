@@ -33,7 +33,7 @@ Hosted at **https://gamenights.jaetill.com** (GitHub Pages frontend, AWS backend
 | Cognito branding ID | `26736f11-feed-4a3f-994d-643e07b2e93d` (per-client branding required for managed login v2) |
 | Required group | `game-night-users` — users without this claim are bounced back to portal |
 | GitHub deploy role | `game-night-github-deploy` (OIDC, GitHub Pages deploy) |
-| IAM role | `grafana-cloudwatch-readonly` — assumed by Grafana Cloud (account `008923505280`) for CloudWatch + Logs read; `sts:ExternalId` `1631481` guards confused-deputy |
+| IAM role | `grafana-cloudwatch-readonly` — assumed by Grafana Cloud (account `008923505280`) for CloudWatch + Logs read; `sts:ExternalId` enforced via `var.grafana_external_id` (set via `TF_VAR_grafana_external_id` env var; value not committed — see Grafana data-source UI) |
 | Region | `us-east-2` |
 
 ## Lambda functions and roles

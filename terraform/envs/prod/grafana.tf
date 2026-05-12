@@ -13,10 +13,12 @@
 # Trust policy hardening:
 #   - Principal: Grafana's published AWS account ID for the Grafana Cloud
 #     stack region (008923505280). Public knowledge; not a secret.
-#   - sts:ExternalId condition: per-stack secret (1631481) shown only inside
-#     our Grafana Cloud UI. Closes the confused-deputy hole: another customer
+#   - sts:ExternalId condition: per-stack value shown only inside our
+#     Grafana Cloud UI. Closes the confused-deputy hole: another customer
 #     of Grafana Cloud can't trick Grafana into assuming OUR role on their
-#     behalf, because they don't know our external ID.
+#     behalf, because they don't know our external ID. Sourced from
+#     var.grafana_external_id (sensitive); set via TF_VAR_grafana_external_id
+#     env var so the value stays out of this public repo.
 #
 # Permissions: minimum set documented by Grafana for the CloudWatch data
 # source. https://grafana.com/docs/grafana/latest/datasources/aws-cloudwatch/aws-authentication/
@@ -38,7 +40,7 @@ data "aws_iam_policy_document" "grafana_cloudwatch_trust" {
     condition {
       test     = "StringEquals"
       variable = "sts:ExternalId"
-      values   = ["1631481"]
+      values   = [var.grafana_external_id]
     }
   }
 }
@@ -77,17 +79,16 @@ data "aws_iam_policy_document" "grafana_cloudwatch_readonly" {
     resources = ["*"]
   }
 
-  # EC2 — used by Grafana to enumerate available regions and resolve
-  # instance-level tags when building dashboards. Not used by us today
-  # (serverless stack) but cheap to include and unblocks future EC2 work.
+  # EC2 — region discovery only. Grafana uses DescribeRegions to populate
+  # the region selector in the data source UI; everything else (instance
+  # listing, instance tags) is excluded because we run serverless and
+  # have no EC2 to monitor. Re-grant DescribeInstances + DescribeTags only
+  # if/when EC2-based dashboards are needed (least-privilege per
+  # PR #30 code review).
   statement {
-    sid    = "Ec2Discovery"
-    effect = "Allow"
-    actions = [
-      "ec2:DescribeRegions",
-      "ec2:DescribeInstances",
-      "ec2:DescribeTags",
-    ]
+    sid       = "Ec2RegionDiscovery"
+    effect    = "Allow"
+    actions   = ["ec2:DescribeRegions"]
     resources = ["*"]
   }
 
