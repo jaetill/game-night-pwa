@@ -69,6 +69,11 @@ function corsHeaders(event) {
   };
 }
 
+// RFC 5321 max local+domain length is 254 characters.
+function validateInviteEmail(email) {
+  return typeof email === 'string' && email.length <= 254 && email.includes('@');
+}
+
 exports.handler = Sentry.wrapHandler(async (event, context) => {
   logger.info('handler.invoked', {
     request_id: context?.awsRequestId,
@@ -115,7 +120,7 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
 
   // ── Invite action: provision Cognito user + send invite email ─────────────
   if (action === 'invite') {
-    if (!inviteEmail || !inviteEmail.includes('@')) {
+    if (!validateInviteEmail(inviteEmail)) {
       return respond(400, { error: 'Valid email required for invite' }, CORS);
     }
     const inviteEmailLc = inviteEmail.toLowerCase();
@@ -517,3 +522,4 @@ function postmark(apiKey, msg) {
 exports._buildHtml = buildHtml;
 exports._buildInviteHtml = buildInviteHtml;
 exports._escapeHtml = escapeHtml;
+exports._validateInviteEmail = validateInviteEmail;

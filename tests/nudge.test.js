@@ -12,6 +12,7 @@ const {
   _buildHtml: buildHtml,
   _buildInviteHtml: buildInviteHtml,
   _escapeHtml: escapeHtml,
+  _validateInviteEmail: validateInviteEmail,
 } = require('../lambda/nudge.js');
 
 const BASE = {
@@ -22,6 +23,47 @@ const BASE = {
   location: 'Bob\'s Place',
   description: 'Bring your favourite games.',
 };
+
+describe('validateInviteEmail', () => {
+  it('accepts a well-formed email', () => {
+    expect(validateInviteEmail('user@example.com')).toBe(true);
+  });
+
+  it('rejects null (falsy guard)', () => {
+    expect(validateInviteEmail(null)).toBe(false);
+  });
+
+  it('rejects undefined', () => {
+    expect(validateInviteEmail(undefined)).toBe(false);
+  });
+
+  it('rejects an array — would throw TypeError on old .includes guard', () => {
+    expect(validateInviteEmail(['user@example.com'])).toBe(false);
+  });
+
+  it('rejects a plain object', () => {
+    expect(validateInviteEmail({ email: 'user@example.com' })).toBe(false);
+  });
+
+  it('rejects a number', () => {
+    expect(validateInviteEmail(42)).toBe(false);
+  });
+
+  it('rejects a string longer than 254 characters', () => {
+    const long = 'a'.repeat(245) + '@b.com'; // 245 + 6 = 251 < 254 — just over when we add more
+    const tooLong = 'a'.repeat(249) + '@b.com'; // 249 + 6 = 255 > 254
+    expect(validateInviteEmail(long)).toBe(true);
+    expect(validateInviteEmail(tooLong)).toBe(false);
+  });
+
+  it('rejects a string without @', () => {
+    expect(validateInviteEmail('notanemail')).toBe(false);
+  });
+
+  it('rejects an empty string', () => {
+    expect(validateInviteEmail('')).toBe(false);
+  });
+});
 
 describe('escapeHtml', () => {
   it('encodes the five dangerous characters', () => {
