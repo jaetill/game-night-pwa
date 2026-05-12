@@ -58,7 +58,11 @@ jobs:
             Run `git diff origin/${{ github.base_ref }}...HEAD` to get the diff,
             then read whatever surrounding files you need for context.
 
-            Post a SINGLE PR comment with your findings via:
+            ## Your outputs (TWO things to post)
+
+            ### 1. A PR comment with the human-readable summary
+
+            Post a SINGLE PR comment via:
               gh pr comment ${{ github.event.pull_request.number }} --body-file -
             (read the body from stdin via a heredoc).
 
@@ -66,24 +70,78 @@ jobs:
               - Lead with `## Code Review (claude-sonnet-4-6)`
               - Group findings by severity: Critical / High / Medium / Low / Nit
               - Cite file paths and line numbers
-              - End with a line of the EXACT form (used by automation downstream):
+              - End with a line of the EXACT form (parsed by the gate step):
                   `VERDICT: BLOCK` if any Critical or High findings exist
                   `VERDICT: APPROVE-WITH-COMMENTS` if only Medium/Low/Nit
                   `VERDICT: APPROVE` if no findings at all
               - Say "No issues found." in the body if there are no findings
 
-            After posting, exit the AGENT session normally — the workflow's
-            next step parses the verdict line and sets the job's success/
-            failure status based on it (per ADR-0013 gating model).
+            ### 2. A GitHub issue per HIGH or MEDIUM finding (with dedup)
+
+            For each Critical, High, or Medium finding, file a defect issue
+            so it survives this PR's lifecycle and can be picked up by the
+            implementer agent (per ADR-0013).
+
+            Dedup: before filing, check existing open issues for one that
+            already covers this exact file:line + finding category. Run:
+              gh issue list \
+                --label "origin:internal-review,defect" \
+                --state open \
+                --json title,number --limit 100 | \
+                jq -r '.[].title'
+            If you see an existing title containing the same file:line
+            reference, SKIP filing — the issue is already tracked.
+
+            For each new finding, file via:
+              gh issue create \
+                --title "[code-review] <file>:<line> — <one-line description>" \
+                --label "defect,severity:critical|high|medium,origin:internal-review" \
+                --body "$(cat <<EOF
+                **From PR:** #${{ github.event.pull_request.number }}
+                **File:** <file>:<line>
+                **Severity:** <critical|high|medium>
+
+                ## What's wrong
+
+                <2–4 sentences describing the issue>
+
+                ## Suggested fix
+
+                <minimal change — should fit the implementer's scope cap
+                (50 LOC / 3 files / 1 component)>
+
+                ## Test that would catch it
+
+                <one-line test description, if applicable>
+
+                ---
+
+                *Auto-filed by code-reviewer per ADR-0013. Awaiting human
+                dispatch — add label `ready-for-implementer` to dispatch
+                to the implementer agent.*
+                EOF
+                )"
+
+            Do NOT file issues for Low or Nit findings. Those stay in the
+            PR comment only — too noisy as standalone defects.
+
+            Do NOT apply `ready-for-implementer` yourself — that's the
+            human's dispatch gate per the three-tier model.
+
+            After both outputs, exit the agent session normally.
           claude_args: |
             --model claude-sonnet-4-6
             --permission-mode bypassPermissions
             --allowed-tools Bash,Read,Glob,Grep
             --append-system-prompt "Follow the platform standards in docs/standards/."
-      - name: "Enforce gate (fail if VERDICT BLOCK)"
-        # Reads the most recent code-review comment and fails the job
-        # if it ends with "VERDICT: BLOCK". This makes the job a real
-        # gating status check, not advisory.
+      - name: "Enforce gate (hybrid VERDICT verification)"
+        # Defense in depth per ADR-0013 §4 decision:
+        #   1. Parse the agent's self-declared VERDICT line
+        #   2. INDEPENDENTLY scan the comment for ### Critical or ### High
+        #      severity headers
+        # Fail the job if EITHER signals BLOCK. This catches a subverted
+        # prompt that "forgets" the VERDICT line, AND it catches an
+        # honest VERDICT: APPROVE that's inconsistent with the body.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -92,15 +150,34 @@ jobs:
             --jq '[.[] | select(.body | startswith("## Code Review"))] | last | .body // ""')
           if [[ -z "$body" ]]; then
             echo "::warning::No code-review comment found; agent may have failed to post."
-            echo "Treating as APPROVE for now (don't punish a tooling failure)."
+            echo "Treating as APPROVE (don't punish a tooling failure)."
             exit 0
           fi
+          # Signal 1: explicit VERDICT line
+          verdict_block=0
           if echo "$body" | grep -q '^VERDICT: BLOCK$'; then
-            echo "::error::Code review found Critical or High issues. Merge blocked."
+            verdict_block=1
+            echo "::notice::VERDICT line says BLOCK."
+          fi
+          # Signal 2: independent scan for Critical/High severity headers
+          # that contain at least one finding bullet
+          severity_block=0
+          if echo "$body" | awk '
+            /^### Critical/ || /^### High/ { in_section=1; next }
+            /^### / || /^---/ { in_section=0; next }
+            in_section && /^- / { print; exit 0 }
+            END { exit 1 }
+          ' >/dev/null 2>&1; then
+            severity_block=1
+            echo "::notice::Independent scan found Critical or High severity findings."
+          fi
+          if [[ $verdict_block -eq 1 || $severity_block -eq 1 ]]; then
+            echo "::error::Code review BLOCKED merge."
+            echo "(verdict_block=$verdict_block, severity_block=$severity_block)"
             echo "See the PR comment for details."
             exit 1
           fi
-          echo "Code review verdict: not BLOCK. Job passing."
+          echo "Code review: no blocking findings. Job passing."
 
   functional-test:
     if: github.actor != 'claude[bot]' && !endsWith(github.actor, '[bot]')
@@ -374,26 +451,70 @@ jobs:
             and HEAD. Get the diff via `git diff origin/${{ github.base_ref }}...HEAD`
             and read whatever surrounding files you need for context.
 
-            Post a SINGLE PR comment with your findings via:
+            ## Your outputs (TWO things to post)
+
+            ### 1. A PR comment with the human-readable summary
+
+            Post a SINGLE PR comment via:
               gh pr comment ${{ github.event.pull_request.number }} --body-file -
-            (read the body from stdin via a heredoc).
 
             The comment must:
               - Lead with `## Security Review (claude-sonnet-4-6)`
               - Group findings by severity: Critical / High / Medium / Low
               - Focus on injection, authn/authz, secrets, IAM scope, input validation
               - Cite file paths and line numbers
-              - End with a line of the EXACT form (parsed by automation):
+              - End with a line of the EXACT form (parsed by gate step):
                   `VERDICT: BLOCK` if any Critical or High findings exist
                   `VERDICT: APPROVE-WITH-COMMENTS` if only Medium/Low
                   `VERDICT: APPROVE` if no findings at all
               - Say "No security issues found." in the body if there are no findings
+
+            ### 2. A GitHub issue per HIGH or MEDIUM finding (with dedup)
+
+            Same pattern as the code-reviewer:
+
+            Dedup check:
+              gh issue list \
+                --label "origin:internal-review,defect" \
+                --state open \
+                --json title,number --limit 100 | \
+                jq -r '.[].title'
+            If a title already references the same file:line, SKIP.
+
+            File new findings:
+              gh issue create \
+                --title "[security-review] <file>:<line> — <one-line description>" \
+                --label "defect,severity:critical|high|medium,origin:internal-review" \
+                --body "$(cat <<EOF
+                **From PR:** #${{ github.event.pull_request.number }}
+                **File:** <file>:<line>
+                **Severity:** <critical|high|medium>
+                **Class:** <e.g. injection / authz / secret leakage / IAM scope>
+
+                ## Threat model
+
+                <2–4 sentences: who can exploit, under what conditions, blast radius>
+
+                ## Suggested mitigation
+
+                <minimal fix description>
+
+                ---
+
+                *Auto-filed by security-reviewer per ADR-0013. Awaiting
+                human dispatch — add `ready-for-implementer` to dispatch
+                to the implementer agent.*
+                EOF
+                )"
+
+            Do NOT file issues for Low findings (kept in PR comment only).
+            Do NOT apply `ready-for-implementer` yourself.
           claude_args: |
             --model claude-sonnet-4-6
             --permission-mode bypassPermissions
             --allowed-tools Bash,Read,Glob,Grep
             --append-system-prompt "Follow the platform standards in docs/standards/."
-      - name: "Enforce gate (fail if VERDICT BLOCK)"
+      - name: "Enforce gate (hybrid VERDICT verification)"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -404,11 +525,25 @@ jobs:
             echo "::warning::No security-review comment found; treating as APPROVE."
             exit 0
           fi
+          verdict_block=0
           if echo "$body" | grep -q '^VERDICT: BLOCK$'; then
-            echo "::error::Security review found Critical or High issues. Merge blocked."
+            verdict_block=1
+          fi
+          severity_block=0
+          if echo "$body" | awk '
+            /^### Critical/ || /^### High/ { in_section=1; next }
+            /^### / || /^---/ { in_section=0; next }
+            in_section && /^- / { print; exit 0 }
+            END { exit 1 }
+          ' >/dev/null 2>&1; then
+            severity_block=1
+          fi
+          if [[ $verdict_block -eq 1 || $severity_block -eq 1 ]]; then
+            echo "::error::Security review BLOCKED merge."
+            echo "(verdict_block=$verdict_block, severity_block=$severity_block)"
             exit 1
           fi
-          echo "Security review verdict: not BLOCK. Job passing."
+          echo "Security review: no blocking findings. Job passing."
 
   destructive-change-check:
     runs-on: ubuntu-latest
@@ -534,129 +669,36 @@ jobs:
               body: `🛑 This PR contains changes in ADR-gated categories: \`${categories.join(", ")}\`.\n\nMerge is blocked until a paired ADR is Accepted. The architect agent will draft one.`,
             });
 
-  defect-filer:
-    # Runs after the two reviewers. Parses their PR comments and creates
-    # one GitHub issue per High/Medium finding, labeled per ADR-0013's
-    # taxonomy (origin:internal-review, severity:*, defect). Survives
-    # PR close — so findings don't die in the comment thread when the PR
-    # is merged or abandoned.
-    #
-    # Doesn't gate (continues-on-error); a defect-filing failure shouldn't
-    # block merge if the human accepts the reviewer's findings explicitly.
-    needs: [code-review, security-review]
-    if: |
-      always()
-      && github.actor != 'claude[bot]'
-      && !endsWith(github.actor, '[bot]')
+  ensure-labels:
+    # Pre-creates the ADR-0013 label taxonomy so the reviewers can apply
+    # them when filing defect issues. Idempotent — won't fail if labels
+    # already exist. Runs in parallel with the reviewers; reviewers may
+    # need to retry the first gh issue create if labels haven't landed
+    # yet, but in practice this completes in <5s.
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    continue-on-error: true
+    timeout-minutes: 2
+    permissions:
+      issues: write
     steps:
-      - uses: actions/checkout@v4
       - name: Pre-create labels (idempotent)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Severity labels
-          gh label create severity:critical    --color B60205 --description "Critical issue — must fix before merge" 2>/dev/null || true
-          gh label create severity:high        --color D93F0B --description "High-severity issue — must fix before merge" 2>/dev/null || true
-          gh label create severity:medium      --color FBCA04 --description "Medium-severity issue — should fix soon" 2>/dev/null || true
-          gh label create severity:low         --color 0E8A16 --description "Low-severity issue — nice to fix" 2>/dev/null || true
-          gh label create severity:nit         --color BFD4F2 --description "Stylistic nit — author's discretion" 2>/dev/null || true
+          gh --repo "${{ github.repository }}" label create severity:critical    --color B60205 --description "Critical issue — must fix before merge" 2>/dev/null || true
+          gh --repo "${{ github.repository }}" label create severity:high        --color D93F0B --description "High-severity issue — must fix before merge" 2>/dev/null || true
+          gh --repo "${{ github.repository }}" label create severity:medium      --color FBCA04 --description "Medium-severity issue — should fix soon" 2>/dev/null || true
+          gh --repo "${{ github.repository }}" label create severity:low         --color 0E8A16 --description "Low-severity issue — nice to fix" 2>/dev/null || true
+          gh --repo "${{ github.repository }}" label create severity:nit         --color BFD4F2 --description "Stylistic nit — author's discretion" 2>/dev/null || true
           # Origin labels (per ADR-0013 trust tiers)
-          gh label create origin:internal-review  --color 5319E7 --description "Filed by an internal-review agent (code-reviewer / security-reviewer / test-writer / doc-keeper)" 2>/dev/null || true
-          gh label create origin:production-signal --color 1D76DB --description "Filed from a production signal (Sentry / drift / dep advisory)" 2>/dev/null || true
-          gh label create origin:external-request --color C5DEF5 --description "Filed from an external request (feedback widget / human prompt)" 2>/dev/null || true
+          gh --repo "${{ github.repository }}" label create origin:internal-review  --color 5319E7 --description "Filed by an internal-review agent (code-reviewer / security-reviewer / test-writer / doc-keeper)" 2>/dev/null || true
+          gh --repo "${{ github.repository }}" label create origin:production-signal --color 1D76DB --description "Filed from a production signal (Sentry / drift / dep advisory)" 2>/dev/null || true
+          gh --repo "${{ github.repository }}" label create origin:external-request --color C5DEF5 --description "Filed from an external request (feedback widget / human prompt)" 2>/dev/null || true
           # Lifecycle labels
-          gh label create defect                 --color D73A4A --description "A defect awaiting fix" 2>/dev/null || true
-          gh label create ready-for-implementer  --color 0E8A16 --description "Cleared for implementer agent to engage" 2>/dev/null || true
-          gh label create awaiting-dispatch      --color FBCA04 --description "Triaged but awaiting human dispatch decision (Tier 3)" 2>/dev/null || true
-          gh label create wontfix                --color FFFFFF --description "Triaged but not actionable" 2>/dev/null || true
-
-      - name: Parse review comments and file defects
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          REPO: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          # Pull both review comments (most recent of each kind).
-          code_review=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" \
-            --jq '[.[] | select(.body | startswith("## Code Review"))] | last // {body: ""}')
-          security_review=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" \
-            --jq '[.[] | select(.body | startswith("## Security Review"))] | last // {body: ""}')
-
-          file_defects_from_comment() {
-            local comment_body="$1"
-            local source_label="$2"
-            # Extract HIGH and MEDIUM sections. The reviewer's output is
-            # markdown with ### headers like "### High" / "### Medium".
-            # For each section, each finding is its own bullet (- ** or *
-            # prefix). Convert each finding into a defect issue.
-            #
-            # This is a rough parser — it can over-file (e.g. if the
-            # reviewer's comment has formatting quirks). Better to file
-            # too many than too few; the human can close the noise.
-            echo "$comment_body" | awk -v source="$source_label" -v pr="$PR_NUMBER" -v prurl="$PR_URL" '
-              BEGIN { in_section=""; finding="" }
-              /^### Critical/ || /^### High/   { in_section="high"; next }
-              /^### Medium/                    { in_section="medium"; next }
-              /^### Low/ || /^### Nit/ || /^---/ { in_section=""; next }
-              /^- / && in_section != "" {
-                if (finding != "") print in_section "|" source "|" pr "|" prurl "|" finding
-                finding = substr($0, 3)
-                next
-              }
-              /^  / && in_section != "" && finding != "" {
-                finding = finding " " $0
-                next
-              }
-              END {
-                if (finding != "" && in_section != "")
-                  print in_section "|" source "|" pr "|" prurl "|" finding
-              }
-            ' | while IFS='|' read -r severity source pr prurl finding; do
-              [[ -z "$finding" ]] && continue
-              # Take the first 60 chars as a title hint; rest goes in body.
-              title_hint=$(echo "$finding" | head -c 80 | tr -d '\n' | sed 's/[[:space:]]*$//')
-              title="${source}: ${title_hint}"
-              # Truncate to GitHub's title limit (~256 chars)
-              title=$(echo "$title" | head -c 200)
-
-              body=$(cat <<EOF
-          **Severity:** ${severity}
-          **Source:** ${source}
-          **From PR:** ${prurl}
-
-          ---
-
-          ${finding}
-
-          ---
-
-          *Auto-filed by defect-filer per ADR-0013. If this is a duplicate or non-issue, close with \`wontfix\` label.*
-          EOF
-          )
-              echo "Filing defect: $title"
-              gh issue create \
-                --title "$title" \
-                --label "defect,severity:${severity},origin:internal-review" \
-                --body "$body" || echo "::warning::Failed to file defect: $title"
-            done
-          }
-
-          code_body=$(echo "$code_review" | jq -r .body)
-          security_body=$(echo "$security_review" | jq -r .body)
-
-          if [[ -n "$code_body" && "$code_body" != "null" ]]; then
-            file_defects_from_comment "$code_body" "code-reviewer"
-          fi
-          if [[ -n "$security_body" && "$security_body" != "null" ]]; then
-            file_defects_from_comment "$security_body" "security-reviewer"
-          fi
-
-          echo "defect-filer complete."
+          gh --repo "${{ github.repository }}" label create defect                 --color D73A4A --description "A defect awaiting fix" 2>/dev/null || true
+          gh --repo "${{ github.repository }}" label create ready-for-implementer  --color 0E8A16 --description "Cleared for implementer agent to engage" 2>/dev/null || true
+          gh --repo "${{ github.repository }}" label create awaiting-dispatch      --color FBCA04 --description "Triaged but awaiting human dispatch decision (Tier 3)" 2>/dev/null || true
+          gh --repo "${{ github.repository }}" label create wontfix                --color FFFFFF --description "Triaged but not actionable" 2>/dev/null || true
 
   invoke-architect-if-gated:
     needs: destructive-change-check
