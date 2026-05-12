@@ -69,6 +69,13 @@ function corsHeaders(event) {
   };
 }
 
+// RFC 5321 allows `"` in the local part but Cognito's ListUsers filter
+// syntax does not — an unescaped double-quote breaks the filter string
+// and can cause DoS or unexpected user matches on the dedup path.
+function isValidInviteEmail(email) {
+  return typeof email === 'string' && email.includes('@') && !email.includes('"');
+}
+
 exports.handler = Sentry.wrapHandler(async (event, context) => {
   logger.info('handler.invoked', {
     request_id: context?.awsRequestId,
@@ -115,7 +122,7 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
 
   // ── Invite action: provision Cognito user + send invite email ─────────────
   if (action === 'invite') {
-    if (!inviteEmail || !inviteEmail.includes('@')) {
+    if (!isValidInviteEmail(inviteEmail)) {
       return respond(400, { error: 'Valid email required for invite' }, CORS);
     }
     const inviteEmailLc = inviteEmail.toLowerCase();
@@ -517,3 +524,4 @@ function postmark(apiKey, msg) {
 exports._buildHtml = buildHtml;
 exports._buildInviteHtml = buildInviteHtml;
 exports._escapeHtml = escapeHtml;
+exports._isValidInviteEmail = isValidInviteEmail;

@@ -12,6 +12,7 @@ const {
   _buildHtml: buildHtml,
   _buildInviteHtml: buildInviteHtml,
   _escapeHtml: escapeHtml,
+  _isValidInviteEmail: isValidInviteEmail,
 } = require('../lambda/nudge.js');
 
 const BASE = {
@@ -22,6 +23,41 @@ const BASE = {
   location: 'Bob\'s Place',
   description: 'Bring your favourite games.',
 };
+
+describe('isValidInviteEmail', () => {
+  it('accepts a normal email address', () => {
+    expect(isValidInviteEmail('alice@example.com')).toBe(true);
+  });
+
+  it('rejects undefined', () => {
+    expect(isValidInviteEmail(undefined)).toBe(false);
+  });
+
+  it('rejects null', () => {
+    expect(isValidInviteEmail(null)).toBe(false);
+  });
+
+  it('rejects an empty string', () => {
+    expect(isValidInviteEmail('')).toBe(false);
+  });
+
+  it('rejects an address with no @ sign', () => {
+    expect(isValidInviteEmail('notanemail')).toBe(false);
+  });
+
+  it('rejects an email containing a double-quote (Cognito filter injection)', () => {
+    expect(isValidInviteEmail('foo"@bar.com')).toBe(false);
+  });
+
+  it('rejects an email where the double-quote is mid-address', () => {
+    expect(isValidInviteEmail('a"b@example.com')).toBe(false);
+  });
+
+  it('rejects a crafted filter-escape payload', () => {
+    // Payload that would break the ListUsers filter: email = "x" OR "1"="1"
+    expect(isValidInviteEmail('x" OR "1"="1')).toBe(false);
+  });
+});
 
 describe('escapeHtml', () => {
   it('encodes the five dangerous characters', () => {
