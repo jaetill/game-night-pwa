@@ -456,15 +456,15 @@ function buildText({ name, hostName, dateStr, timeStr, location, description }) 
 }
 
 function buildHtml({ name, hostName, dateStr, timeStr, location, description }) {
-  const when = [dateStr && `<strong>${dateStr}</strong>`, timeStr && `at <strong>${timeStr}</strong>`].filter(Boolean).join(' ');
+  const when = [dateStr && `<strong>${escapeHtml(dateStr)}</strong>`, timeStr && `at <strong>${escapeHtml(timeStr)}</strong>`].filter(Boolean).join(' ');
   return `<!DOCTYPE html>
 <html>
 <body style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px 16px;color:#1e293b;">
   <h2 style="margin:0 0 16px;font-size:20px;">🎲 Game night reminder</h2>
-  <p>Hi${name ? ` ${name}` : ''}!</p>
-  <p><strong>${hostName}</strong> wanted to remind you about game night${when ? ` ${when}` : ''}${location ? ` at <strong>${location}</strong>` : ''}.</p>
-  ${description ? `<p style="color:#64748b;font-style:italic;">${description}</p>` : ''}
-  <p>Haven't replied yet? Let ${hostName} know if you can make it:</p>
+  <p>Hi${name ? ` ${escapeHtml(name)}` : ''}!</p>
+  <p><strong>${escapeHtml(hostName)}</strong> wanted to remind you about game night${when ? ` ${when}` : ''}${location ? ` at <strong>${escapeHtml(location)}</strong>` : ''}.</p>
+  ${description ? `<p style="color:#64748b;font-style:italic;">${escapeHtml(description)}</p>` : ''}
+  <p>Haven't replied yet? Let ${escapeHtml(hostName)} know if you can make it:</p>
   <p>
     <a href="${APP_URL}"
        style="display:inline-block;background:#4f46e5;color:#fff;padding:10px 22px;border-radius:6px;text-decoration:none;font-weight:600;">
@@ -504,3 +504,7 @@ function postmark(apiKey, msg) {
     req.end();
   });
 }
+
+// Test seam — not part of the public API.
+exports._buildHtml = buildHtml;
+exports._escapeHtml = escapeHtml;
