@@ -127,15 +127,35 @@ When triggered in Mode B (fix iteration):
     feat(<component>): <short description> (#<issue-number>)
     ```
 
-11. **Push the branch.**
+11. **Pre-flight conflict check.** Before pushing, verify your branch will
+    cleanly merge to current `master`. Parallel implementer dispatches can
+    leave each branch stale relative to a sibling PR that merged first
+    (issue #29).
 
-12. **Open the PR.** Title: `<type>(<component>): <description>`. Body must include:
+    ```bash
+    git fetch origin master
+    if git rebase origin/master; then
+      echo "Rebase clean � continuing to push."
+    else
+      git rebase --abort
+      gh issue comment "$ISSUE_NUMBER" --body "Implementer detected a merge conflict with current master after writing the fix. Most likely cause: a parallel implementer dispatch shipped overlapping changes first. The branch has been discarded; re-dispatch (remove + re-add `ready-for-implementer`) once the conflicting work has merged. Filed per issue #29 pre-flight check."
+      exit 0
+    fi
+    ```
+
+    Successful rebase = your branch is on top of latest master, push it.
+    Conflict = bail cleanly without pushing; the human or a future
+    dispatch will retry.
+
+12. **Push the branch.**
+
+13. **Open the PR.** Title: `<type>(<component>): <description>`. Body must include:
     - Reference to the originating issue: `Closes #<issue-number>`
     - A "What changed" section (1–3 bullets)
     - A "Why" section (referencing the issue or finding)
     - A "How tested" section (which tests added/modified, what they verify)
 
-13. **Stop.** Wait for the review pipeline. The next time you engage on this PR will be Mode B (fix iteration), if any reviewer requests changes.
+14. **Stop.** Wait for the review pipeline. The next time you engage on this PR will be Mode B (fix iteration), if any reviewer requests changes.
 
 ## Process — Mode B (fix iteration)
 
