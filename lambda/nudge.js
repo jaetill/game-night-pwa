@@ -69,11 +69,19 @@ function corsHeaders(event) {
   };
 }
 
-// RFC 5321 allows `"` in the local part but Cognito's ListUsers filter
-// syntax does not — an unescaped double-quote breaks the filter string
-// and can cause DoS or unexpected user matches on the dedup path.
+// Combined invite-email validator from issues #22 + #23:
+//   - type check (string only)
+//   - length cap (RFC 5321 max 254 chars)
+//   - must contain @
+//   - must NOT contain `"` — Cognito's ListUsers filter syntax breaks on
+//     unquoted double-quotes; an attacker could inject filter syntax that
+//     causes DoS or unexpected user matches on the dedup path.
 function isValidInviteEmail(email) {
-  return typeof email === 'string' && email.includes('@') && !email.includes('"');
+  return typeof email === 'string'
+    && email.length > 0
+    && email.length <= 254
+    && email.includes('@')
+    && !email.includes('"');
 }
 
 exports.handler = Sentry.wrapHandler(async (event, context) => {

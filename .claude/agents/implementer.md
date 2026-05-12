@@ -112,6 +112,8 @@ When triggered in Mode B (fix iteration):
 
 7. **Write tests.** For each behavioral change, add at least one test that would fail without your change. Use the project's existing test framework and patterns. Place tests in the appropriate directory.
 
+   **You are responsible for test coverage of your change, not the PR-time `test-writer` reviewer.** Per ADR-0013 (post-#25 redesign), the PR-time test-writer agent is in reviewer mode — it flags coverage gaps but does NOT write tests. If you skip this step, the test-writer reviewer will file a defect issue. Write the tests now.
+
 8. **Run the test suite locally.** `npm test` (or the project's equivalent). Iterate until your new tests pass and no existing tests regress.
 
 9. **Run lint + typecheck.** `npm run lint` and `npm run typecheck` if the project has them. Fix any issues.

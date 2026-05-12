@@ -25,8 +25,15 @@ const BASE = {
 };
 
 describe('isValidInviteEmail', () => {
+  // Unified validator combining issue #22 (Cognito filter injection — no double-quotes)
+  // and issue #23 (string/length guard so non-strings don't throw on .includes).
+
   it('accepts a normal email address', () => {
     expect(isValidInviteEmail('alice@example.com')).toBe(true);
+  });
+
+  it('accepts a well-formed email (alt)', () => {
+    expect(isValidInviteEmail('user@example.com')).toBe(true);
   });
 
   it('rejects undefined', () => {
@@ -56,6 +63,25 @@ describe('isValidInviteEmail', () => {
   it('rejects a crafted filter-escape payload', () => {
     // Payload that would break the ListUsers filter: email = "x" OR "1"="1"
     expect(isValidInviteEmail('x" OR "1"="1')).toBe(false);
+  });
+
+  it('rejects an array — would throw TypeError on old .includes guard', () => {
+    expect(isValidInviteEmail(['user@example.com'])).toBe(false);
+  });
+
+  it('rejects a plain object', () => {
+    expect(isValidInviteEmail({ email: 'user@example.com' })).toBe(false);
+  });
+
+  it('rejects a number', () => {
+    expect(isValidInviteEmail(42)).toBe(false);
+  });
+
+  it('rejects a string longer than 254 characters', () => {
+    const long = 'a'.repeat(245) + '@b.com'; // 251 chars — under cap
+    const tooLong = 'a'.repeat(249) + '@b.com'; // 255 chars — over cap
+    expect(isValidInviteEmail(long)).toBe(true);
+    expect(isValidInviteEmail(tooLong)).toBe(false);
   });
 });
 

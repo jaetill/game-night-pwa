@@ -285,52 +285,60 @@ jobs:
           # bot-initiated runs here.
           allowed_bots: 'claude[bot]'
           prompt: |
-            Act as the test-writer subagent defined in .claude/agents/test-writer.md.
+            Act as the test-writer subagent defined in .claude/agents/test-writer.md
+            in **reviewer mode** (per issue #25 / ADR-0013 follow-up).
 
-            Steps:
+            ## Role at PR time
+
+            You are a coverage REVIEWER, not a test author at this stage.
+            Test authoring belongs in the implementer's Mode A pipeline
+            (per issue #25 redesign). Your job here is to verify that
+            the PR includes adequate tests for its changes, and post
+            findings if it doesn't. **You do NOT push commits to this PR.**
+
+            ## Steps
+
             1. List the changed source files in this PR:
                  git diff --name-only origin/${{ github.base_ref }}...HEAD \
                    | grep -E '^(lambda/.*\.(js|mjs)|src/js/.*\.js)$' \
                    | grep -v -E '\.test\.|\.spec\.' || true
             2. For each changed source file, check whether a corresponding
-               tests/<name>.test.js (or tests/<name>Tests.test.js) exists
-               and whether it covers the diff's added/changed behavior.
-            3. Write missing tests using vitest + happy-dom (frontend) or
-               plain vitest (lambda). Match the existing patterns in
-               tests/*.test.js. Use the project's existing test conventions —
-               don't introduce a new framework or factory library.
-            4. Run `npm test` to verify the new tests pass; if anything
-               fails, treat it as a real bug per the agent spec — DO NOT
-               modify production code; instead post a finding-style comment
-               and stop.
-            5. Commit the new test files to the PR head branch:
-                 git config user.name 'claude[bot]'
-                 git config user.email '41898282+claude[bot]@users.noreply.github.com'
-                 git add tests/
-                 git commit -m 'test: add coverage for changes (test-writer agent)'
-                 git push
-            6. Post a SINGLE PR comment via:
+               tests/*.test.js covers the diff's added/changed behavior.
+               Read the test file's content. Don't trust file existence
+               alone; verify the assertions actually exercise the new code.
+            3. Identify each coverage gap (changed function/code path with
+               no corresponding assertion).
+            4. For HIGH-priority coverage gaps (security-sensitive paths,
+               new public functions, modified API contracts), file each
+               as a defect issue with labels
+               `defect,severity:medium,origin:internal-review` using the
+               same dedup pattern as code-reviewer.
+            5. Post a SINGLE PR comment via:
                  gh pr comment ${{ github.event.pull_request.number }} --body-file -
 
             The comment must:
               - Lead with `## Test Coverage (claude-sonnet-4-6)`
-              - List each test file written and the cases added
-              - State whether new tests pass on `npm test`
-              - End with `No new tests needed.` if coverage was already adequate
-              - End with `Manual tests recommended:` followed by a list if the
-                changes touched code paths the agent couldn't write a clean
-                test for (e.g. tightly coupled to AWS SDK, integration-only)
+              - List each changed source file + its coverage status
+                (covered / partial / uncovered)
+              - For uncovered files: cite the function/path that lacks a test
+              - End with `Coverage adequate.` OR
+                `Coverage gaps found — see filed defects.` OR
+                `Manual integration test recommended:` for paths the
+                test framework can't easily exercise
 
-            Constraints:
-              - Do NOT modify production code under any circumstance.
-              - Do NOT add new test dependencies (no new npm packages).
-              - Skip terraform/, docs/, .github/, .claude/ — those are not
-                code that benefits from unit tests.
+            ## Hard rules
+
+            - Do NOT commit or push anything. Test-writing happens in the
+              implementer's Mode A pipeline now, not at PR time.
+            - Do NOT modify production code.
+            - Do NOT file Low/Nit findings (PR comment only).
+            - Skip terraform/, docs/, .github/, .claude/ — not code that
+              benefits from unit tests.
           claude_args: |
             --model claude-sonnet-4-6
             --permission-mode bypassPermissions
-            --allowed-tools Bash,Read,Write,Edit,Glob,Grep
-            --append-system-prompt "Follow the platform standards in docs/standards/. Use vitest, happy-dom for DOM tests, no new test deps."
+            --allowed-tools Bash,Read,Glob,Grep
+            --append-system-prompt "Follow the platform standards in docs/standards/. You are in REVIEWER mode per issue #25 — do not push commits."
 
   e2e-test:
     # Bot-skip guard intentionally removed per the autonomous-team
