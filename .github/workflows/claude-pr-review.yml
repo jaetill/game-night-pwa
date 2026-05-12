@@ -58,41 +58,61 @@ jobs:
             Run `git diff origin/${{ github.base_ref }}...HEAD` to get the diff,
             then read whatever surrounding files you need for context.
 
-            ## Your outputs (TWO things to post)
+            ## Your outputs (THREE things to do)
 
-            ### 1. A PR comment with the human-readable summary
+            ### 1. Inline review with per-finding threads (PRIMARY UX)
 
-            Post a SINGLE PR comment via:
-              gh pr comment ${{ github.event.pull_request.number }} --body-file -
-            (read the body from stdin via a heredoc).
+            Per ADR-0013 Path B, post **inline review comments** on the
+            specific file:line for each finding. These create resolvable
+            review threads — required_conversation_resolution=true on
+            master means each thread MUST be resolved before merge.
 
-            The comment must:
-              - Lead with `## Code Review (claude-sonnet-4-6)`
-              - Group findings by severity: Critical / High / Medium / Low / Nit
-              - Cite file paths and line numbers
-              - End with a line of the EXACT form (parsed by the gate step):
-                  `VERDICT: BLOCK` if any Critical or High findings exist
-                  `VERDICT: APPROVE-WITH-COMMENTS` if only Medium/Low/Nit
-                  `VERDICT: APPROVE` if no findings at all
-              - Say "No issues found." in the body if there are no findings
+            Use the GitHub Reviews API (not `gh pr comment`). Submit ONE
+            review per PR run with state COMMENT (not REQUEST_CHANGES —
+            same-actor restriction can bite us on implementer-authored
+            PRs, and the conversation-resolution gate is the actual
+            block).
 
-            ### 2. A GitHub issue per HIGH or MEDIUM finding (with dedup)
+            Build a JSON array of inline comments, one per Critical /
+            High / Medium / Low / Nit finding:
 
-            For each Critical, High, or Medium finding, file a defect issue
-            so it survives this PR's lifecycle and can be picked up by the
-            implementer agent (per ADR-0013).
+              comments_json='[
+                {"path":"<file>","line":<N>,"side":"RIGHT","body":"**[severity:critical|high|medium|low|nit]** <finding body>\n\n*Suggested fix:* <minimal change>"},
+                ...
+              ]'
 
-            Dedup: before filing, check existing open issues for one that
-            already covers this exact file:line + finding category. Run:
+            Then submit the review:
+
+              gh api \
+                "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews" \
+                -X POST \
+                -F event=COMMENT \
+                -F "body=## Code Review (claude-sonnet-4-6)
+
+            See inline annotations for the per-finding details. <summary
+            paragraph: total findings count by severity; high-level
+            takeaway>." \
+                --field-from-file "comments=-" <<< "$comments_json"
+
+            Critical / High findings MUST become inline review comments.
+            Medium also recommended. Low / Nit are optional inline; if
+            many, summarize in the review body instead.
+
+            ### 2. A defect GitHub issue per HIGH or MEDIUM finding (with dedup)
+
+            Persistence: inline reviews live on the PR. After merge or
+            close, the threads are archived. We also need a tracked
+            work item for the implementer agent to pick up.
+
+            Dedup first:
               gh issue list \
                 --label "origin:internal-review,defect" \
                 --state open \
-                --json title,number --limit 100 | \
+                --json title --limit 100 | \
                 jq -r '.[].title'
-            If you see an existing title containing the same file:line
-            reference, SKIP filing — the issue is already tracked.
 
-            For each new finding, file via:
+            For each new Critical / High / Medium finding NOT already
+            tracked, file:
               gh issue create \
                 --title "[code-review] <file>:<line> — <one-line description>" \
                 --label "defect,severity:critical|high|medium,origin:internal-review" \
@@ -103,32 +123,50 @@ jobs:
 
                 ## What's wrong
 
-                <2–4 sentences describing the issue>
+                <2–4 sentences>
 
                 ## Suggested fix
 
-                <minimal change — should fit the implementer's scope cap
-                (50 LOC / 3 files / 1 component)>
+                <minimal change — implementer scope cap 50 LOC / 3 files>
 
                 ## Test that would catch it
 
-                <one-line test description, if applicable>
+                <one-line>
 
                 ---
 
                 *Auto-filed by code-reviewer per ADR-0013. Awaiting human
-                dispatch — add label `ready-for-implementer` to dispatch
+                dispatch — add `ready-for-implementer` label to dispatch
                 to the implementer agent.*
                 EOF
                 )"
 
-            Do NOT file issues for Low or Nit findings. Those stay in the
-            PR comment only — too noisy as standalone defects.
+            Do NOT file issues for Low or Nit (too noisy).
+            Do NOT apply `ready-for-implementer` yourself.
 
-            Do NOT apply `ready-for-implementer` yourself — that's the
-            human's dispatch gate per the three-tier model.
+            ### 3. A short summary comment on the PR (for context)
 
-            After both outputs, exit the agent session normally.
+            One more `gh pr comment` with a brief overview. This is the
+            human-readable "what's the gist" pointer. Include the VERDICT
+            line so the safety-gate step can parse it as a backup signal:
+
+              gh pr comment ${{ github.event.pull_request.number }} --body "$(cat <<EOF
+              ## Code Review (claude-sonnet-4-6) — Summary
+
+              <1–2 sentence overview>
+
+              <count of findings by severity>
+
+              See **inline annotations** for per-finding details. Each
+              annotation is a thread you can resolve once addressed.
+
+              VERDICT: BLOCK | APPROVE-WITH-COMMENTS | APPROVE
+              EOF
+              )"
+
+            The VERDICT line meanings are unchanged from before.
+
+            After all three outputs, exit normally.
           claude_args: |
             --model claude-sonnet-4-6
             --permission-mode bypassPermissions
@@ -451,37 +489,41 @@ jobs:
             and HEAD. Get the diff via `git diff origin/${{ github.base_ref }}...HEAD`
             and read whatever surrounding files you need for context.
 
-            ## Your outputs (TWO things to post)
+            ## Your outputs (THREE things to do — same pattern as code-reviewer)
 
-            ### 1. A PR comment with the human-readable summary
+            ### 1. Inline review with per-finding threads
 
-            Post a SINGLE PR comment via:
-              gh pr comment ${{ github.event.pull_request.number }} --body-file -
+            Per ADR-0013 Path B, post inline review comments on the
+            specific file:line for each Critical / High / Medium finding.
+            These create resolvable threads. required_conversation_resolution=true
+            on master gates merge until each is resolved.
 
-            The comment must:
-              - Lead with `## Security Review (claude-sonnet-4-6)`
-              - Group findings by severity: Critical / High / Medium / Low
-              - Focus on injection, authn/authz, secrets, IAM scope, input validation
-              - Cite file paths and line numbers
-              - End with a line of the EXACT form (parsed by gate step):
-                  `VERDICT: BLOCK` if any Critical or High findings exist
-                  `VERDICT: APPROVE-WITH-COMMENTS` if only Medium/Low
-                  `VERDICT: APPROVE` if no findings at all
-              - Say "No security issues found." in the body if there are no findings
+            Build a JSON array, then submit ONE review with state COMMENT:
 
-            ### 2. A GitHub issue per HIGH or MEDIUM finding (with dedup)
+              gh api \
+                "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews" \
+                -X POST \
+                -F event=COMMENT \
+                -F "body=## Security Review (claude-sonnet-4-6)
 
-            Same pattern as the code-reviewer:
+            See inline annotations. <summary of severity counts + top concerns>." \
+                --field-from-file "comments=-" <<< "$comments_json"
+
+            Each inline body should include:
+              **[severity:X]** **Class:** <injection|authz|secret|iam|input>
+              <threat model: who can exploit, under what conditions, blast radius>
+              *Suggested mitigation:* <minimal change>
+
+            ### 2. A defect GitHub issue per HIGH or MEDIUM finding (with dedup)
 
             Dedup check:
               gh issue list \
                 --label "origin:internal-review,defect" \
                 --state open \
-                --json title,number --limit 100 | \
+                --json title --limit 100 | \
                 jq -r '.[].title'
-            If a title already references the same file:line, SKIP.
 
-            File new findings:
+            For each new finding, file:
               gh issue create \
                 --title "[security-review] <file>:<line> — <one-line description>" \
                 --label "defect,severity:critical|high|medium,origin:internal-review" \
@@ -489,26 +531,40 @@ jobs:
                 **From PR:** #${{ github.event.pull_request.number }}
                 **File:** <file>:<line>
                 **Severity:** <critical|high|medium>
-                **Class:** <e.g. injection / authz / secret leakage / IAM scope>
+                **Class:** <injection / authz / secret leakage / IAM scope / input validation>
 
                 ## Threat model
 
-                <2–4 sentences: who can exploit, under what conditions, blast radius>
+                <2–4 sentences>
 
                 ## Suggested mitigation
 
-                <minimal fix description>
+                <minimal fix>
 
                 ---
 
                 *Auto-filed by security-reviewer per ADR-0013. Awaiting
-                human dispatch — add `ready-for-implementer` to dispatch
-                to the implementer agent.*
+                human dispatch — add `ready-for-implementer` to dispatch.*
                 EOF
                 )"
 
-            Do NOT file issues for Low findings (kept in PR comment only).
+            Do NOT file issues for Low findings.
             Do NOT apply `ready-for-implementer` yourself.
+
+            ### 3. A short PR-level summary comment with VERDICT line
+
+            gh pr comment ${{ github.event.pull_request.number }} --body "$(cat <<EOF
+            ## Security Review (claude-sonnet-4-6) — Summary
+
+            <1–2 sentence overview>
+
+            <count by severity>
+
+            See **inline annotations** for per-finding details.
+
+            VERDICT: BLOCK | APPROVE-WITH-COMMENTS | APPROVE
+            EOF
+            )"
           claude_args: |
             --model claude-sonnet-4-6
             --permission-mode bypassPermissions
