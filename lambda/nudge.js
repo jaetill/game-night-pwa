@@ -394,7 +394,15 @@ function buildInviteText({ name, hostName, dateStr, timeStr, location, descripti
 }
 
 function buildInviteHtml({ name, hostName, dateStr, timeStr, location, description, isNewAccount, signInEmail, tempPassword }) {
-  const when = [dateStr && `<strong>${dateStr}</strong>`, timeStr && `at <strong>${timeStr}</strong>`].filter(Boolean).join(' ');
+  // Escape every user-supplied field in the email body — same discipline
+  // as buildHtml (per code-review findings #20 and #21 on PR #18).
+  // `dateStr`/`timeStr` come from gameNights.json (host-written) and
+  // `name` is derived from the invitee's email local-part — all
+  // attacker-controlled in principle.
+  const when = [
+    dateStr && `<strong>${escapeHtml(dateStr)}</strong>`,
+    timeStr && `at <strong>${escapeHtml(timeStr)}</strong>`,
+  ].filter(Boolean).join(' ');
   const credentialBlock = (isNewAccount && tempPassword) ? `
   <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-top:20px;">
     <p style="margin:0 0 10px;font-size:14px;font-weight:600;color:#1e293b;">First time signing in? Use these credentials:</p>
@@ -408,7 +416,7 @@ function buildInviteHtml({ name, hostName, dateStr, timeStr, location, descripti
 <html>
 <body style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px 16px;color:#1e293b;">
   <h2 style="margin:0 0 16px;font-size:20px;">🎲 You're invited to game night!</h2>
-  <p>Hi${name ? ` ${name}` : ''}!</p>
+  <p>Hi${name ? ` ${escapeHtml(name)}` : ''}!</p>
   <p><strong>${escapeHtml(hostName)}</strong> has invited you to game night${when ? ` ${when}` : ''}${location ? ` at <strong>${escapeHtml(location)}</strong>` : ''}.</p>
   ${description ? `<p style="color:#64748b;font-style:italic;">${escapeHtml(description)}</p>` : ''}
   <p>Let ${escapeHtml(hostName)} know if you can make it:</p>
@@ -507,4 +515,5 @@ function postmark(apiKey, msg) {
 
 // Test seam — not part of the public API.
 exports._buildHtml = buildHtml;
+exports._buildInviteHtml = buildInviteHtml;
 exports._escapeHtml = escapeHtml;

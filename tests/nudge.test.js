@@ -8,7 +8,11 @@ import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { _buildHtml: buildHtml, _escapeHtml: escapeHtml } = require('../lambda/nudge.js');
+const {
+  _buildHtml: buildHtml,
+  _buildInviteHtml: buildInviteHtml,
+  _escapeHtml: escapeHtml,
+} = require('../lambda/nudge.js');
 
 const BASE = {
   name: 'Alice',
@@ -83,6 +87,62 @@ describe('buildHtml XSS escaping', () => {
     const html = buildHtml(BASE);
     expect(html).toContain('Bob');
     // apostrophe is legitimately encoded by escapeHtml
+    expect(html).toContain('Bob&#39;s Place');
+    expect(html).toContain('Bring your favourite games.');
+  });
+});
+
+describe('buildInviteHtml XSS escaping', () => {
+  // Regression guard for code-review findings #20 and #21 — same class of
+  // bug as buildHtml; the implementer's first PR fixed buildHtml only,
+  // reviewer caught that buildInviteHtml had the same gap.
+
+  it('escapes a malicious hostName', () => {
+    const html = buildInviteHtml({ ...BASE, hostName: '<script>alert(1)</script>' });
+    expect(html.indexOf('<script>')).toBe(-1);
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+  });
+
+  it('escapes a malicious dateStr (finding #20)', () => {
+    const html = buildInviteHtml({ ...BASE, dateStr: '<img src=x onerror=alert(1)>' });
+    expect(html.indexOf('<img src=x')).toBe(-1);
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+  });
+
+  it('escapes a malicious timeStr (finding #20)', () => {
+    const html = buildInviteHtml({ ...BASE, timeStr: '<svg onload=alert(1)>' });
+    expect(html.indexOf('<svg onload')).toBe(-1);
+    expect(html).toContain('&lt;svg onload=alert(1)&gt;');
+  });
+
+  it('escapes a malicious name in the greeting (finding #21)', () => {
+    const html = buildInviteHtml({ ...BASE, name: '<em>Mallory</em>' });
+    expect(html.indexOf('<em>Mallory</em>')).toBe(-1);
+    expect(html).toContain('Hi &lt;em&gt;Mallory&lt;/em&gt;!');
+  });
+
+  it('escapes a malicious location', () => {
+    const html = buildInviteHtml({ ...BASE, location: '<b>Pwn</b>ed' });
+    expect(html.indexOf('<b>Pwn</b>')).toBe(-1);
+    expect(html).toContain('&lt;b&gt;Pwn&lt;/b&gt;ed');
+  });
+
+  it('escapes a malicious description', () => {
+    const html = buildInviteHtml({ ...BASE, description: '<iframe src=evil></iframe>' });
+    expect(html.indexOf('<iframe')).toBe(-1);
+    expect(html).toContain('&lt;iframe src=evil&gt;&lt;/iframe&gt;');
+  });
+
+  it('escapes hostName in both occurrences (invite + RSVP prompt)', () => {
+    const html = buildInviteHtml({ ...BASE, hostName: '<x>' });
+    expect(html.indexOf('<x>')).toBe(-1);
+    const count = (html.match(/&lt;x&gt;/g) ?? []).length;
+    expect(count).toBe(2);
+  });
+
+  it('renders benign inputs cleanly', () => {
+    const html = buildInviteHtml(BASE);
+    expect(html).toContain('Bob');
     expect(html).toContain('Bob&#39;s Place');
     expect(html).toContain('Bring your favourite games.');
   });
