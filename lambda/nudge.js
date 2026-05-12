@@ -69,9 +69,19 @@ function corsHeaders(event) {
   };
 }
 
-// RFC 5321 max local+domain length is 254 characters.
-function validateInviteEmail(email) {
-  return typeof email === 'string' && email.length <= 254 && email.includes('@');
+// Combined invite-email validator from issues #22 + #23:
+//   - type check (string only)
+//   - length cap (RFC 5321 max 254 chars)
+//   - must contain @
+//   - must NOT contain `"` — Cognito's ListUsers filter syntax breaks on
+//     unquoted double-quotes; an attacker could inject filter syntax that
+//     causes DoS or unexpected user matches on the dedup path.
+function isValidInviteEmail(email) {
+  return typeof email === 'string'
+    && email.length > 0
+    && email.length <= 254
+    && email.includes('@')
+    && !email.includes('"');
 }
 
 exports.handler = Sentry.wrapHandler(async (event, context) => {
@@ -120,7 +130,7 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
 
   // ── Invite action: provision Cognito user + send invite email ─────────────
   if (action === 'invite') {
-    if (!validateInviteEmail(inviteEmail)) {
+    if (!isValidInviteEmail(inviteEmail)) {
       return respond(400, { error: 'Valid email required for invite' }, CORS);
     }
     const inviteEmailLc = inviteEmail.toLowerCase();
@@ -522,4 +532,4 @@ function postmark(apiKey, msg) {
 exports._buildHtml = buildHtml;
 exports._buildInviteHtml = buildInviteHtml;
 exports._escapeHtml = escapeHtml;
-exports._validateInviteEmail = validateInviteEmail;
+exports._isValidInviteEmail = isValidInviteEmail;

@@ -12,7 +12,7 @@ const {
   _buildHtml: buildHtml,
   _buildInviteHtml: buildInviteHtml,
   _escapeHtml: escapeHtml,
-  _validateInviteEmail: validateInviteEmail,
+  _isValidInviteEmail: isValidInviteEmail,
 } = require('../lambda/nudge.js');
 
 const BASE = {
@@ -24,44 +24,64 @@ const BASE = {
   description: 'Bring your favourite games.',
 };
 
-describe('validateInviteEmail', () => {
-  it('accepts a well-formed email', () => {
-    expect(validateInviteEmail('user@example.com')).toBe(true);
+describe('isValidInviteEmail', () => {
+  // Unified validator combining issue #22 (Cognito filter injection — no double-quotes)
+  // and issue #23 (string/length guard so non-strings don't throw on .includes).
+
+  it('accepts a normal email address', () => {
+    expect(isValidInviteEmail('alice@example.com')).toBe(true);
   });
 
-  it('rejects null (falsy guard)', () => {
-    expect(validateInviteEmail(null)).toBe(false);
+  it('accepts a well-formed email (alt)', () => {
+    expect(isValidInviteEmail('user@example.com')).toBe(true);
   });
 
   it('rejects undefined', () => {
-    expect(validateInviteEmail(undefined)).toBe(false);
+    expect(isValidInviteEmail(undefined)).toBe(false);
   });
 
-  it('rejects an array — would throw TypeError on old .includes guard', () => {
-    expect(validateInviteEmail(['user@example.com'])).toBe(false);
-  });
-
-  it('rejects a plain object', () => {
-    expect(validateInviteEmail({ email: 'user@example.com' })).toBe(false);
-  });
-
-  it('rejects a number', () => {
-    expect(validateInviteEmail(42)).toBe(false);
-  });
-
-  it('rejects a string longer than 254 characters', () => {
-    const long = 'a'.repeat(245) + '@b.com'; // 245 + 6 = 251 < 254 — just over when we add more
-    const tooLong = 'a'.repeat(249) + '@b.com'; // 249 + 6 = 255 > 254
-    expect(validateInviteEmail(long)).toBe(true);
-    expect(validateInviteEmail(tooLong)).toBe(false);
-  });
-
-  it('rejects a string without @', () => {
-    expect(validateInviteEmail('notanemail')).toBe(false);
+  it('rejects null', () => {
+    expect(isValidInviteEmail(null)).toBe(false);
   });
 
   it('rejects an empty string', () => {
-    expect(validateInviteEmail('')).toBe(false);
+    expect(isValidInviteEmail('')).toBe(false);
+  });
+
+  it('rejects an address with no @ sign', () => {
+    expect(isValidInviteEmail('notanemail')).toBe(false);
+  });
+
+  it('rejects an email containing a double-quote (Cognito filter injection)', () => {
+    expect(isValidInviteEmail('foo"@bar.com')).toBe(false);
+  });
+
+  it('rejects an email where the double-quote is mid-address', () => {
+    expect(isValidInviteEmail('a"b@example.com')).toBe(false);
+  });
+
+  it('rejects a crafted filter-escape payload', () => {
+    // Payload that would break the ListUsers filter: email = "x" OR "1"="1"
+    expect(isValidInviteEmail('x" OR "1"="1')).toBe(false);
+  });
+
+  it('rejects an array — would throw TypeError on old .includes guard', () => {
+    expect(isValidInviteEmail(['user@example.com'])).toBe(false);
+  });
+
+  it('rejects a plain object', () => {
+    expect(isValidInviteEmail({ email: 'user@example.com' })).toBe(false);
+  });
+
+  it('rejects a number', () => {
+    expect(isValidInviteEmail(42)).toBe(false);
+  });
+
+  it('rejects a string longer than 254 characters', () => {
+    const long = 'a'.repeat(245) + '@b.com'; // 251 chars — under cap
+    const tooLong = 'a'.repeat(249) + '@b.com'; // 255 chars — over cap
+    expect(isValidInviteEmail(long)).toBe(true);
+    expect(isValidInviteEmail(tooLong)).toBe(false);
   });
 });
 
