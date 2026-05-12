@@ -106,11 +106,20 @@ jobs:
               9. Iterate locally until clean.
              10. Commit (SSH-signed via the git config from earlier; the
                  runner has the GitHub App's signing identity).
-             11. Push the branch.
-             12. Open a PR with title `<type>(<component>): <description>`
+             11. **Pre-flight conflict check** (per spec step 11, issue #29).
+                 `git fetch origin master && git rebase origin/master`. If
+                 the rebase succeeds, your branch is up-to-date with master
+                 — continue. If it fails with conflicts, `git rebase --abort`,
+                 post an explanatory comment on the issue, and EXIT WITHOUT
+                 PUSHING. The ready-for-implementer label remains; the human
+                 (or a future dispatch) will retry once the conflicting PR
+                 has settled. This prevents the parallel-dispatch failure
+                 mode we hit on PRs #26/#27.
+             12. Push the branch.
+             13. Open a PR with title `<type>(<component>): <description>`
                  and the body sections from your spec (What changed / Why /
                  How tested / Closes #${{ github.event.issue.number }}).
-             13. Stop.
+             14. Stop.
 
             Hard rules:
               - Never commit to master.
