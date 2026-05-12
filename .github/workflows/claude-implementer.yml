@@ -20,8 +20,13 @@ name: claude-implementer
 on:
   issues:
     types: [labeled]
-  pull_request_review:
-    types: [submitted]
+  # Fix-iteration trigger: when a reviewer comment containing "VERDICT: BLOCK"
+  # lands on a PR. Per issue #24, our reviewer agents post issue comments
+  # (not formal PR reviews), so pull_request_review never fires.
+  # issue_comment fires for both issue AND PR comments — the fix-iteration
+  # job filters to PR comments only.
+  issue_comment:
+    types: [created]
   workflow_dispatch:
     inputs:
       issue_number:
@@ -180,77 +185,114 @@ jobs:
 
   # ── Mode B: fix iteration ───────────────────────────────────────────────
   fix-iteration:
-    # Triggered when a review of state REQUEST_CHANGES lands on a PR
-    # authored by claude[bot]. This is the iteration loop from ADR-0013.
+    # Triggered when a reviewer agent posts a comment containing
+    # "VERDICT: BLOCK" on a PR authored by claude[bot]. Per issue #24,
+    # our reviewer agents post issue comments (not formal PR reviews),
+    # so we listen on issue_comment events and parse the body.
     #
-    # Note: we override the bot-skip guard here. Normally we skip bot
-    # actors to prevent loops, but the implementer's whole job is to
-    # respond to bot review feedback. The 3-attempt cap (enforced in the
-    # agent prompt) bounds the loop.
+    # Filters in order:
+    #   1. Must be an issue_comment event (pull_request_review path retired)
+    #   2. Must be on a PR (issue_comment fires for both issues and PRs;
+    #      PR comments have pull_request set on the parent issue)
+    #   3. Comment author must be claude[bot] (the reviewer)
+    #   4. Comment body must contain "VERDICT: BLOCK"
+    #   5. PR head branch must start with impl/ (implementer-authored PR)
+    #
+    # The 3-attempt cap (enforced in the agent prompt + workflow step
+    # below) bounds the fix loop.
     if: |
-      github.event_name == 'pull_request_review'
-      && github.event.review.state == 'changes_requested'
-      && github.event.pull_request.user.login == 'claude[bot]'
+      github.event_name == 'issue_comment'
+      && github.event.action == 'created'
+      && github.event.issue.pull_request != null
+      && github.event.comment.user.login == 'claude[bot]'
+      && contains(github.event.comment.body, 'VERDICT: BLOCK')
+      && startsWith(github.event.issue.title, 'fix(') == false
+      && (
+        startsWith(github.event.issue.pull_request.html_url, 'https://github.com/jaetill/game-night-pwa/pull/')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
+      - name: Resolve PR head ref
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          # issue_comment events don't give us the PR head ref directly.
+          # Fetch it via the API. Also fetch the head branch — must start
+          # with impl/ to qualify as an implementer-authored PR.
+          pr_json=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}")
+          head_ref=$(echo "$pr_json" | jq -r '.head.ref')
+          head_user=$(echo "$pr_json" | jq -r '.user.login')
+          if [[ ! "$head_ref" == impl/* ]]; then
+            echo "::notice::PR head '$head_ref' is not an implementer branch (no impl/ prefix); skipping fix-iteration."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$head_user" != "claude[bot]" ]]; then
+            echo "::notice::PR author '$head_user' is not claude[bot]; skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "head_ref=$head_ref" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
+        if: steps.pr.outputs.skip != 'true'
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ steps.pr.outputs.head_ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/setup-node@v4
+        if: steps.pr.outputs.skip != 'true'
         with:
           node-version: 22
           cache: npm
       - name: Install dependencies
+        if: steps.pr.outputs.skip != 'true'
         run: |
           npm ci
           npm ci --prefix lambda
       - name: Configure git author
+        if: steps.pr.outputs.skip != 'true'
         run: |
           git config user.name 'claude[bot]'
           git config user.email '41898282+claude[bot]@users.noreply.github.com'
       - name: Count prior fix attempts on this branch
         id: count
+        if: steps.pr.outputs.skip != 'true'
         run: |
-          # Count commits on this branch authored by claude[bot] that
-          # contain "address review feedback" in the message — those are
-          # prior fix iterations.
           attempts=$(git log --author='claude\[bot\]' --grep='address review feedback' --oneline | wc -l)
           echo "attempts=$attempts" >> "$GITHUB_OUTPUT"
           echo "Prior fix attempts: $attempts"
       - name: Escalate if at cap
-        if: steps.count.outputs.attempts >= '3'
+        if: steps.pr.outputs.skip != 'true' && steps.count.outputs.attempts >= '3'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ github.event.issue.number }}
         run: |
           gh pr comment ${PR_NUMBER} --body "I've made 3 attempts to address review feedback without converging. Escalating to @jaetill for direction. Stopping autonomous fix iteration per ADR-0013."
           exit 0
       - name: Run implementer agent (Mode B — fix)
-        if: steps.count.outputs.attempts < '3'
+        if: steps.pr.outputs.skip != 'true' && steps.count.outputs.attempts < '3'
         env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ github.event.issue.number }}
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           show_full_output: true
-          # Override the default bot-skip safety because we WANT to act on
-          # bot-initiated review events here. The 3-attempt cap above is
-          # the loop guard.
           allowed_bots: 'claude[bot]'
           prompt: |
             Act as the `implementer` subagent.
             You are operating in **Mode B — fix iteration**.
 
-            PR: #${{ github.event.pull_request.number }}
-            Head branch: ${{ github.event.pull_request.head.ref }}
+            PR: #${{ github.event.issue.number }}
+            Head branch: ${{ steps.pr.outputs.head_ref }}
             Prior attempts on this branch: ${{ steps.count.outputs.attempts }}
 
             Read the latest reviewer comments:
-              gh pr view ${{ github.event.pull_request.number }} --json comments
+              gh pr view ${{ github.event.issue.number }} --json comments
 
             Look specifically for the most recent comments starting with
             `## Code Review` and `## Security Review`. Each enumerates
