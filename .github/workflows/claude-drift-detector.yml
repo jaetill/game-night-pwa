@@ -40,10 +40,16 @@ jobs:
           # and was actively harmful — previously, if this workflow was cancelled
           # mid-plan (timeout cap of 25min, manual cancel, runner crash), the
           # DynamoDB state lock would orphan and block every subsequent
-          # `tofu plan`/`apply` until a human force-unlocked. Read-without-lock
-          # races at worst with a concurrent apply (small window, once-daily
-          # schedule) and would produce a false-positive drift issue that's
-          # easy to dismiss.
+          # `tofu plan`/`apply` until a human force-unlocked.
+          #
+          # Trade-off: a concurrent `tofu apply` racing this plan could
+          # produce a false-positive drift issue. The drift-detector agent
+          # auto-files or updates a GitHub issue on detected drift, so
+          # false positives DO propagate (triage-bot may pick them up;
+          # they appear in dashboards). Dismissal heuristic: if a drift
+          # issue lands suspiciously close to a deploy, check the GitHub
+          # Actions run history for an apply job overlapping the plan
+          # window and dismiss as a race artifact.
           tofu -chdir=terraform/envs/prod plan -lock=false -detailed-exitcode -no-color > /tmp/plan.txt 2>&1
           echo "PLAN_EXIT=$?" >> "$GITHUB_ENV"
         # detailed-exitcode: 0=no-changes, 1=error, 2=changes-present

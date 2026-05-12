@@ -259,12 +259,15 @@ data "aws_iam_policy_document" "iac_drift_tfstate" {
     effect = "Allow"
     actions = [
       "dynamodb:GetItem",
-      "dynamodb:PutItem",
-      "dynamodb:DeleteItem",
     ]
-    # tofu plan needs Put/Delete for the brief lock during refresh. Could be
-    # avoided with `tofu plan -lock=false` but that risks a concurrent apply
-    # racing the plan. Keep the lock; scope dynamodb to the one table.
+    # The drift-detector now runs `tofu plan -lock=false` (per the daily
+    # workflow at .github/workflows/claude-drift-detector.yml); it never
+    # acquires or releases the DynamoDB state lock, so PutItem/DeleteItem
+    # are unnecessary. GetItem is retained for diagnostics (e.g. confirming
+    # the lock table exists during init). The lock pattern was rejected
+    # because cancelled workflow runs were orphaning locks and blocking
+    # subsequent plans; tolerating the small false-positive risk of a
+    # concurrent-apply race is the trade-off.
     resources = [
       "arn:aws:dynamodb:${var.aws_region}:${var.aws_account_id}:table/terraform-state-lock",
     ]
