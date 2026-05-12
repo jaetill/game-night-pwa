@@ -33,6 +33,7 @@ Hosted at **https://gamenights.jaetill.com** (GitHub Pages frontend, AWS backend
 | Cognito branding ID | `26736f11-feed-4a3f-994d-643e07b2e93d` (per-client branding required for managed login v2) |
 | Required group | `game-night-users` — users without this claim are bounced back to portal |
 | GitHub deploy role | `game-night-github-deploy` (OIDC, GitHub Pages deploy) |
+| IAM role | `grafana-cloudwatch-readonly` — assumed by Grafana Cloud (account `008923505280`) for CloudWatch + Logs read; `sts:ExternalId` enforced via `var.grafana_external_id` (set via `TF_VAR_grafana_external_id` env var; value not committed — see Grafana data-source UI) |
 | Region | `us-east-2` |
 
 ## Lambda functions and roles
@@ -345,8 +346,8 @@ The custom MCP server at `mcp/` is application code — it is NOT touched by the
 | Phase 2 — AI configuration | ✅ Complete (12 agents, 10 commands, 10 hooks, settings.json) |
 | Phase 3 — Quality gates | ✅ Complete (ESLint, Prettier, pre-commit, lint-staged, commitlint, vitest tiered coverage) |
 | Phase 4 — CI workflows | ✅ Complete (claude-pr-review, release-please, deploy.yml augmented with Sentry release step) |
-| Phase 5 — Observability | ✅ Complete (Sentry frontend init wired; all 8 Lambda handlers wrapped with Sentry.wrapHandler + structured logger on 2026-05-09; tests/lambdaHandlers.test.js guards regressions) |
-| Phase 6 — IaC retrofit | 🟦 Deferred (capture existing AWS as Terraform; ~500 lines; multi-PR effort) |
+| Phase 5 — Observability | ✅ Complete (Sentry frontend init wired; all 8 Lambda handlers wrapped with Sentry.wrapHandler + structured logger on 2026-05-09; tests/lambdaHandlers.test.js guards regressions; Grafana Cloud CloudWatch pull wired 2026-05-12 — dashboard at grafana/dashboards/lambda-health.json) |
+| Phase 6 — IaC retrofit | 🔄 In progress — `terraform/envs/prod/grafana.tf` is first Terraform file (IAM role for Grafana CloudWatch); full existing-resource retrofit still pending (~500 lines) |
 | Phase 7 — User feedback Lambda | ✅ Code complete on 2026-05-09. lambda/feedback.js + tests/feedback.test.js (18 tests) + lambda/iam/feedback-inline.json + src/js/feedback.js widget. Requires API Gateway POST /feedback route + GitHub PAT in Secrets Manager `game-night/prod/github-token` to activate. |
 
 After this integration:

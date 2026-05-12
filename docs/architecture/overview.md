@@ -55,7 +55,7 @@ Key existing decisions inherited from `CLAUDE.md`:
 - p99 latency: <500ms on primary endpoints
 - Error rate: <0.5%
 
-These are aspirational pending Phase 5 of the integration plan (observability) — currently no Sentry, so error rate is unmeasurable beyond CloudWatch Logs.
+Sentry (frontend + Lambda) and Grafana Cloud CloudWatch are wired as of 2026-05-12. Error rate and latency are now measurable.
 
 ## Out of scope
 
