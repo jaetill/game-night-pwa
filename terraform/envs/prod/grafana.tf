@@ -6,7 +6,7 @@
 # Groups Tagging). Grafana then queries CloudWatch on demand when a
 # dashboard panel loads.
 #
-# Decision recorded in agentic-dev-environment ADR-0014: pull pattern over
+# Decision recorded in agentic-dev-environment ADR-0013: pull pattern over
 # CloudWatch Metric Streams (push). Pull is the industry default at our
 # scale; push is reserved for sub-minute SRE/on-call needs we don't have.
 #
@@ -22,9 +22,22 @@
 #
 # Permissions: minimum set documented by Grafana for the CloudWatch data
 # source. https://grafana.com/docs/grafana/latest/datasources/aws-cloudwatch/aws-authentication/
-# All actions are read-only; resource scope is "*" because CloudWatch's
-# metric/log APIs do not support resource-level IAM (the actions are
-# inherently account-wide reads).
+# All actions are read-only.
+#
+# Resource scoping is split by action type:
+#   - CloudWatch metrics: "*" because the metric APIs do not support
+#     resource-level IAM (the actions are inherently account-wide reads).
+#   - CloudWatch Logs control plane (DescribeLogGroups, StopQuery,
+#     GetQueryResults): "*" because the resource is either a query ID
+#     (not a log group) or the account-level log-group list.
+#   - CloudWatch Logs query + read (StartQuery, GetLogEvents,
+#     DescribeLogStreams, GetLogGroupFields): scoped to /aws/lambda/*
+#     log groups only. PII defense-in-depth — Standard 06 already
+#     redacts PII at emission time, but IAM scoping is the second
+#     line of defense if a developer logs an unredacted field by
+#     mistake. Re-scope when other log-group prefixes need access
+#     (e.g. /aws/apigateway/*) — track in a new issue rather than
+#     widening to wildcard.
 
 # ── Trust policy: who can assume this role ─────────────────────────────────
 data "aws_iam_policy_document" "grafana_cloudwatch_trust" {
@@ -63,28 +76,44 @@ data "aws_iam_policy_document" "grafana_cloudwatch_readonly" {
     resources = ["*"]
   }
 
-  # CloudWatch Logs — query log groups via Logs Insights + raw GetLogEvents.
+  # CloudWatch Logs — control-plane actions. Wildcard because the resource
+  # is a query ID (StopQuery, GetQueryResults) or the account-level log-
+  # group inventory (DescribeLogGroups, required for Grafana's UI to list
+  # available groups before drill-down).
   statement {
-    sid    = "CloudWatchLogsRead"
+    sid    = "CloudWatchLogsControlPlane"
     effect = "Allow"
     actions = [
       "logs:DescribeLogGroups",
+      "logs:StopQuery",
+      "logs:GetQueryResults",
+    ]
+    resources = ["*"]
+  }
+
+  # CloudWatch Logs — query + read actions, scoped to Lambda log groups.
+  # Both ARN forms required: the bare log-group form for query/describe
+  # actions, and the :* (log-stream) form for GetLogEvents.
+  statement {
+    sid    = "CloudWatchLogsReadLambda"
+    effect = "Allow"
+    actions = [
       "logs:DescribeLogStreams",
       "logs:GetLogGroupFields",
       "logs:StartQuery",
-      "logs:StopQuery",
-      "logs:GetQueryResults",
       "logs:GetLogEvents",
     ]
-    resources = ["*"]
+    resources = [
+      "arn:aws:logs:${var.aws_region}:${var.aws_account_id}:log-group:/aws/lambda/*",
+      "arn:aws:logs:${var.aws_region}:${var.aws_account_id}:log-group:/aws/lambda/*:*",
+    ]
   }
 
   # EC2 — region discovery only. Grafana uses DescribeRegions to populate
   # the region selector in the data source UI; everything else (instance
   # listing, instance tags) is excluded because we run serverless and
   # have no EC2 to monitor. Re-grant DescribeInstances + DescribeTags only
-  # if/when EC2-based dashboards are needed (least-privilege per
-  # PR #30 code review).
+  # if/when EC2-based dashboards are needed.
   statement {
     sid       = "Ec2RegionDiscovery"
     effect    = "Allow"
