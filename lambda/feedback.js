@@ -69,6 +69,14 @@ function makeRateLimiter() {
   };
 }
 
+// ── Markdown sanitization ────────────────────────────────────────────────────
+// Escape characters that GitHub Markdown renders specially so anonymous callers
+// cannot inject headings, image embeds, links, or fabricated sections into the
+// triage-visible issue body.
+function escapeMarkdown(str) {
+  return str.replace(/[\\*_#[\]`<>!]/g, '\\$&');
+}
+
 // ── Validation (inline; no schema lib for low dep weight) ───────────────────
 const ALLOWED_TYPES = new Set(['bug', 'feature', 'other']);
 
@@ -205,13 +213,13 @@ function createHandler(deps = {}) {
     const titleBody = body.description.length > 60
       ? body.description.slice(0, 60).trim() + '...'
       : body.description;
-    const issueTitle = `[${body.type}] ${titleBody}`;
+    const issueTitle = `[${body.type}] ${escapeMarkdown(titleBody)}`;
     const issueBody = [
-      '## Description', body.description, '',
+      '## Description', escapeMarkdown(body.description), '',
       '## Context',
-      body.page_url ? `- Page: ${body.page_url}` : null,
-      body.user_agent ? `- UA: \`${body.user_agent}\`` : null,
-      body.email ? `- Email: ${body.email}` : null,
+      body.page_url ? `- Page: ${escapeMarkdown(body.page_url)}` : null,
+      body.user_agent ? `- UA: ${escapeMarkdown(body.user_agent)}` : null,
+      body.email ? `- Email: ${escapeMarkdown(body.email)}` : null,
       `- Source IP: ${ip}`,
       `- Lambda request: ${context?.awsRequestId || 'unknown'}`,
       '',
@@ -270,3 +278,4 @@ exports.handler = createHandler();
 exports._createHandler = createHandler;
 exports._validate = validate;
 exports._makeRateLimiter = makeRateLimiter;
+exports._escapeMarkdown = escapeMarkdown;

@@ -9,7 +9,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { _createHandler, _validate } = require('../lambda/feedback.js');
+const { _createHandler, _validate, _escapeMarkdown } = require('../lambda/feedback.js');
 
 // ── Mock factories ─────────────────────────────────────────────────────────
 function makeMockSm({ secretValue = { GITHUB_TOKEN: 'ghp_fake' }, fail = false } = {}) {
@@ -205,6 +205,70 @@ describe('lambda/feedback.js — handler', () => {
     }
     const otherIp = await handler(makeEvent('POST', VALID_BODY, { ip: '2.2.2.2' }), { awsRequestId: 'rid-b-1' });
     expect(otherIp.statusCode).toBe(201);
+  });
+});
+
+describe('lambda/feedback.js — Markdown injection prevention', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('escapes Markdown special chars in issue title when description contains them', async () => {
+    const ok = makeMockOctokit();
+    const handler = _createHandler({ smClient: makeMockSm(), Octokit: ok.Octokit });
+    const maliciousDesc = '## Fake heading [phish](http://evil.com) ![img](http://tracker.example)';
+    const res = await handler(makeEvent('POST', { ...VALID_BODY, description: maliciousDesc }), { awsRequestId: 'rid-title-escape' });
+    expect(res.statusCode).toBe(201);
+    expect(ok.captured.length).toBe(1);
+    const { title, body } = ok.captured[0];
+    expect(title).not.toContain('## Fake heading');
+    expect(title).not.toMatch(/\[phish\]\(http/);
+    expect(title).not.toMatch(/!\[img\]/);
+    expect(body).not.toContain('## Fake heading');
+    expect(body).not.toMatch(/\[phish\]\(http/);
+    expect(body).not.toMatch(/!\[img\]/);
+  });
+
+  it('escapes Markdown in page_url so link injection cannot occur', async () => {
+    const ok = makeMockOctokit();
+    const handler = _createHandler({ smClient: makeMockSm(), Octokit: ok.Octokit });
+    const maliciousUrl = '[evil](http://phishing.example) <script>alert(1)</script>';
+    const res = await handler(makeEvent('POST', { ...VALID_BODY, page_url: maliciousUrl }), { awsRequestId: 'rid-url-escape' });
+    expect(res.statusCode).toBe(201);
+    const { body } = ok.captured[0];
+    expect(body).not.toMatch(/\[evil\]\(http/);
+    expect(body).not.toContain('<script>');
+    expect(body).toContain('\\[evil\\]');
+  });
+
+  it('escapes backticks in user_agent so code-span injection cannot occur', async () => {
+    const ok = makeMockOctokit();
+    const handler = _createHandler({ smClient: makeMockSm(), Octokit: ok.Octokit });
+    const maliciousUA = 'Mozilla/5.0` injected-after-code-span `leftover';
+    const res = await handler(makeEvent('POST', { ...VALID_BODY, user_agent: maliciousUA }), { awsRequestId: 'rid-ua-escape' });
+    expect(res.statusCode).toBe(201);
+    const { body } = ok.captured[0];
+    expect(body).not.toContain('` injected-after-code-span `');
+    expect(body).toContain('\\`');
+  });
+});
+
+describe('lambda/feedback.js — _escapeMarkdown helper', () => {
+  it('escapes all Markdown-special characters', () => {
+    expect(_escapeMarkdown('*bold* _italic_ #heading [link](url) `code` <tag> ![img](src)')).toBe(
+      '\\*bold\\* \\_italic\\_ \\#heading \\[link\\](url) \\`code\\` \\<tag\\> \\!\\[img\\](src)'
+    );
+  });
+
+  it('escapes backslash to prevent double-escaping', () => {
+    expect(_escapeMarkdown('back\\slash')).toBe('back\\\\slash');
+  });
+
+  it('returns plain strings unchanged', () => {
+    expect(_escapeMarkdown('hello world 123')).toBe('hello world 123');
   });
 });
 
