@@ -34,7 +34,7 @@ Hosted at **https://gamenights.jaetill.com** (GitHub Pages frontend, AWS backend
 | Required group | `game-night-users` — users without this claim are bounced back to portal |
 | GitHub deploy role | `game-night-github-deploy` (OIDC, GitHub Pages deploy) |
 | IAM role | `grafana-cloudwatch-readonly` — assumed by Grafana Cloud (account `008923505280`) for CloudWatch + Logs read; Logs query/read actions scoped to `/aws/lambda/*` (metrics remain `*` — metric APIs have no resource-level IAM); `sts:ExternalId` enforced via `var.grafana_external_id` (set via `TF_VAR_grafana_external_id` env var; value not committed — see Grafana data-source UI) |
-| IAM role | `game-night-iac-drift` — assumed by the drift-detector CI workflow (`tofu plan -refresh-only`); narrowly-scoped inline policy: IAM/Lambda/API Gateway/Cognito/S3 metadata + CloudWatch describe, **no** secret values (`secretsmanager:GetSecretValue` omitted), **no** SSM parameter values (`ssm:GetParameter` omitted), **no** S3 object reads. Plus a separate inline policy scoped to the tfstate S3 bucket and DynamoDB lock table. |
+| IAM role | `game-night-iac-drift` — assumed by the drift-detector CI workflow (`tofu plan -refresh-only`); has AWS managed `ReadOnlyAccess` policy attached (re-attached in PR #76, reverting the narrowing from PR #48), plus two narrow inline policies: one for the tfstate S3 bucket and DynamoDB lock table, one with additional metadata reads. `secretsmanager:GetSecretValue` and `ssm:GetParameter` (secret values) are **not** in the inline policies but may be reachable via `ReadOnlyAccess`; S3 object reads similarly. |
 | Region | `us-east-2` |
 
 ## Lambda functions and roles
