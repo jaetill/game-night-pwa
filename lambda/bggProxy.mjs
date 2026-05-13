@@ -94,7 +94,7 @@ export const handler = Sentry.wrapHandler(async (event, context) => {
       } catch (err) {
         logger.error('s3.profile_read_failed', { request_id: context?.awsRequestId, user_id: callerId, error: err.message });
         Sentry.captureException(err);
-        return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: err.message }) };
+        return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'storage_error' }) };
       }
     }
 
@@ -124,7 +124,7 @@ export const handler = Sentry.wrapHandler(async (event, context) => {
       } catch (err) {
         logger.error('s3.profile_write_failed', { request_id: context?.awsRequestId, user_id: callerId, error: err.message });
         Sentry.captureException(err);
-        return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: err.message }) };
+        return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'storage_error' }) };
       }
     }
   }
@@ -145,7 +145,7 @@ export const handler = Sentry.wrapHandler(async (event, context) => {
     } catch (err) {
       logger.error('s3.collection_read_failed', { request_id: context?.awsRequestId, user_id: callerId, error: err.message });
       Sentry.captureException(err);
-      return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: err.message }) };
+      return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'storage_error' }) };
     }
   }
 
@@ -170,7 +170,7 @@ export const handler = Sentry.wrapHandler(async (event, context) => {
     } catch (err) {
       logger.error('s3.collection_write_failed', { request_id: context?.awsRequestId, user_id: callerId, error: err.message });
       Sentry.captureException(err);
-      return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: err.message }) };
+      return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'storage_error' }) };
     }
   }
 

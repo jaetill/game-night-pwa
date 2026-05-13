@@ -77,6 +77,9 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
   } catch (err) {
     logger.error('presign.failed', { request_id: context?.awsRequestId, key, error: err.message });
     Sentry.captureException(err);
-    return respond(500, { error: err.message }, CORS);
+    // Generic message — detail is logged above for ops. AWS SDK error
+    // strings can embed bucket/key/request-id; keep that out of the
+    // response body (issue #45).
+    return respond(500, { error: 'storage_error' }, CORS);
   }
 });
