@@ -272,12 +272,12 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
     } catch (e) {
       logger.error('postmark.nudge_failed', { request_id: context?.awsRequestId, error: e.message });
       Sentry.captureException(e);
-      errors.push({ email, error: e.message });
+      errors.push(makeNudgeErrorEntry(e));
     }
   }
 
   logger.info('nudge.complete', { request_id: context?.awsRequestId, sent, total: targets.length, errors: errors.length });
-  return respond(200, { sent, total: targets.length, errors }, CORS);
+  return respond(200, { sent, total: targets.length, errorCount: errors.length }, CORS);
 });
 
 // ── Helpers ───────────────────────────────────────────────
@@ -528,8 +528,11 @@ function postmark(apiKey, msg) {
   });
 }
 
+function makeNudgeErrorEntry(e) { return { error: e.message }; }
+
 // Test seam — not part of the public API.
 exports._buildHtml = buildHtml;
 exports._buildInviteHtml = buildInviteHtml;
 exports._escapeHtml = escapeHtml;
 exports._isValidInviteEmail = isValidInviteEmail;
+exports._makeNudgeErrorEntry = makeNudgeErrorEntry;
