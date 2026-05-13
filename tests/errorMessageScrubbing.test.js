@@ -50,3 +50,18 @@ describe('issue #45 — S3 error messages must not leak in 500 responses', () =>
     });
   }
 });
+
+describe('issue #55 — Postmark error message must not leak in invite 500 response', () => {
+  it('nudge.js contains no 500 path interpolating e.message into the invite error body', () => {
+    const src = readFileSync(join(lambdaDir, 'nudge.js'), 'utf8');
+    // Guard: any respond(500, ...) call that includes e.message in the body
+    // within a ~200-char window indicates the Postmark error detail is leaking.
+    const matches = src.match(/respond\(500[\s\S]{0,200}e\.message/g);
+    expect(matches).toBeNull();
+  });
+
+  it('nudge.js invite error returns the generic sentinel string', () => {
+    const src = readFileSync(join(lambdaDir, 'nudge.js'), 'utf8');
+    expect(src).toMatch(/error:\s*['"]Failed to send invite email['"]/);
+  });
+});
