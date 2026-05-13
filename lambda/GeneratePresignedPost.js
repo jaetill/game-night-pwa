@@ -162,7 +162,10 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
   } catch (err) {
     logger.error('s3.put_failed', { request_id: context?.awsRequestId, key: KEY, error: err.message });
     Sentry.captureException(err);
-    return respond(500, { error: err.message }, CORS);
+    // Generic message — detail is logged above for ops. AWS SDK error
+    // strings can embed bucket/key/request-id; keep that out of the
+    // response body (issue #45).
+    return respond(500, { error: 'storage_error' }, CORS);
   }
 
   logger.info('upload.saved', { request_id: context?.awsRequestId, count: incoming.length });
