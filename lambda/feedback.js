@@ -36,6 +36,18 @@ const ALLOWED_ORIGINS = new Set([
   'http://localhost:5173',
 ]);
 
+// Allowlist of origins whose URLs are safe to embed as clickable links in
+// the GitHub issue body. An attacker-controlled page_url would otherwise
+// create a phishing link visible to maintainers triaging feedback.
+const SAFE_PAGE_ORIGINS = [
+  'https://gamenights.jaetill.com',
+  'https://jaetill.github.io/game-night-pwa',
+];
+
+function isSafePageUrl(url) {
+  return typeof url === 'string' && SAFE_PAGE_ORIGINS.some(o => url.startsWith(o));
+}
+
 // ── In-memory rate limit (per warm Lambda instance) ─────────────────────────
 const WINDOW_MS = 60 * 60 * 1000; // 1 hour
 const LIMIT = 10;
@@ -217,7 +229,7 @@ function createHandler(deps = {}) {
     const issueBody = [
       '## Description', escapeMarkdown(body.description), '',
       '## Context',
-      body.page_url ? `- Page: ${escapeMarkdown(body.page_url)}` : null,
+      body.page_url && isSafePageUrl(body.page_url) ? `- Page: ${escapeMarkdown(body.page_url)}` : null,
       body.user_agent ? `- UA: ${escapeMarkdown(body.user_agent)}` : null,
       body.email ? `- Email: ${escapeMarkdown(body.email)}` : null,
       `- Source IP: ${ip}`,
@@ -279,3 +291,4 @@ exports._createHandler = createHandler;
 exports._validate = validate;
 exports._makeRateLimiter = makeRateLimiter;
 exports._escapeMarkdown = escapeMarkdown;
+exports._isSafePageUrl = isSafePageUrl;
