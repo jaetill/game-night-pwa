@@ -211,7 +211,7 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
     } catch (e) {
       logger.error('postmark.invite_failed', { request_id: context?.awsRequestId, error: e.message });
       Sentry.captureException(e);
-      return respond(500, { error: `Failed to send invite: ${e.message}` }, CORS);
+      return respond(500, { error: 'Failed to send invite email' }, CORS);
     }
   }
 
