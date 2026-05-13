@@ -315,8 +315,17 @@ jobs:
               3. Run npm test to verify nothing regresses.
               4. Commit with message:
                  `fix(<component>): address review feedback — <description>`
-              5. Push to the same branch.
-              6. Post a brief comment on the PR listing one bullet per
+              5. **Pre-flight conflict check** (per spec step 11, issue
+                 #29; equally applies to Mode B per #43). Run
+                 `git fetch origin master && git rebase origin/master`.
+                 Clean rebase = continue. Conflict = `git rebase --abort`,
+                 post an explanatory comment on the PR
+                 (`gh pr comment ${PR_NUMBER} --body "..."`), and EXIT
+                 WITHOUT PUSHING. The PR remains open; once the conflicting
+                 master change has settled, the next reviewer-block
+                 comment will re-trigger this job.
+              6. Push to the same branch.
+              7. Post a brief comment on the PR listing one bullet per
                  finding with what you changed.
 
             Hard rules same as Mode A.
