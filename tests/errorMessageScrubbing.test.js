@@ -24,6 +24,7 @@ import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const lambdaDir = join(__dirname, '..', 'lambda');
+const fixturesDir = join(__dirname, 'fixtures');
 
 const files = [
   'bggProxy.mjs',
@@ -31,14 +32,17 @@ const files = [
   'GeneratePresignedPost.js',
 ];
 
+// Matches any catch-binding identifier (err, e, error, ex, etc.).
+const LEAK_PATTERN = /500[\s\S]{0,200}error:\s*\w+\.message/g;
+
 describe('issue #45 — S3 error messages must not leak in 500 responses', () => {
   for (const f of files) {
-    it(`${f} contains no 500 path interpolating err.message into body`, () => {
+    it(`${f} contains no 500 path interpolating <binding>.message into body`, () => {
       const src = readFileSync(join(lambdaDir, f), 'utf8');
-      // Look for the bad pattern: any 500 followed soon after by err.message
-      // in a body field. The 500-to-err.message window is bounded to ~200 chars
+      // Look for the bad pattern: any 500 followed soon after by <var>.message
+      // in a body field. The 500-to-<var>.message window is bounded to ~200 chars
       // so we don't false-positive across unrelated parts of the file.
-      const matches = src.match(/500[\s\S]{0,200}error:\s*err\.message/g);
+      const matches = src.match(LEAK_PATTERN);
       expect(matches).toBeNull();
     });
 
@@ -49,4 +53,11 @@ describe('issue #45 — S3 error messages must not leak in 500 responses', () =>
       expect(src).toMatch(/error:\s*['"]storage_error['"]/);
     });
   }
+
+  it('guard catches e.message binding (not just err.message)', () => {
+    // Verifies the regex is not variable-name-specific — issue #53.
+    const src = readFileSync(join(fixturesDir, 'leak-e-message.js'), 'utf8');
+    const matches = src.match(LEAK_PATTERN);
+    expect(matches).not.toBeNull();
+  });
 });
