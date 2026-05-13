@@ -4,17 +4,18 @@
 // while buildInviteHtml already called escapeHtml. This test locks in the
 // fix so any future edit that removes escapeHtml calls breaks loudly here.
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
+const nudge = require('../lambda/nudge.js');
 const {
   _buildHtml: buildHtml,
   _buildInviteHtml: buildInviteHtml,
   _escapeHtml: escapeHtml,
   _isValidInviteEmail: isValidInviteEmail,
   _makeNudgeErrorEntry: makeNudgeErrorEntry,
-} = require('../lambda/nudge.js');
+} = nudge;
 
 const BASE = {
   name: 'Alice',
@@ -225,5 +226,85 @@ describe('makeNudgeErrorEntry (PII guard — issue #44)', () => {
   it('returns only the error field (no extra keys)', () => {
     const entry = makeNudgeErrorEntry(new Error('x'));
     expect(Object.keys(entry)).toEqual(['error']);
+  });
+});
+
+// Handler-level regression guard for PR #49 (issue #44 PII fix).
+// If a future edit restores `errors` in the response body, these tests break.
+describe('handler nudge — response body shape (PII regression guard, issue #51)', () => {
+  const NIGHT = {
+    id: 'night-1',
+    hostUserId: 'host-user',
+    invited: ['user1-id', 'user2-id'],
+    rsvps: [],
+    declined: [],
+    date: '2026-06-01',
+    time: '7:00 PM',
+    location: "Alice's Place",
+    description: '',
+  };
+
+  function makeNudgeEvent() {
+    return {
+      httpMethod: 'POST',
+      resource: '/nudge',
+      headers: { origin: 'https://gamenights.jaetill.com' },
+      requestContext: { authorizer: { userId: 'host-user' } },
+      body: JSON.stringify({ nightId: 'night-1' }),
+    };
+  }
+
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const mockS3 = {
+      send: vi.fn(async () => ({
+        Body: { transformToString: async () => JSON.stringify([NIGHT]) },
+      })),
+    };
+
+    const mockCognito = {
+      send: vi.fn(async (cmd) => {
+        const username = cmd.input?.Username;
+        if (username === 'host-user') return { UserAttributes: [{ Name: 'name', Value: 'Alice' }] };
+        if (username === 'user1-id')  return { UserAttributes: [{ Name: 'email', Value: 'user1@example.com' }, { Name: 'name', Value: 'User One' }] };
+        if (username === 'user2-id')  return { UserAttributes: [{ Name: 'email', Value: 'user2@example.com' }, { Name: 'name', Value: 'User Two' }] };
+        throw new Error(`Unexpected Cognito call for username: ${username}`);
+      }),
+    };
+
+    const mockSm = {
+      send: vi.fn(async () => ({ SecretString: JSON.stringify({ POSTMARK_API_KEY: 'test-key' }) })),
+    };
+
+    let deliveryCallCount = 0;
+    const mockPostmark = vi.fn(async () => {
+      deliveryCallCount++;
+      if (deliveryCallCount >= 2) throw new Error('Postmark delivery failed');
+    });
+
+    nudge._setForTest({ smClient: mockSm, s3: mockS3, cognito: mockCognito, postmark: mockPostmark });
+  });
+
+  afterEach(() => {
+    nudge._resetForTest();
+    vi.restoreAllMocks();
+  });
+
+  it('uses errorCount (not errors array) in response when a delivery fails', async () => {
+    const res = await nudge.handler(makeNudgeEvent(), { awsRequestId: 'test-nudge-shape-1' });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(typeof body.errorCount).toBe('number');
+    expect(body.errors).toBeUndefined(); // PII regression guard — issue #44
+    expect(body.errorCount).toBe(1);
+    expect(body.sent).toBe(1);
+    expect(body.total).toBe(2);
+  });
+
+  it('response body contains no email addresses', async () => {
+    const res = await nudge.handler(makeNudgeEvent(), { awsRequestId: 'test-nudge-shape-2' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).not.toMatch(/@/); // no email-format strings in the response at all
   });
 });
