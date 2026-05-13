@@ -9,7 +9,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { _createHandler, _validate, _escapeMarkdown } = require('../lambda/feedback.js');
+const { _createHandler, _validate, _escapeMarkdown, _isSafePageUrl } = require('../lambda/feedback.js');
 
 // ── Mock factories ─────────────────────────────────────────────────────────
 function makeMockSm({ secretValue = { GITHUB_TOKEN: 'ghp_fake' }, fail = false } = {}) {
@@ -232,16 +232,17 @@ describe('lambda/feedback.js — Markdown injection prevention', () => {
     expect(body).not.toMatch(/!\[img\]/);
   });
 
-  it('escapes Markdown in page_url so link injection cannot occur', async () => {
+  it('escapes Markdown special chars in safe-origin page_url before embedding in issue body', async () => {
     const ok = makeMockOctokit();
     const handler = _createHandler({ smClient: makeMockSm(), Octokit: ok.Octokit });
-    const maliciousUrl = '[evil](http://phishing.example) <script>alert(1)</script>';
-    const res = await handler(makeEvent('POST', { ...VALID_BODY, page_url: maliciousUrl }), { awsRequestId: 'rid-url-escape' });
+    // Safe-origin URL with Markdown-special chars in query string
+    const urlWithMarkdown = 'https://gamenights.jaetill.com/path?q=<value>&x=`code`';
+    const res = await handler(makeEvent('POST', { ...VALID_BODY, page_url: urlWithMarkdown }), { awsRequestId: 'rid-url-escape' });
     expect(res.statusCode).toBe(201);
     const { body } = ok.captured[0];
-    expect(body).not.toMatch(/\[evil\]\(http/);
-    expect(body).not.toContain('<script>');
-    expect(body).toContain('\\[evil\\]');
+    expect(body).not.toContain('<value>');
+    expect(body).not.toContain('`code`');
+    expect(body).toContain('\\<value\\>');
   });
 
   it('escapes backticks in user_agent so code-span injection cannot occur', async () => {
@@ -269,6 +270,90 @@ describe('lambda/feedback.js — _escapeMarkdown helper', () => {
 
   it('returns plain strings unchanged', () => {
     expect(_escapeMarkdown('hello world 123')).toBe('hello world 123');
+  });
+});
+
+describe('lambda/feedback.js — page_url origin validation', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('includes page_url from known app origin in GitHub issue body', async () => {
+    const ok = makeMockOctokit();
+    const handler = _createHandler({ smClient: makeMockSm(), Octokit: ok.Octokit });
+    const safeUrl = 'https://gamenights.jaetill.com/';
+    const res = await handler(makeEvent('POST', { ...VALID_BODY, page_url: safeUrl }), { awsRequestId: 'rid-safe-url' });
+    expect(res.statusCode).toBe(201);
+    const { body } = ok.captured[0];
+    expect(body).toContain('Page:');
+    expect(body).toContain('gamenights.jaetill.com');
+  });
+
+  it('omits page_url from external / phishing origin', async () => {
+    const ok = makeMockOctokit();
+    const handler = _createHandler({ smClient: makeMockSm(), Octokit: ok.Octokit });
+    const phishUrl = 'https://evil.example.com/fake-login';
+    const res = await handler(makeEvent('POST', { ...VALID_BODY, page_url: phishUrl }), { awsRequestId: 'rid-phish-url' });
+    expect(res.statusCode).toBe(201);
+    const { body } = ok.captured[0];
+    expect(body).not.toContain('evil.example.com');
+    expect(body).not.toContain('Page:');
+  });
+
+  it('omits page_url that mimics a safe origin via path prefix spoofing', async () => {
+    const ok = makeMockOctokit();
+    const handler = _createHandler({ smClient: makeMockSm(), Octokit: ok.Octokit });
+    // Evil URL starts with a path segment that looks like the safe origin but is not
+    const spoofUrl = 'https://evil.com/https://gamenights.jaetill.com/';
+    const res = await handler(makeEvent('POST', { ...VALID_BODY, page_url: spoofUrl }), { awsRequestId: 'rid-spoof-url' });
+    expect(res.statusCode).toBe(201);
+    const { body } = ok.captured[0];
+    expect(body).not.toContain('evil.com');
+    expect(body).not.toContain('Page:');
+  });
+});
+
+describe('lambda/feedback.js — _isSafePageUrl helper', () => {
+  it('accepts URLs rooted at the primary app origin', () => {
+    expect(_isSafePageUrl('https://gamenights.jaetill.com/')).toBe(true);
+    expect(_isSafePageUrl('https://gamenights.jaetill.com/some/path?q=1')).toBe(true);
+  });
+
+  it('accepts URLs rooted at the GitHub Pages origin', () => {
+    expect(_isSafePageUrl('https://jaetill.github.io/game-night-pwa/')).toBe(true);
+    expect(_isSafePageUrl('https://jaetill.github.io/game-night-pwa/callback.html')).toBe(true);
+  });
+
+  it('rejects external URLs', () => {
+    expect(_isSafePageUrl('https://evil.example.com/')).toBe(false);
+    expect(_isSafePageUrl('http://gamenights.jaetill.com/')).toBe(false); // wrong scheme
+  });
+
+  it('rejects non-string inputs', () => {
+    expect(_isSafePageUrl(null)).toBe(false);
+    expect(_isSafePageUrl(undefined)).toBe(false);
+    expect(_isSafePageUrl(42)).toBe(false);
+  });
+
+  // Regression guard for the domain-suffix spoofing bypass that the
+  // initial startsWith-based implementation allowed. See PR #58
+  // code-review finding.
+  it('rejects domain-suffix spoofing (gamenights.jaetill.com.evil.com)', () => {
+    expect(_isSafePageUrl('https://gamenights.jaetill.com.evil.example/')).toBe(false);
+    expect(_isSafePageUrl('https://gamenights.jaetill.com.attacker.test/path')).toBe(false);
+  });
+
+  it('rejects GitHub Pages spoofing (jaetill.github.io.evil.com or wrong project path)', () => {
+    expect(_isSafePageUrl('https://jaetill.github.io.evil.example/game-night-pwa/')).toBe(false);
+    expect(_isSafePageUrl('https://jaetill.github.io/other-project/')).toBe(false);
+  });
+
+  it('rejects malformed URLs', () => {
+    expect(_isSafePageUrl('not-a-url')).toBe(false);
+    expect(_isSafePageUrl('javascript:alert(1)')).toBe(false);
   });
 });
 

@@ -36,6 +36,38 @@ const ALLOWED_ORIGINS = new Set([
   'http://localhost:5173',
 ]);
 
+// Allowlist of origins whose URLs are safe to embed as clickable links in
+// the GitHub issue body. An attacker-controlled page_url would otherwise
+// create a phishing link visible to maintainers triaging feedback.
+//
+// Implementation: parse the URL and compare its `origin` exactly against
+// the allowlist (plus an optional pathname prefix when the entry includes
+// one — e.g. the GitHub Pages app lives under /game-night-pwa). A naive
+// `startsWith` check is vulnerable to domain-suffix spoofing: a URL like
+// `https://gamenights.jaetill.com.evil.example/x` would match a
+// `startsWith('https://gamenights.jaetill.com')` test. Parsing forces
+// the comparison to use the structured origin (scheme + host + port),
+// closing that bypass.
+const SAFE_PAGE_ENTRIES = [
+  { origin: 'https://gamenights.jaetill.com', pathPrefix: '' },
+  { origin: 'https://jaetill.github.io', pathPrefix: '/game-night-pwa' },
+];
+
+function isSafePageUrl(url) {
+  if (typeof url !== 'string') return false;
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  return SAFE_PAGE_ENTRIES.some(
+    (entry) =>
+      parsed.origin === entry.origin &&
+      (entry.pathPrefix === '' || parsed.pathname.startsWith(entry.pathPrefix)),
+  );
+}
+
 // ── In-memory rate limit (per warm Lambda instance) ─────────────────────────
 const WINDOW_MS = 60 * 60 * 1000; // 1 hour
 const LIMIT = 10;
@@ -217,7 +249,7 @@ function createHandler(deps = {}) {
     const issueBody = [
       '## Description', escapeMarkdown(body.description), '',
       '## Context',
-      body.page_url ? `- Page: ${escapeMarkdown(body.page_url)}` : null,
+      body.page_url && isSafePageUrl(body.page_url) ? `- Page: ${escapeMarkdown(body.page_url)}` : null,
       body.user_agent ? `- UA: ${escapeMarkdown(body.user_agent)}` : null,
       body.email ? `- Email: ${escapeMarkdown(body.email)}` : null,
       `- Source IP: ${ip}`,
@@ -279,3 +311,4 @@ exports._createHandler = createHandler;
 exports._validate = validate;
 exports._makeRateLimiter = makeRateLimiter;
 exports._escapeMarkdown = escapeMarkdown;
+exports._isSafePageUrl = isSafePageUrl;
