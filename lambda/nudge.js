@@ -37,9 +37,10 @@ const crypto = require('node:crypto');
 
 const REQUIRED_GROUP = 'game-night-users';
 
-const s3      = new S3Client({ region: process.env.AWS_REGION || 'us-east-2' });
-const cognito = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION || 'us-east-2' });
-const smClient = new SecretsManagerClient({ region: 'us-east-2' });
+let s3      = new S3Client({ region: process.env.AWS_REGION || 'us-east-2' });
+let cognito = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION || 'us-east-2' });
+let smClient = new SecretsManagerClient({ region: 'us-east-2' });
+let _postmarkFn = null; // test seam: if set, replaces real postmark calls
 
 let _secrets;
 async function getSecrets() {
@@ -198,7 +199,7 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
     const name = inviteEmail.split('@')[0];
 
     try {
-      await postmark(POSTMARK_KEY, {
+      await (_postmarkFn ?? postmark)(POSTMARK_KEY, {
         To:            inviteEmail,
         From:          FROM_EMAIL,
         Subject:       `You're invited to game night${dateStr ? ` on ${dateStr}` : ''}!`,
@@ -260,7 +261,7 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
   const errors = [];
   for (const { email, name } of targets) {
     try {
-      await postmark(POSTMARK_KEY, {
+      await (_postmarkFn ?? postmark)(POSTMARK_KEY, {
         To:            email,
         From:          FROM_EMAIL,
         Subject:       `Reminder: Game night${dateStr ? ` on ${dateStr}` : ''}`,
@@ -530,9 +531,23 @@ function postmark(apiKey, msg) {
 
 function makeNudgeErrorEntry(e) { return { error: e.message }; }
 
-// Test seam — not part of the public API.
+// Test seams — not part of the public API.
 exports._buildHtml = buildHtml;
 exports._buildInviteHtml = buildInviteHtml;
 exports._escapeHtml = escapeHtml;
 exports._isValidInviteEmail = isValidInviteEmail;
 exports._makeNudgeErrorEntry = makeNudgeErrorEntry;
+
+exports._setForTest = function({ smClient: sm, s3: s3arg, cognito: cog, postmark: pm } = {}) {
+  if (sm)    { smClient = sm; _secrets = null; }
+  if (s3arg) s3 = s3arg;
+  if (cog)   cognito = cog;
+  if (pm)    _postmarkFn = pm;
+};
+exports._resetForTest = function() {
+  smClient    = new SecretsManagerClient({ region: 'us-east-2' });
+  s3          = new S3Client({ region: process.env.AWS_REGION || 'us-east-2' });
+  cognito     = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION || 'us-east-2' });
+  _postmarkFn = null;
+  _secrets    = null;
+};
