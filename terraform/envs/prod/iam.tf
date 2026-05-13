@@ -201,19 +201,38 @@ resource "aws_iam_role_policy" "searchGames_s3" {
 # ════════════════════════════════════════════════════════════════════════════
 # game-night-iac-drift — read-only role for the claude-drift-detector
 # workflow. Used to run `tofu plan` against terraform/envs/prod and detect
-# infrastructure drift. Strictly scoped:
-#   - Inline introspection policy (per-service Describe/Get/List actions)
-#     — NOT the broad ReadOnlyAccess managed policy. ReadOnlyAccess used
-#     to attach here but was too wide: it granted ssm:GetParameter,
-#     secretsmanager:GetSecretValue, cognito-idp:AdminGetUser, and full
-#     S3 object reads — none of which tofu plan needs, all of which a
-#     compromised workflow runner could exfiltrate. The narrower policy
-#     explicitly omits secret-VALUE actions while keeping the metadata
-#     actions tofu plan does need (issue #48).
+# infrastructure drift.
+#
+# CURRENT SCOPE (as of 2026-05-13):
+#   - ReadOnlyAccess (AWS-managed) attached. This is wider than tofu plan
+#     strictly needs and is the subject of OPEN ISSUE #48 (security-review
+#     proposed narrowing to per-service inline Describe/Get/List actions).
+#   - The inline `iac_drift_introspect` policy below ALSO attached. It is
+#     a strict subset of ReadOnlyAccess so the role's effective permissions
+#     equal ReadOnlyAccess. The inline policy is retained as scaffolding
+#     for the next attempt to narrow this role.
 #   - S3 + DynamoDB scoped to ONLY the tfstate bucket + lock table
 #     (separate inline policy, below).
-# The deploy role (above) is NOT reused — separating drift-detection from
-# deploy keeps the deploy role's blast radius minimal even if compromised.
+#
+# HOW WE GOT HERE: PR #59 closed #48 by replacing the ReadOnlyAccess
+# attachment with the narrow inline. That broke the drift-detector
+# workflow — `tofu plan` hung for >13 minutes on the workflow runner,
+# most likely because the narrow policy was missing a permission tofu's
+# refresh loop needs for one of our resource types, and the deny was
+# retried indefinitely instead of surfacing. PR #76 reverted by
+# re-attaching ReadOnlyAccess (this commit). Issue #48 reopened with
+# instructions for the next narrowing attempt (per-resource API call
+# audit, sandboxed pre-merge test).
+#
+# RISK ACCEPTED (until #48 lands cleanly): a compromised drift-detector
+# runner could exfiltrate S3 object contents, Cognito user metadata,
+# SSM parameter names (not encrypted values — `kms:Decrypt` is not
+# included in ReadOnlyAccess), and Secrets Manager descriptions. The
+# trust policy gates assume-role on GitHub OIDC for this repo's master
+# ref only, so the attack requires either a malicious PR landing on
+# master or a supply-chain compromise of an action used by the workflow.
+# The deploy role (above) is still NOT reused — separating drift-detect
+# from deploy keeps deploy's blast radius minimal regardless.
 # ════════════════════════════════════════════════════════════════════════════
 resource "aws_iam_role" "iac_drift" {
   name               = "game-night-iac-drift"
@@ -242,14 +261,20 @@ data "aws_iam_policy_document" "iac_drift_trust" {
   }
 }
 
-# Narrowly-scoped introspection policy replacing the previous ReadOnlyAccess
-# attachment. Each statement covers one service's read-metadata actions.
-# Notable omissions vs. ReadOnlyAccess:
-#   - secretsmanager:GetSecretValue (Postmark + GitHub PAT remain unreadable)
-#   - ssm:GetParameter, ssm:GetParameters, ssm:GetParameterHistory
-#     (API keys at /game-night/api-keys/* remain unreadable)
-#   - cognito-idp:AdminGetUser, ListUsers (user PII remains unreadable)
-#   - s3:GetObject (object contents — outside tfstate — remain unreadable)
+# Scaffolding for the future re-narrowing attempt (see header comment).
+# This data block + the role_policy resource below stay attached to the
+# role alongside the ReadOnlyAccess managed policy — but ReadOnlyAccess
+# is a strict superset, so this inline contributes nothing to the role's
+# effective permissions today. Leaving it in place means the next
+# narrowing attempt only needs to remove the ReadOnlyAccess attachment
+# (and ideally add the missing permissions that caused the 2026-05-13
+# hang). Per-action commentary describing INTENDED future omissions:
+#   - secretsmanager:GetSecretValue (Postmark + GitHub PAT)
+#   - ssm:GetParameter / GetParameters / GetParameterHistory
+#   - cognito-idp:AdminGetUser
+#   - s3:GetObject (outside tfstate)
+# These are NOT actually omitted today — ReadOnlyAccess grants all of
+# them — but capture the policy's design intent for the future fix.
 data "aws_iam_policy_document" "iac_drift_introspect" {
   statement {
     sid       = "IAMRead"
@@ -329,6 +354,10 @@ resource "aws_iam_role_policy" "iac_drift_introspect" {
   policy = data.aws_iam_policy_document.iac_drift_introspect.json
 }
 
+resource "aws_iam_role_policy_attachment" "iac_drift_read_only" {
+  role       = aws_iam_role.iac_drift.name
+  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+}
 data "aws_iam_policy_document" "iac_drift_tfstate" {
   statement {
     sid    = "TFStateRead"
