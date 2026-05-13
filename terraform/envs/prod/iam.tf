@@ -202,9 +202,16 @@ resource "aws_iam_role_policy" "searchGames_s3" {
 # game-night-iac-drift — read-only role for the claude-drift-detector
 # workflow. Used to run `tofu plan` against terraform/envs/prod and detect
 # infrastructure drift. Strictly scoped:
-#   - ReadOnlyAccess (AWS-managed) so refresh can introspect every resource
-#     type we manage without enumerating actions per service.
-#   - S3 + DynamoDB scoped to ONLY the tfstate bucket + lock table.
+#   - Inline introspection policy (per-service Describe/Get/List actions)
+#     — NOT the broad ReadOnlyAccess managed policy. ReadOnlyAccess used
+#     to attach here but was too wide: it granted ssm:GetParameter,
+#     secretsmanager:GetSecretValue, cognito-idp:AdminGetUser, and full
+#     S3 object reads — none of which tofu plan needs, all of which a
+#     compromised workflow runner could exfiltrate. The narrower policy
+#     explicitly omits secret-VALUE actions while keeping the metadata
+#     actions tofu plan does need (issue #48).
+#   - S3 + DynamoDB scoped to ONLY the tfstate bucket + lock table
+#     (separate inline policy, below).
 # The deploy role (above) is NOT reused — separating drift-detection from
 # deploy keeps the deploy role's blast radius minimal even if compromised.
 # ════════════════════════════════════════════════════════════════════════════
@@ -235,9 +242,91 @@ data "aws_iam_policy_document" "iac_drift_trust" {
   }
 }
 
-resource "aws_iam_role_policy_attachment" "iac_drift_read_only" {
-  role       = aws_iam_role.iac_drift.name
-  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+# Narrowly-scoped introspection policy replacing the previous ReadOnlyAccess
+# attachment. Each statement covers one service's read-metadata actions.
+# Notable omissions vs. ReadOnlyAccess:
+#   - secretsmanager:GetSecretValue (Postmark + GitHub PAT remain unreadable)
+#   - ssm:GetParameter, ssm:GetParameters, ssm:GetParameterHistory
+#     (API keys at /game-night/api-keys/* remain unreadable)
+#   - cognito-idp:AdminGetUser, ListUsers (user PII remains unreadable)
+#   - s3:GetObject (object contents — outside tfstate — remain unreadable)
+data "aws_iam_policy_document" "iac_drift_introspect" {
+  statement {
+    sid       = "IAMRead"
+    effect    = "Allow"
+    actions   = ["iam:Get*", "iam:List*"]
+    resources = ["*"]
+  }
+  statement {
+    sid       = "LambdaRead"
+    effect    = "Allow"
+    actions   = ["lambda:Get*", "lambda:List*"]
+    resources = ["*"]
+  }
+  statement {
+    sid       = "ApiGwRead"
+    effect    = "Allow"
+    actions   = ["apigateway:GET"]
+    resources = ["*"]
+  }
+  statement {
+    sid       = "CognitoMetadataRead"
+    effect    = "Allow"
+    actions   = ["cognito-idp:Describe*", "cognito-idp:List*"]
+    resources = ["*"]
+  }
+  statement {
+    sid    = "S3MetadataRead"
+    effect = "Allow"
+    actions = [
+      "s3:GetBucket*",
+      "s3:GetEncryptionConfiguration",
+      "s3:GetLifecycleConfiguration",
+      "s3:GetReplicationConfiguration",
+      "s3:GetBucketPublicAccessBlock",
+      "s3:GetBucketOwnershipControls",
+      "s3:ListBucket",
+      "s3:ListAllMyBuckets",
+    ]
+    resources = ["*"]
+  }
+  statement {
+    sid    = "SecretsManagerMetadataOnly"
+    effect = "Allow"
+    actions = [
+      "secretsmanager:DescribeSecret",
+      "secretsmanager:ListSecrets",
+      "secretsmanager:GetResourcePolicy",
+    ]
+    resources = ["*"]
+  }
+  statement {
+    sid    = "SsmMetadataOnly"
+    effect = "Allow"
+    actions = [
+      "ssm:DescribeParameters",
+      "ssm:ListTagsForResource",
+    ]
+    resources = ["*"]
+  }
+  statement {
+    sid       = "CloudWatchRead"
+    effect    = "Allow"
+    actions   = ["cloudwatch:Describe*", "cloudwatch:List*", "logs:Describe*"]
+    resources = ["*"]
+  }
+  statement {
+    sid       = "StsIdentity"
+    effect    = "Allow"
+    actions   = ["sts:GetCallerIdentity"]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy" "iac_drift_introspect" {
+  name   = "introspect"
+  role   = aws_iam_role.iac_drift.id
+  policy = data.aws_iam_policy_document.iac_drift_introspect.json
 }
 
 data "aws_iam_policy_document" "iac_drift_tfstate" {

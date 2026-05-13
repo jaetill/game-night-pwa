@@ -183,15 +183,32 @@ When triggered in Mode B (fix iteration):
    fix(<component>): address review feedback â€” <short description>
    ```
 
-7. **Push to the same branch.**
+7. **Pre-flight conflict check** (same as Mode A step 11; per issue #43,
+   the conflict-race also applies to fix-iteration). Before pushing, run:
 
-8. **Post a brief comment on the PR.** One sentence per finding, what you changed. Example:
+   ```bash
+   git fetch origin master
+   if git rebase origin/master; then
+     echo "Rebase clean — continuing to push."
+   else
+     git rebase --abort
+     gh pr comment "$PR_NUMBER" --body "Fix-iteration aborted: branch can't cleanly rebase onto current master (likely a parallel merge during the review cycle). The PR remains open; the next reviewer-block comment will retrigger this job once master has settled. Per issue #43 pre-flight check."
+     exit 0
+   fi
+   ```
+
+   Clean rebase = your branch is on top of latest master, proceed to push.
+   Conflict = bail without pushing; the PR stays open and the next BLOCK
+   verdict re-triggers.
+8. **Push to the same branch.**
+
+9. **Post a brief comment on the PR.** One sentence per finding, what you changed. Example:
    ```
    - [#code-reviewer-finding-1] Fixed by escaping HTML in lambda/nudge.js:142
    - [#security-reviewer-finding-2] Removed unverified-JWT fallback per resolveCallerId.js refactor
    ```
 
-9. **Stop.** Wait for re-review.
+10. **Stop.** Wait for re-review.
 
 ## Output format
 
