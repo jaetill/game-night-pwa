@@ -215,10 +215,18 @@ jobs:
       && github.event.issue.pull_request != null
       && github.event.comment.user.login == 'claude[bot]'
       && contains(github.event.comment.body, 'VERDICT: BLOCK')
-      && startsWith(github.event.issue.title, 'fix(') == false
       && (
         startsWith(github.event.issue.pull_request.html_url, 'https://github.com/jaetill/game-night-pwa/pull/')
       )
+      # NB: removed the `startsWith(issue.title, 'fix(') == false` filter that
+      # was here. The intent had been to prevent fix-iteration from re-entering
+      # on already-in-flight fix PRs, but the effect was to exclude EVERY
+      # Conventional-Commits-named PR (all of our PRs start with `fix(` or
+      # `feat(`). Observed concretely on PR #58 on 2026-05-13: VERDICT: BLOCK
+      # landed, fix-iteration didn't fire, the head agent had to do the fix
+      # manually. The re-entry concern is already handled by the Resolve PR
+      # head ref step below — only PRs whose head branch starts with `impl/`
+      # qualify, and the 3-attempt cap downstream bounds the loop.
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
