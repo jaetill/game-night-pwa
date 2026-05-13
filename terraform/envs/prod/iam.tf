@@ -329,6 +329,10 @@ resource "aws_iam_role_policy" "iac_drift_introspect" {
   policy = data.aws_iam_policy_document.iac_drift_introspect.json
 }
 
+resource "aws_iam_role_policy_attachment" "iac_drift_read_only" {
+  role       = aws_iam_role.iac_drift.name
+  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+}
 data "aws_iam_policy_document" "iac_drift_tfstate" {
   statement {
     sid    = "TFStateRead"
