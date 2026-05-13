@@ -13,6 +13,7 @@ const {
   _buildInviteHtml: buildInviteHtml,
   _escapeHtml: escapeHtml,
   _isValidInviteEmail: isValidInviteEmail,
+  _makeNudgeErrorEntry: makeNudgeErrorEntry,
 } = require('../lambda/nudge.js');
 
 const BASE = {
@@ -207,5 +208,22 @@ describe('buildInviteHtml XSS escaping', () => {
     expect(html).toContain('Bob');
     expect(html).toContain('Bob&#39;s Place');
     expect(html).toContain('Bring your favourite games.');
+  });
+});
+
+describe('makeNudgeErrorEntry (PII guard — issue #44)', () => {
+  it('does not include the invitee email address', () => {
+    const entry = makeNudgeErrorEntry(new Error('delivery failed'));
+    expect(Object.keys(entry)).not.toContain('email');
+  });
+
+  it('includes the error message', () => {
+    const entry = makeNudgeErrorEntry(new Error('postmark timeout'));
+    expect(entry.error).toBe('postmark timeout');
+  });
+
+  it('returns only the error field (no extra keys)', () => {
+    const entry = makeNudgeErrorEntry(new Error('x'));
+    expect(Object.keys(entry)).toEqual(['error']);
   });
 });
