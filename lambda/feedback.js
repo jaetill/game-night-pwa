@@ -39,13 +39,33 @@ const ALLOWED_ORIGINS = new Set([
 // Allowlist of origins whose URLs are safe to embed as clickable links in
 // the GitHub issue body. An attacker-controlled page_url would otherwise
 // create a phishing link visible to maintainers triaging feedback.
-const SAFE_PAGE_ORIGINS = [
-  'https://gamenights.jaetill.com',
-  'https://jaetill.github.io/game-night-pwa',
+//
+// Implementation: parse the URL and compare its `origin` exactly against
+// the allowlist (plus an optional pathname prefix when the entry includes
+// one — e.g. the GitHub Pages app lives under /game-night-pwa). A naive
+// `startsWith` check is vulnerable to domain-suffix spoofing: a URL like
+// `https://gamenights.jaetill.com.evil.example/x` would match a
+// `startsWith('https://gamenights.jaetill.com')` test. Parsing forces
+// the comparison to use the structured origin (scheme + host + port),
+// closing that bypass.
+const SAFE_PAGE_ENTRIES = [
+  { origin: 'https://gamenights.jaetill.com', pathPrefix: '' },
+  { origin: 'https://jaetill.github.io', pathPrefix: '/game-night-pwa' },
 ];
 
 function isSafePageUrl(url) {
-  return typeof url === 'string' && SAFE_PAGE_ORIGINS.some(o => url.startsWith(o));
+  if (typeof url !== 'string') return false;
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  return SAFE_PAGE_ENTRIES.some(
+    (entry) =>
+      parsed.origin === entry.origin &&
+      (entry.pathPrefix === '' || parsed.pathname.startsWith(entry.pathPrefix)),
+  );
 }
 
 // ── In-memory rate limit (per warm Lambda instance) ─────────────────────────

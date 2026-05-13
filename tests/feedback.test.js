@@ -337,6 +337,24 @@ describe('lambda/feedback.js — _isSafePageUrl helper', () => {
     expect(_isSafePageUrl(undefined)).toBe(false);
     expect(_isSafePageUrl(42)).toBe(false);
   });
+
+  // Regression guard for the domain-suffix spoofing bypass that the
+  // initial startsWith-based implementation allowed. See PR #58
+  // code-review finding.
+  it('rejects domain-suffix spoofing (gamenights.jaetill.com.evil.com)', () => {
+    expect(_isSafePageUrl('https://gamenights.jaetill.com.evil.example/')).toBe(false);
+    expect(_isSafePageUrl('https://gamenights.jaetill.com.attacker.test/path')).toBe(false);
+  });
+
+  it('rejects GitHub Pages spoofing (jaetill.github.io.evil.com or wrong project path)', () => {
+    expect(_isSafePageUrl('https://jaetill.github.io.evil.example/game-night-pwa/')).toBe(false);
+    expect(_isSafePageUrl('https://jaetill.github.io/other-project/')).toBe(false);
+  });
+
+  it('rejects malformed URLs', () => {
+    expect(_isSafePageUrl('not-a-url')).toBe(false);
+    expect(_isSafePageUrl('javascript:alert(1)')).toBe(false);
+  });
 });
 
 describe('lambda/feedback.js — _validate helper', () => {
