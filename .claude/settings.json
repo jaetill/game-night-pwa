@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "_comment": "Project now subscribes to the ai-team plugin (per ADR-0015). The plugin ships the hook scripts, subagent definitions, and slash commands. This file only carries: (1) the marketplace subscription so the project is self-documenting, (2) the permissions block (plugin settings.json cannot ship permissions per Claude Code's plugin spec). When the workspace is published to GitHub, swap the directory source for {\"source\": \"github\", \"repo\": \"jaetill/agentic-dev-environment\"}.",
+  "_comment": "Project now subscribes to the ai-team plugin (per ADR-0015). The plugin ships the hook scripts, subagent definitions, and slash commands. This file only carries: (1) the marketplace subscription so the project is self-documenting, (2) the permissions block (plugin settings.json cannot ship permissions per Claude Code's plugin spec).",
 
   "extraKnownMarketplaces": {
     "agentic-dev-environment": {
