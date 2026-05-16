@@ -297,6 +297,29 @@ Claude Code picks it up automatically on startup.
 
 ---
 
+## Email E2E setup (`admin-invite-flow.spec.js`)
+
+The test at `tests/e2e/admin-invite-flow.spec.js` exercises the full
+`POST /invite` path — provisions a real Cognito user, waits for the
+temp-password welcome email in Gmail, asserts it didn't land in spam,
+extracts the credentials. Uses `@platform/test-inbox` (workspace ADR-0014).
+
+**The test self-skips** when any required env var is missing, so CI and
+local `npm run test:e2e` stay green without setup.
+
+Env vars required to actually run it:
+
+- `GMAIL_TESTER_EMAIL=jaetill@gmail.com`
+- `GMAIL_TESTER_CLIENT_ID`, `GMAIL_TESTER_CLIENT_SECRET`, `GMAIL_TESTER_REFRESH_TOKEN` — Gmail OAuth (one-time mint via Google Cloud Console; readonly + modify scopes; stored in AWS Secrets Manager at `platform/test-inbox/gmail-tester`).
+- `GAME_NIGHT_API_BASE` — e.g. `https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod`
+- `GAME_NIGHT_HOST_AUTH_TOKEN` — Cognito ID token for a long-lived host user (capture from a real sign-in; refresh as needed)
+- `GAME_NIGHT_TEST_NIGHT_ID` — a long-lived game night where the host token's user is the host
+- `PLATFORM_TEST_INBOX_ALLOW_PROD_CLEANUP=true` — required because `us-east-2_xneeJzaDJ` doesn't have "test" in its name; the alias-prefix guard (`jaetill+gn-`) is the load-bearing safety per ADR-0014
+
+The afterAll hook calls `cleanupCognitoTestUsers` against the shared pool, deleting only users whose email starts with the tester alias prefix.
+
+---
+
 ## Platform inheritance
 
 This project adopts the [Agentic Dev Environment](https://github.com/jaetill/agentic-dev-environment) platform. The platform's standards (11) and ADRs (12+) define how this project is operated. Project-specific deviations are documented in [docs/adr/0001-platform-adoption.md](docs/adr/0001-platform-adoption.md).
