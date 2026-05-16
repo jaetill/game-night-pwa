@@ -52,7 +52,7 @@ jobs:
     if: |
       github.event_name == 'issues'
       && github.event.action == 'labeled'
-      && github.event.label.name == 'ready-for-implementer'
+      && contains(fromJSON('["ready-for-implementer", "sentry", "source:sentry", "severity:critical"]'), github.event.label.name)
       && !contains(github.event.issue.labels.*.name, 'scope:iac')
     runs-on: ubuntu-latest
     timeout-minutes: 25
