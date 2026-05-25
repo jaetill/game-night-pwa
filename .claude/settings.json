@@ -21,6 +21,7 @@
       "Bash(rm -rf /*)",
       "Bash(sudo rm*)",
       "Bash(git push --force*)",
+      "Bash(git push -f*)",
       "Bash(*DROP TABLE*)",
       "Bash(*TRUNCATE*)",
       "Edit(*.tfstate*)",
