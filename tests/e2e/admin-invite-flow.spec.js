@@ -43,9 +43,10 @@ const REQUIRED_ENV = [
   'GMAIL_TESTER_CLIENT_ID',
   'GMAIL_TESTER_CLIENT_SECRET',
   'GMAIL_TESTER_REFRESH_TOKEN',
-  'GAME_NIGHT_API_BASE',           // e.g. https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod
-  'GAME_NIGHT_HOST_AUTH_TOKEN',    // Cognito ID token for the test host
-  'GAME_NIGHT_TEST_NIGHT_ID',      // long-lived game night where the host token owns
+  'GAME_NIGHT_API_BASE',                    // e.g. https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod
+  'GAME_NIGHT_HOST_AUTH_TOKEN',             // Cognito ID token for the test host
+  'GAME_NIGHT_TEST_NIGHT_ID',               // long-lived game night where the host token owns
+  'PLATFORM_TEST_INBOX_ALLOW_PROD_CLEANUP', // explicit opt-in for shared-pool cleanup (ADR-0014)
 ];
 
 const missingEnv = REQUIRED_ENV.filter((k) => !process.env[k]);
@@ -77,6 +78,33 @@ const test = base.extend({
 
 test.afterAll(async () => {
   if (SHOULD_SKIP) return;
+
+  // Belt-and-suspenders safety gates owned by this repo (issue #91).
+  // These are independent of @platform/test-inbox's internal guards — if
+  // that package's guard silently regresses, these catch it before any
+  // irreversible AdminDeleteUser call against the shared production pool.
+
+  // Guard 1: alias prefix must contain '+gn-' to prove it's scoped to test
+  // users. If BASE_EMAIL parsing produced a too-broad prefix (e.g. the '@'
+  // split failed) this throws before any Cognito call.
+  if (!ALIAS_PREFIX.includes('+gn-') || ALIAS_PREFIX.length < 5) {
+    throw new Error(
+      `[admin-invite-flow] cleanup aborted: ALIAS_PREFIX "${ALIAS_PREFIX}" failed ` +
+        `safety check — expected format "<username>+gn-". ` +
+        `Not calling cleanupCognitoTestUsers against pool ${COGNITO_USER_POOL_ID}.`,
+    );
+  }
+
+  // Guard 2: require the explicit opt-in in this file, not just inside
+  // @platform/test-inbox. REQUIRED_ENV already ensures this var is set, so
+  // this branch is a last-resort guard against unexpected env mutation.
+  if (process.env.PLATFORM_TEST_INBOX_ALLOW_PROD_CLEANUP !== 'true') {
+    throw new Error(
+      `[admin-invite-flow] cleanup aborted: PLATFORM_TEST_INBOX_ALLOW_PROD_CLEANUP !== 'true'. ` +
+        `Pool ${COGNITO_USER_POOL_ID} is shared production — explicit opt-in required.`,
+    );
+  }
+
   // Shared production pool (CLAUDE.md: us-east-2_xneeJzaDJ). The
   // alias-prefix guard + PLATFORM_TEST_INBOX_ALLOW_PROD_CLEANUP=true (set
   // in the test runner's env) are the load-bearing safety layers per
