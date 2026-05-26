@@ -13,6 +13,8 @@
 //
 // IAM:
 //   s3:GetObject + s3:PutObject on profiles/* and collections/*
+//   s3:ListBucket on the bucket — required so S3 returns NoSuchKey (not
+//   AccessDenied) when a key is absent; see lambda/iam/bggProxy-inline.json
 //
 // Note on naming: this Lambda predates the BGG integration and now also
 // serves /profiles. The historical name is preserved to avoid disturbing
@@ -43,16 +45,25 @@ function corsHeaders(event) {
   };
 }
 
-async function s3Get(key, notFoundValue) {
+// Exported for testing — accepts an explicit S3 client so tests can inject a mock
+// without fighting the lambda/node_modules module-resolution boundary.
+export async function _s3GetWith(client, key, notFoundValue) {
   try {
-    const res    = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: key }));
+    const res    = await client.send(new GetObjectCommand({ Bucket: BUCKET, Key: key }));
     const chunks = [];
     for await (const chunk of res.Body) chunks.push(chunk);
     return Buffer.concat(chunks).toString('utf-8');
   } catch (err) {
     if (err.name === 'NoSuchKey') return notFoundValue;
+    // S3 returns AccessDenied (mentioning s3:ListBucket) instead of NoSuchKey
+    // when the role lacks s3:ListBucket and the requested key is absent.
+    if (err.name === 'AccessDenied' && err.message?.includes('s3:ListBucket')) return notFoundValue;
     throw err;
   }
+}
+
+async function s3Get(key, notFoundValue) {
+  return _s3GetWith(s3, key, notFoundValue);
 }
 
 async function s3Put(key, data) {
