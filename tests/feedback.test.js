@@ -268,6 +268,10 @@ describe('lambda/feedback.js — _escapeMarkdown helper', () => {
     expect(_escapeMarkdown('back\\slash')).toBe('back\\\\slash');
   });
 
+  it('escapes pipe to prevent Markdown table injection', () => {
+    expect(_escapeMarkdown('col1 | col2 | col3')).toBe('col1 \\| col2 \\| col3');
+  });
+
   it('returns plain strings unchanged', () => {
     expect(_escapeMarkdown('hello world 123')).toBe('hello world 123');
   });
