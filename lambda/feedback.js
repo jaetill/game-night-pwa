@@ -106,7 +106,7 @@ function makeRateLimiter() {
 // cannot inject headings, image embeds, links, or fabricated sections into the
 // triage-visible issue body.
 function escapeMarkdown(str) {
-  return str.replace(/[\\*_#[\]`<>!]/g, '\\$&');
+  return str.replace(/[\\*_#[\]`<>!|]/g, '\\$&');
 }
 
 // ── Validation (inline; no schema lib for low dep weight) ───────────────────
