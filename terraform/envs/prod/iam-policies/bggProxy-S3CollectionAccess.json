@@ -8,6 +8,16 @@
                 "s3:PutObject"
             ],
             "Resource": "arn:aws:s3:::jaetill-game-nights/collections/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "s3:ListBucket",
+            "Resource": "arn:aws:s3:::jaetill-game-nights",
+            "Condition": {
+                "StringLike": {
+                    "s3:prefix": ["collections/*"]
+                }
+            }
         }
     ]
 }
