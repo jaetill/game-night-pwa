@@ -43,16 +43,22 @@ function corsHeaders(event) {
   };
 }
 
-async function s3Get(key, notFoundValue) {
+// Exported for unit tests — production code calls s3Get() which binds the module-level client.
+export async function _s3Get(key, notFoundValue, client) {
   try {
-    const res    = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: key }));
+    const res    = await client.send(new GetObjectCommand({ Bucket: BUCKET, Key: key }));
     const chunks = [];
     for await (const chunk of res.Body) chunks.push(chunk);
     return Buffer.concat(chunks).toString('utf-8');
   } catch (err) {
     if (err.name === 'NoSuchKey') return notFoundValue;
+    if (err.name === 'AccessDenied' && err.message?.includes('s3:ListBucket')) return notFoundValue;
     throw err;
   }
+}
+
+async function s3Get(key, notFoundValue) {
+  return _s3Get(key, notFoundValue, s3);
 }
 
 async function s3Put(key, data) {
