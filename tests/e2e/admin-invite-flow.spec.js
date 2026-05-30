@@ -36,7 +36,21 @@
 // The test SKIPS rather than failing when any required env var is missing.
 
 import { test as base, expect } from '@playwright/test';
-import { inboxFixture, cleanupCognitoTestUsers } from '@platform/test-inbox';
+
+// @platform/test-inbox is optional — absent on CI runners that lack the
+// platform repo at the file: path. Dynamic import lets npm ci succeed and
+// allows the test to self-skip below rather than crashing on load.
+let inboxFixture;
+let cleanupCognitoTestUsers;
+let MODULE_AVAILABLE = false;
+try {
+  const mod = await import('@platform/test-inbox');
+  inboxFixture = mod.inboxFixture;
+  cleanupCognitoTestUsers = mod.cleanupCognitoTestUsers;
+  MODULE_AVAILABLE = true;
+} catch {
+  // optional dependency not installed; SHOULD_SKIP will be true
+}
 
 const REQUIRED_ENV = [
   'GMAIL_TESTER_EMAIL',
@@ -50,7 +64,7 @@ const REQUIRED_ENV = [
 ];
 
 const missingEnv = REQUIRED_ENV.filter((k) => !process.env[k]);
-const SHOULD_SKIP = missingEnv.length > 0;
+const SHOULD_SKIP = !MODULE_AVAILABLE || missingEnv.length > 0;
 
 const COGNITO_USER_POOL_ID = process.env.GAME_NIGHT_COGNITO_POOL_ID || 'us-east-2_xneeJzaDJ';
 const COGNITO_REGION = process.env.GAME_NIGHT_COGNITO_REGION || 'us-east-2';
