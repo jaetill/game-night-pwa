@@ -4,11 +4,12 @@
 // AccessDenied (not NoSuchKey) when the role lacks s3:ListBucket. The helper must
 // treat both as "no data yet" and return [].
 
-import { vi, describe, it, expect } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { _loadCurrentNights } = require('../lambda/GeneratePresignedPost.js');
+const gppMod = require('../lambda/GeneratePresignedPost.js');
+const { _loadCurrentNights } = gppMod;
 
 function makeClient(rejectWith) {
   return { send: vi.fn().mockRejectedValueOnce(rejectWith) };
@@ -56,5 +57,38 @@ describe('_loadCurrentNights error handling', () => {
     const client   = { send: vi.fn().mockResolvedValueOnce({ Body: mockBody }) };
     const result   = await _loadCurrentNights(client);
     expect(result).toEqual([]);
+  });
+});
+
+describe('handler — _loadCurrentNights rethrow → 500', () => {
+  let captureExceptionSpy;
+
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const { Sentry } = require('../lambda/lib/sentry.js');
+    captureExceptionSpy = vi.spyOn(Sentry, 'captureException').mockImplementation(() => {});
+    gppMod._setForTest({
+      s3: { send: vi.fn().mockRejectedValueOnce(new Error('S3ServiceException')) },
+    });
+  });
+
+  afterEach(() => {
+    gppMod._resetForTest();
+    vi.restoreAllMocks();
+  });
+
+  it('returns 500 when _loadCurrentNights rethrows an unexpected S3 error', async () => {
+    const event = {
+      httpMethod: 'POST',
+      resource: '/upload-token',
+      headers: { origin: 'https://gamenights.jaetill.com' },
+      requestContext: { authorizer: { userId: 'alice' } },
+      body: JSON.stringify([]),
+    };
+    const res = await gppMod.handler(event, { awsRequestId: 'test-req-1' });
+    expect(res.statusCode).toBe(500);
+    expect(JSON.parse(res.body).error).toBe('Failed to load current data');
+    expect(captureExceptionSpy).toHaveBeenCalledTimes(1);
+    expect(captureExceptionSpy.mock.calls[0][0].message).toBe('S3ServiceException');
   });
 });

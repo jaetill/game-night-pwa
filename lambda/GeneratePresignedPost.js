@@ -35,7 +35,7 @@ const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/clien
 const BUCKET = process.env.S3_BUCKET || 'jaetill-game-nights';
 const KEY    = 'gameNights.json';
 const REGION = process.env.AWS_REGION || 'us-east-2';
-const s3     = new S3Client({ region: REGION });
+let s3       = new S3Client({ region: REGION });
 
 const ALLOWED_ORIGINS = new Set([
   'https://gamenights.jaetill.com',
@@ -183,3 +183,10 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
   logger.info('upload.saved', { request_id: context?.awsRequestId, count: incoming.length });
   return respond(200, { saved: incoming.length }, CORS);
 });
+
+exports._setForTest = function({ s3: s3arg } = {}) {
+  if (s3arg) s3 = s3arg;
+};
+exports._resetForTest = function() {
+  s3 = new S3Client({ region: REGION });
+};
