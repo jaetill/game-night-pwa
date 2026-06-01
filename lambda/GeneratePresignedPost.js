@@ -105,6 +105,24 @@ function validateChanges(current, incoming, userId) {
   return null;
 }
 
+// Exported for unit tests — production handler calls with module-level s3 client.
+// Returns [] when the key is absent or the IAM role lacks s3:ListBucket (S3
+// returns AccessDenied in that case rather than NoSuchKey per AWS docs).
+async function _loadCurrentNights(client) {
+  try {
+    const res    = await client.send(new GetObjectCommand({ Bucket: BUCKET, Key: KEY }));
+    const chunks = [];
+    for await (const chunk of res.Body) chunks.push(chunk);
+    const parsed = JSON.parse(Buffer.concat(chunks).toString('utf-8'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    if (err.name === 'NoSuchKey') return [];
+    if (err.name === 'AccessDenied' && err.message?.includes('s3:ListBucket')) return [];
+    throw err;
+  }
+}
+exports._loadCurrentNights = _loadCurrentNights;
+
 // ── Handler ────────────────────────────────────────────────────────────────
 
 exports.handler = Sentry.wrapHandler(async (event, context) => {
@@ -133,17 +151,11 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
 
   let current = [];
   try {
-    const res    = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: KEY }));
-    const chunks = [];
-    for await (const chunk of res.Body) chunks.push(chunk);
-    current = JSON.parse(Buffer.concat(chunks).toString('utf-8'));
-    if (!Array.isArray(current)) current = [];
+    current = await _loadCurrentNights(s3);
   } catch (err) {
-    if (err.name !== 'NoSuchKey') {
-      logger.error('s3.load_failed', { request_id: context?.awsRequestId, key: KEY, error: err.message });
-      Sentry.captureException(err);
-      return respond(500, { error: 'Failed to load current data' }, CORS);
-    }
+    logger.error('s3.load_failed', { request_id: context?.awsRequestId, key: KEY, error: err.message });
+    Sentry.captureException(err);
+    return respond(500, { error: 'Failed to load current data' }, CORS);
   }
 
   const violation = validateChanges(current, incoming, userId);
