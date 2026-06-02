@@ -76,6 +76,21 @@ describe('lambda/feedback.js — handler', () => {
     vi.restoreAllMocks();
   });
 
+  // ── CORS origin gating ────────────────────────────────────
+  it('localhost origin gets fallback CORS header when DEPLOY_ENV is unset (defaults to prod)', async () => {
+    // DEPLOY_ENV is not set in the test environment, so it defaults to 'prod',
+    // which excludes http://localhost:5173 from ALLOWED_ORIGINS. A request from
+    // localhost must receive the production fallback origin, not the local origin.
+    const handler = _createHandler({ smClient: makeMockSm(), Octokit: makeMockOctokit().Octokit });
+    const res = await handler(
+      makeEvent('OPTIONS', '{}', { headers: { origin: 'http://localhost:5173' } }),
+      { awsRequestId: 'rid-localhost-cors' },
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['Access-Control-Allow-Origin']).toBe('https://gamenights.jaetill.com');
+    expect(res.headers['Access-Control-Allow-Origin']).not.toBe('http://localhost:5173');
+  });
+
   // ── OPTIONS / method gating ───────────────────────────────
   it('OPTIONS returns 200 with CORS headers', async () => {
     const handler = _createHandler({ smClient: makeMockSm(), Octokit: makeMockOctokit().Octokit });
