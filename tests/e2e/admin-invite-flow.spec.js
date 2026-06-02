@@ -173,6 +173,9 @@ test.describe('admin invite — portal user provisioning', () => {
       inbox.lastWasInSpam(),
       'Game-night invite landed in SPAM — check SPF/DKIM/DMARC on jaetill.com',
     ).toBe(false);
-    expect(message.receivedAt.getTime()).toBeGreaterThan(before.getTime() - 5_000);
+    const deliveryLatencyMs = message.receivedAt.getTime() - before.getTime();
+    expect(deliveryLatencyMs, `Email delivery latency: ${deliveryLatencyMs}ms`).toBeLessThan(
+      120_000,
+    );
   });
 });
