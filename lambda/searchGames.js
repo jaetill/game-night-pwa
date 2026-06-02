@@ -15,7 +15,8 @@ const { Sentry } = require('./lib/sentry');
 const logger = require('./lib/logger');
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 
-const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-2' });
+const REGION = process.env.AWS_REGION || 'us-east-2';
+let s3 = new S3Client({ region: REGION });
 
 const BUCKET = process.env.S3_BUCKET || 'jaetill-game-nights';
 
@@ -66,6 +67,23 @@ function levenshtein(a, b) {
 
 const MAX_RESULTS = 5;
 
+// Exported for unit tests — production handler calls with module-level s3 client.
+// Returns [] when the key is absent or the role lacks s3:ListBucket (S3 returns
+// AccessDenied instead of NoSuchKey when ListBucket is missing from the role).
+async function _loadCollection(callerId, client) {
+  try {
+    const obj  = await client.send(new GetObjectCommand({ Bucket: BUCKET, Key: `collections/${callerId}.json` }));
+    const text = await obj.Body.transformToString();
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    if (err.name === 'NoSuchKey') return [];
+    if (err.name === 'AccessDenied' && err.message?.includes('s3:ListBucket')) return [];
+    throw err;
+  }
+}
+exports._loadCollection = _loadCollection;
+
 // ── Handler ───────────────────────────────────────────────
 
 exports.handler = Sentry.wrapHandler(async (event, context) => {
@@ -91,12 +109,8 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
   // ── Load BGG collection from S3 ──
   let games;
   try {
-    const obj  = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: `collections/${callerId}.json` }));
-    const text = await obj.Body.transformToString();
-    const parsed = JSON.parse(text);
-    games = Array.isArray(parsed) ? parsed : [];
+    games = await _loadCollection(callerId, s3);
   } catch (e) {
-    if (e.name === 'NoSuchKey') return respond(200, { results: [] }, CORS);
     logger.error('s3.load_failed', { request_id: context?.awsRequestId, key: `collections/${callerId}.json`, error: e.message });
     Sentry.captureException(e);
     return respond(500, { error: 'Could not load game collection' }, CORS);
@@ -135,3 +149,10 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
 
   return respond(200, { results: shaped }, CORS);
 });
+
+exports._setForTest = function({ s3: s3arg } = {}) {
+  if (s3arg) s3 = s3arg;
+};
+exports._resetForTest = function() {
+  s3 = new S3Client({ region: REGION });
+};
