@@ -29,11 +29,12 @@ const REGION = process.env.AWS_REGION || 'us-east-2';
 const REPO_OWNER = process.env.GITHUB_REPO_OWNER || 'jaetill';
 const REPO_NAME = process.env.GITHUB_REPO_NAME || 'game-night-pwa';
 const SECRET_ID = process.env.GITHUB_SECRET_ID || 'game-night/prod/github-token';
+const DEPLOY_ENV = process.env.DEPLOY_ENV || 'prod';
 
 const ALLOWED_ORIGINS = new Set([
   'https://gamenights.jaetill.com',
   'https://jaetill.github.io',
-  'http://localhost:5173',
+  ...(DEPLOY_ENV !== 'prod' ? ['http://localhost:5173'] : []),
 ]);
 
 // Allowlist of origins whose URLs are safe to embed as clickable links in
