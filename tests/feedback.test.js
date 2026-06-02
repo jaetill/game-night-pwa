@@ -77,6 +77,30 @@ describe('lambda/feedback.js — handler', () => {
   });
 
   // ── CORS origin gating ────────────────────────────────────
+  it('localhost origin is echoed when DEPLOY_ENV is not prod', async () => {
+    // ALLOWED_ORIGINS is a module-level constant evaluated at require() time, so
+    // exercising the non-prod branch requires a fresh module load. Both caches
+    // must be cleared: vi.resetModules() for Vitest's ESM interop registry and
+    // require.cache for Node's native CJS cache (used by createRequire).
+    vi.resetModules();
+    const feedbackPath = require.resolve('../lambda/feedback.js');
+    delete require.cache[feedbackPath];
+    process.env.DEPLOY_ENV = 'dev';
+    try {
+      const { _createHandler } = require('../lambda/feedback.js');
+      const handler = _createHandler({ smClient: makeMockSm(), Octokit: makeMockOctokit().Octokit });
+      const res = await handler(
+        makeEvent('OPTIONS', '{}', { headers: { origin: 'http://localhost:5173' } }),
+        { awsRequestId: 'rid-localhost-nonprod' },
+      );
+      expect(res.headers['Access-Control-Allow-Origin']).toBe('http://localhost:5173');
+    } finally {
+      delete process.env.DEPLOY_ENV;
+      delete require.cache[feedbackPath];
+      vi.resetModules();
+    }
+  });
+
   it('localhost origin gets fallback CORS header when DEPLOY_ENV is unset (defaults to prod)', async () => {
     // DEPLOY_ENV is not set in the test environment, so it defaults to 'prod',
     // which excludes http://localhost:5173 from ALLOWED_ORIGINS. A request from
