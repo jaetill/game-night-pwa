@@ -2,7 +2,8 @@
 //
 // When a user has no S3 object yet, AWS may return AccessDenied with a message
 // containing 's3:ListBucket' instead of NoSuchKey (IAM-driven 404 masking).
-// This guard prevents that from surfacing as a 500 while the IAM fix propagates.
+// The root cause is fixed via unconditional s3:ListBucket in the IAM policy (issue #124).
+// This guard remains as defense-in-depth for propagation lag and future regressions.
 //
 // _s3Get is exported for testing (consistent with the nudge.js _buildHtml pattern).
 

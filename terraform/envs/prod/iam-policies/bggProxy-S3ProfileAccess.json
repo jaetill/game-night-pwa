@@ -8,6 +8,11 @@
                 "s3:PutObject"
             ],
             "Resource": "arn:aws:s3:::jaetill-game-nights/profiles/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "s3:ListBucket",
+            "Resource": "arn:aws:s3:::jaetill-game-nights"
         }
     ]
 }
