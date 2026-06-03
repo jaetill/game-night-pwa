@@ -30,11 +30,12 @@ const REPO_OWNER = process.env.GITHUB_REPO_OWNER || 'jaetill';
 const REPO_NAME = process.env.GITHUB_REPO_NAME || 'game-night-pwa';
 const SECRET_ID = process.env.GITHUB_SECRET_ID || 'game-night/prod/github-token';
 const DEPLOY_ENV = process.env.DEPLOY_ENV || 'prod';
+const _DEV_ENVS = new Set(['dev', 'staging']);
 
 const ALLOWED_ORIGINS = new Set([
   'https://gamenights.jaetill.com',
   'https://jaetill.github.io',
-  ...(DEPLOY_ENV !== 'prod' ? ['http://localhost:5173'] : []),
+  ...(_DEV_ENVS.has(DEPLOY_ENV) ? ['http://localhost:5173'] : []),
 ]);
 
 // Allowlist of origins whose URLs are safe to embed as clickable links in

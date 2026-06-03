@@ -101,6 +101,28 @@ describe('lambda/feedback.js — handler', () => {
     }
   });
 
+  it('localhost origin blocked when DEPLOY_ENV is a typo (Prod, PROD, production)', async () => {
+    for (const typo of ['Prod', 'PROD', 'production']) {
+      vi.resetModules();
+      const feedbackPath = require.resolve('../lambda/feedback.js');
+      delete require.cache[feedbackPath];
+      process.env.DEPLOY_ENV = typo;
+      try {
+        const { _createHandler } = require('../lambda/feedback.js');
+        const handler = _createHandler({ smClient: makeMockSm(), Octokit: makeMockOctokit().Octokit });
+        const res = await handler(
+          makeEvent('OPTIONS', '{}', { headers: { origin: 'http://localhost:5173' } }),
+          { awsRequestId: `rid-typo-${typo}` },
+        );
+        expect(res.headers['Access-Control-Allow-Origin'], `DEPLOY_ENV=${typo} must not echo localhost`).not.toBe('http://localhost:5173');
+      } finally {
+        delete process.env.DEPLOY_ENV;
+        delete require.cache[feedbackPath];
+        vi.resetModules();
+      }
+    }
+  });
+
   it('localhost origin gets fallback CORS header when DEPLOY_ENV is unset (defaults to prod)', async () => {
     // DEPLOY_ENV is not set in the test environment, so it defaults to 'prod',
     // which excludes http://localhost:5173 from ALLOWED_ORIGINS. A request from
