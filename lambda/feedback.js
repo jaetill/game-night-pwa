@@ -253,7 +253,6 @@ function createHandler(deps = {}) {
       '## Context',
       body.page_url && isSafePageUrl(body.page_url) ? `- Page: ${escapeMarkdown(body.page_url)}` : null,
       body.user_agent ? `- UA: ${escapeMarkdown(body.user_agent)}` : null,
-      body.email ? `- Email: ${escapeMarkdown(body.email)}` : null,
       `- Source IP: ${ip}`,
       `- Lambda request: ${context?.awsRequestId || 'unknown'}`,
       '',
