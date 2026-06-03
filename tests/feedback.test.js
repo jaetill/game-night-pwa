@@ -101,6 +101,26 @@ describe('lambda/feedback.js — handler', () => {
     }
   });
 
+  it('localhost origin is echoed when DEPLOY_ENV is staging', async () => {
+    vi.resetModules();
+    const feedbackPath = require.resolve('../lambda/feedback.js');
+    delete require.cache[feedbackPath];
+    process.env.DEPLOY_ENV = 'staging';
+    try {
+      const { _createHandler } = require('../lambda/feedback.js');
+      const handler = _createHandler({ smClient: makeMockSm(), Octokit: makeMockOctokit().Octokit });
+      const res = await handler(
+        makeEvent('OPTIONS', '{}', { headers: { origin: 'http://localhost:5173' } }),
+        { awsRequestId: 'rid-localhost-staging' },
+      );
+      expect(res.headers['Access-Control-Allow-Origin']).toBe('http://localhost:5173');
+    } finally {
+      delete process.env.DEPLOY_ENV;
+      delete require.cache[feedbackPath];
+      vi.resetModules();
+    }
+  });
+
   it('localhost origin blocked when DEPLOY_ENV is a typo (Prod, PROD, production)', async () => {
     for (const typo of ['Prod', 'PROD', 'production']) {
       vi.resetModules();
