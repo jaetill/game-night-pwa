@@ -28,8 +28,18 @@
       "Bash(*TRUNCATE*)",
       "Edit(*.tfstate*)",
       "Edit(.env)",
+      "Edit(.env.local)",
+      "Edit(.env.production)",
+      "Edit(.ssh/*)",
+      "Edit(.aws/credentials)",
+      "Edit(.gnupg/*)",
       "Write(*.tfstate*)",
-      "Write(.env)"
+      "Write(.env)",
+      "Write(.env.local)",
+      "Write(.env.production)",
+      "Write(.ssh/*)",
+      "Write(.aws/credentials)",
+      "Write(.gnupg/*)"
     ]
   }
 }
