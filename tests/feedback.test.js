@@ -224,6 +224,16 @@ describe('lambda/feedback.js — handler', () => {
     expect(ok.captured[0].labels).toEqual(expect.arrayContaining(['feedback:user-submitted', 'type:bug']));
   });
 
+  it('submitter email is NOT included in the public GitHub issue body', async () => {
+    const ok = makeMockOctokit();
+    const handler = _createHandler({ smClient: makeMockSm(), Octokit: ok.Octokit });
+    const res = await handler(makeEvent('POST', VALID_BODY), { awsRequestId: 'rid-no-email' });
+    expect(res.statusCode).toBe(201);
+    expect(ok.captured.length).toBe(1);
+    expect(ok.captured[0].body).not.toContain('tester@example.com');
+    expect(ok.captured[0].body).not.toContain('Email:');
+  });
+
   it('long descriptions are truncated in the issue title', async () => {
     const ok = makeMockOctokit();
     const handler = _createHandler({ smClient: makeMockSm(), Octokit: ok.Octokit });
