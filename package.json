@@ -36,7 +36,9 @@
     "prettier": "^3.3.0",
     "tailwindcss": "^4.2.1",
     "vite": "^7.0.0",
-    "vitest": "^2.0.0",
+    "vitest": "^2.0.0"
+  },
+  "optionalDependencies": {
     "@platform/test-inbox": "file:../../Claude/Projects/Agentic Dev Environment/templates/_shared/test-inbox"
   }
 }
