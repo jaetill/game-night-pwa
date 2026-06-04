@@ -30,6 +30,8 @@
       "Bash(*AWS_SESSION_TOKEN=*)",
       "Bash(*GITHUB_TOKEN=ghp_*)",
       "Bash(*GITHUB_TOKEN=github_pat_*)",
+      "Bash(*GITHUB_TOKEN=ghs_*)",
+      "Bash(*GITHUB_TOKEN=gho_*)",
       "Bash(*BEGIN PRIVATE KEY*)",
       "Bash(*BEGIN RSA PRIVATE KEY*)",
       "Bash(*BEGIN EC PRIVATE KEY*)",
