@@ -1,8 +1,8 @@
 name: claude-dep-watcher
 # Invokes the dep-watcher subagent (.claude/agents/dep-watcher.md) to scan
 # package.json + lambda/package.json for outdated or vulnerable deps, then
-# files findings as a single tracked GitHub issue (one issue per run,
-# updated rather than duplicated).
+# writes the rolling report to docs/dependency-report.md on the
+# reports/dep-watch branch (ADR-0045 — digest issues are retired).
 #
 # Schedule: weekly on Monday 09:00 UTC. Manual trigger via workflow_dispatch.
 
@@ -11,9 +11,11 @@ on:
     - cron: '0 9 * * 1'
   workflow_dispatch:
 
+# contents: write — push the rolling report to reports/dep-watch (ADR-0045).
+# issues: write was removed with the digest-issue retirement: the workflow no
+# longer files issues, and keeping it widened the prompt-injection blast
+# radius of the bypassPermissions agent (review finding on #158).
 permissions:
-  contents: read
-  issues: write
   contents: write
   id-token: write
 
