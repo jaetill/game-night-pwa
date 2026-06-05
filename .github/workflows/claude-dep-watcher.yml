@@ -1,8 +1,14 @@
 name: claude-dep-watcher
 # Invokes the dep-watcher subagent (.claude/agents/dep-watcher.md) to scan
 # package.json + lambda/package.json for outdated or vulnerable deps, then
-# files findings as a single tracked GitHub issue (one issue per run,
-# updated rather than duplicated).
+# publishes the rolling report to docs/dependency-report.md on the
+# reports/dep-watch branch (ADR-0045 — digest issues are retired).
+#
+# WRITER ≠ PUBLISHER (review finding on #158): the LLM agent runs with
+# contents: read ONLY — npm advisory text is attacker-influenced input to a
+# bypassPermissions agent, so the agent job gets no write capability at all.
+# It emits the report as a build artifact; a separate deterministic job
+# (no LLM, fixed shell) holds contents: write and performs the push.
 #
 # Schedule: weekly on Monday 09:00 UTC. Manual trigger via workflow_dispatch.
 
@@ -11,21 +17,21 @@ on:
     - cron: '0 9 * * 1'
   workflow_dispatch:
 
-permissions:
-  contents: read
-  issues: write
-  id-token: write
+permissions: {}
 
 jobs:
-  dep-watch:
+  generate:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write   # claude-code-action OIDC
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Run dep-watcher agent
+      - name: Run dep-watcher agent (read-only)
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -41,17 +47,14 @@ jobs:
                - CRITICAL/HIGH security advisory → flag for immediate update
                - Major version bump available → note + breaking-change risk
                - Minor/patch bump available → low priority, batch in monthly sweep
-            4. Check if a `dep-watch` issue is already open in the repo:
-                 gh issue list --label dep-watch --state open --json number,title
-               If yes, UPDATE that issue with the current findings via:
-                 gh issue edit <number> --body-file -
-               If no, OPEN a new one with label `dep-watch`:
-                 gh issue create --title "Weekly dependency report — $(date +%Y-%m-%d)" \
-                   --label dep-watch --body-file -
+            4. Write the FULL report to the file `dependency-report.md` in the
+               repository root via a Bash heredoc (replace the whole file —
+               rolling, latest state only). Do NOT run any git commands; a
+               separate workflow job publishes the file.
 
-            Issue body must:
+            Report file must:
               - Lead with `## Dependency Watch ($(date +%Y-%m-%d))`
-              - Section per package.json (root, lambda/)
+              - Section per package manifest in the repo
               - Group findings by severity
               - End with `No actionable findings.` if everything is current
           claude_args: |
@@ -59,3 +62,43 @@ jobs:
             --permission-mode bypassPermissions
             --allowed-tools Bash,Read,Glob,Grep
             --append-system-prompt "Follow the platform standards in docs/standards/."
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-report
+          path: dependency-report.md
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: generate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write   # deterministic push only — no LLM in this job
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: dependency-report
+          path: ${{ runner.temp }}/depwatch
+      - name: Publish rolling report to reports/dep-watch
+        run: |
+          set -euo pipefail
+          git config user.name "dep-watch"
+          git config user.email "dep-watch@users.noreply.github.com"
+          git checkout -B reports/dep-watch origin/reports/dep-watch 2>/dev/null \
+            || git checkout -B reports/dep-watch
+          mkdir -p docs
+          cp "${RUNNER_TEMP}/depwatch/dependency-report.md" docs/dependency-report.md
+          git add docs/dependency-report.md
+          if git diff --cached --quiet; then
+            echo "Report unchanged; nothing to publish."
+            exit 0
+          fi
+          git commit -m "dep-watch: weekly report $(date +%Y-%m-%d)"
+          # The reports branch is machine-owned and rolling; force-with-lease
+          # handles divergence without clobbering concurrent pushes.
+          git push --force-with-lease origin reports/dep-watch
