@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.1.0](https://github.com/jaetill/game-night-pwa/compare/v1.0.0...v1.1.0) (2026-06-05)
+
+
+### Features
+
+* **iac:** wire ADR-0035 iac-additive-guard caller + pull_request OIDC trust ([#169](https://github.com/jaetill/game-night-pwa/issues/169)) ([26d87b7](https://github.com/jaetill/game-night-pwa/commit/26d87b757fb3cc1ce84b3b486c29202875830f87))
+
+
+### Bug Fixes
+
+* **bggProxy:** catch AccessDenied+s3:ListBucket in s3Get ([#125](https://github.com/jaetill/game-night-pwa/issues/125)) ([#128](https://github.com/jaetill/game-night-pwa/issues/128)) ([a8f9de2](https://github.com/jaetill/game-night-pwa/commit/a8f9de22e7f9060e0de0ce9978afe52944066796))
+* **e2e:** make @platform/test-inbox optional so npm ci doesn't ENOENT in CI ([#131](https://github.com/jaetill/game-night-pwa/issues/131)) ([cad0133](https://github.com/jaetill/game-night-pwa/commit/cad013360208ebbc744e83986b33d3a395eaad4c)), closes [#92](https://github.com/jaetill/game-night-pwa/issues/92)
+* **e2e:** replace no-op receivedAt assertion with max-latency check ([#96](https://github.com/jaetill/game-night-pwa/issues/96)) ([#138](https://github.com/jaetill/game-night-pwa/issues/138)) ([24c985d](https://github.com/jaetill/game-night-pwa/commit/24c985d3c5f3b976d48298892dcf4c063840e6eb))
+* **feedback:** add pipe to escapeMarkdown to block Markdown table injection ([#64](https://github.com/jaetill/game-night-pwa/issues/64)) ([#127](https://github.com/jaetill/game-night-pwa/issues/127)) ([0e513ff](https://github.com/jaetill/game-night-pwa/commit/0e513fffd3fe8121c34b6a2f985477296a84d106))
+* **feedback:** gate localhost CORS origin behind DEPLOY_ENV != prod ([#70](https://github.com/jaetill/game-night-pwa/issues/70)) ([#140](https://github.com/jaetill/game-night-pwa/issues/140)) ([1aeedb1](https://github.com/jaetill/game-night-pwa/commit/1aeedb174692a520ba832e234c0f1831ebf4fbbd))
+* **feedback:** remove submitter email from public GitHub issue body ([#150](https://github.com/jaetill/game-night-pwa/issues/150)) ([c3c2c83](https://github.com/jaetill/game-night-pwa/commit/c3c2c83ad2a0917b38eeff9740f368c40887272d)), closes [#88](https://github.com/jaetill/game-night-pwa/issues/88)
+* **feedback:** use allowlist for DEPLOY_ENV localhost CORS gate ([#143](https://github.com/jaetill/game-night-pwa/issues/143)) ([#147](https://github.com/jaetill/game-night-pwa/issues/147)) ([ddc654e](https://github.com/jaetill/game-night-pwa/commit/ddc654ed4e82df79a51f487d2fc910950e3575b5))
+* **GeneratePresignedPost:** catch AccessDenied+s3:ListBucket as not-found ([#81](https://github.com/jaetill/game-night-pwa/issues/81)) ([#135](https://github.com/jaetill/game-night-pwa/issues/135)) ([395b6ff](https://github.com/jaetill/game-night-pwa/commit/395b6ff032e6c4d2a295988bc0d5f5e4e4c1681e))
+* **iac:** replace cognito-idp:List* with safe explicit actions in iac_drift_introspect ([#168](https://github.com/jaetill/game-night-pwa/issues/168)) ([27e7c50](https://github.com/jaetill/game-night-pwa/commit/27e7c507c25f21c2f8555d1fefd2ebb80bca097d)), closes [#66](https://github.com/jaetill/game-night-pwa/issues/66)
+* **iam:** add unconditional s3:ListBucket to bggProxy policies ([#124](https://github.com/jaetill/game-night-pwa/issues/124)) ([#144](https://github.com/jaetill/game-night-pwa/issues/144)) ([d4ddd3f](https://github.com/jaetill/game-night-pwa/commit/d4ddd3f0c1060c6c3468ea29b41289593162ba9d))
+* **iam:** scope bggProxy s3:ListBucket to collections/* and profiles/* ([#122](https://github.com/jaetill/game-night-pwa/issues/122)) ([#129](https://github.com/jaetill/game-night-pwa/issues/129)) ([fd7987c](https://github.com/jaetill/game-night-pwa/commit/fd7987cd9ee7b3bdef56f23d57f1d0b8093bcff4))
+* **searchGames:** catch AccessDenied+s3:ListBucket as empty collection ([#126](https://github.com/jaetill/game-night-pwa/issues/126)) ([#139](https://github.com/jaetill/game-night-pwa/issues/139)) ([f6e0d79](https://github.com/jaetill/game-night-pwa/commit/f6e0d791c44a571ab34bfc7abb7e045b02226b18))
+* **security:** add credential-exposure patterns to permissions.deny ([#152](https://github.com/jaetill/game-night-pwa/issues/152)) ([be37f49](https://github.com/jaetill/game-night-pwa/commit/be37f4966020b0cbe72131c93393cc4b45c0a26f)), closes [#84](https://github.com/jaetill/game-night-pwa/issues/84)
+* **security:** add ghs_ and gho_ GitHub token prefixes to deny block ([#167](https://github.com/jaetill/game-night-pwa/issues/167)) ([c383b2c](https://github.com/jaetill/game-night-pwa/commit/c383b2c5fc4368069094298293ca0db55ff08c74)), closes [#156](https://github.com/jaetill/game-night-pwa/issues/156)
+* **settings:** extend permissions.deny to cover credential and SSH paths ([#151](https://github.com/jaetill/game-night-pwa/issues/151)) ([e0dd54a](https://github.com/jaetill/game-night-pwa/commit/e0dd54a9086dd7a0fe174be33d4bf46a63ecf1aa))
+
 ## 1.0.0 (2026-05-25)
 
 
