@@ -28,3 +28,6 @@ jobs:
       aws-region: us-east-2
     secrets:
       aws-role-arn: ${{ secrets.AWS_IAC_GUARD_ROLE_ARN }}
+      # TF_VAR_grafana_external_id — required by the root module but kept out
+      # of source (public repo); see variables.tf.
+      extra-tf-env: ${{ secrets.IAC_GUARD_TF_ENV }}
