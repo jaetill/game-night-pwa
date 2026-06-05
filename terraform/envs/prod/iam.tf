@@ -268,13 +268,16 @@ data "aws_iam_policy_document" "iac_drift_trust" {
 # effective permissions today. Leaving it in place means the next
 # narrowing attempt only needs to remove the ReadOnlyAccess attachment
 # (and ideally add the missing permissions that caused the 2026-05-13
-# hang). Per-action commentary describing INTENDED future omissions:
+# hang). Actions NOT included in this inline (intentional omissions for
+# when ReadOnlyAccess is eventually removed):
 #   - secretsmanager:GetSecretValue (Postmark + GitHub PAT)
 #   - ssm:GetParameter / GetParameters / GetParameterHistory
-#   - cognito-idp:AdminGetUser
+#   - cognito-idp:ListUsers / AdminGetUser (PII — shared pool)
 #   - s3:GetObject (outside tfstate)
-# These are NOT actually omitted today — ReadOnlyAccess grants all of
-# them — but capture the policy's design intent for the future fix.
+# The Cognito statement is wildcard-free so no future wildcard expansion
+# can accidentally re-introduce ListUsers. ReadOnlyAccess still grants
+# all of the above omissions today — they take effect only after
+# ReadOnlyAccess is detached (#48).
 data "aws_iam_policy_document" "iac_drift_introspect" {
   statement {
     sid       = "IAMRead"
@@ -295,9 +298,19 @@ data "aws_iam_policy_document" "iac_drift_introspect" {
     resources = ["*"]
   }
   statement {
-    sid       = "CognitoMetadataRead"
-    effect    = "Allow"
-    actions   = ["cognito-idp:Describe*", "cognito-idp:List*"]
+    # Intentionally excludes cognito-idp:ListUsers (PII — shared pool) and
+    # cognito-idp:AdminGetUser. Wildcard-free to prevent future wild-card
+    # expansion from re-introducing either action.
+    sid    = "CognitoMetadataRead"
+    effect = "Allow"
+    actions = [
+      "cognito-idp:DescribeUserPool",
+      "cognito-idp:DescribeUserPoolClient",
+      "cognito-idp:DescribeUserPoolDomain",
+      "cognito-idp:ListUserPools",
+      "cognito-idp:ListUserPoolClients",
+      "cognito-idp:ListGroups",
+    ]
     resources = ["*"]
   }
   statement {
