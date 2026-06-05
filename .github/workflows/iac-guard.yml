@@ -1,0 +1,30 @@
+name: iac-guard
+# ADR-0035: per-repo caller for the platform's reusable iac-additive-guard.
+# Plans terraform changes on PRs with a READ-ONLY role and classifies the
+# diff as safe-additive (pass) or not (fail). The fleet auto-merge gate
+# (agentic-dev-environment triage-scan.yml) requires this check passing
+# before a scope:iac PR may auto-merge — absent or red, the PR is held
+# `hold:iac-unverified` for a human.
+#
+# The role (game-night-iac-drift) is the drift detector's read-only role;
+# its trust policy includes the `pull_request` OIDC sub for this caller
+# (terraform/envs/prod/iam.tf, iac_drift_trust).
+
+on:
+  pull_request:
+    paths:
+      - 'terraform/**'
+
+permissions:
+  contents: read
+  id-token: write   # AWS OIDC (read-only plan role)
+  checks: read
+
+jobs:
+  guard:
+    uses: jaetill/agentic-dev-environment/.github/workflows/iac-guard.yml@main
+    with:
+      tf-dir: terraform/envs/prod
+      aws-region: us-east-2
+    secrets:
+      aws-role-arn: ${{ secrets.AWS_IAC_GUARD_ROLE_ARN }}

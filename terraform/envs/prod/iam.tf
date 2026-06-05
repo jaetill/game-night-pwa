@@ -256,7 +256,14 @@ data "aws_iam_policy_document" "iac_drift_trust" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:jaetill/game-night-pwa:ref:refs/heads/master"]
+      # master: the scheduled drift detector. pull_request: the ADR-0035
+      # iac-additive-guard caller (.github/workflows/iac-guard.yml), which
+      # plans PR branches before the fleet auto-merge gate will let a
+      # scope:iac PR auto-merge. Read-only role — both contexts only plan.
+      values = [
+        "repo:jaetill/game-night-pwa:ref:refs/heads/master",
+        "repo:jaetill/game-night-pwa:pull_request",
+      ]
     }
   }
 }
