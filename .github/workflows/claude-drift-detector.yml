@@ -31,8 +31,13 @@ jobs:
           role-to-assume: arn:aws:iam::214599503944:role/game-night-iac-drift
           aws-region: us-east-2
       - name: tofu init
-        run: tofu -chdir=terraform/envs/prod init
+        run: tofu -chdir=terraform/envs/prod init -input=false
       - name: tofu plan (capture)
+        # TF_VAR_grafana_external_id is required by the root module but kept out
+        # of source (public repo); supply it from the repo secret so the plan
+        # doesn't block on an interactive prompt.
+        env:
+          TF_VAR_grafana_external_id: ${{ secrets.GRAFANA_EXTERNAL_ID }}
         run: |
           set +e
           # -lock=false: drift-detector only READS state to check for divergence;
@@ -50,7 +55,7 @@ jobs:
           # issue lands suspiciously close to a deploy, check the GitHub
           # Actions run history for an apply job overlapping the plan
           # window and dismiss as a race artifact.
-          tofu -chdir=terraform/envs/prod plan -lock=false -detailed-exitcode -no-color > /tmp/plan.txt 2>&1
+          tofu -chdir=terraform/envs/prod plan -input=false -lock=false -detailed-exitcode -no-color > /tmp/plan.txt 2>&1
           echo "PLAN_EXIT=$?" >> "$GITHUB_ENV"
         # detailed-exitcode: 0=no-changes, 1=error, 2=changes-present
       - name: Run drift-detector agent
