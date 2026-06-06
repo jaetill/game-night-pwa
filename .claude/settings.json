@@ -35,6 +35,7 @@
       "Bash(*BEGIN PRIVATE KEY*)",
       "Bash(*BEGIN RSA PRIVATE KEY*)",
       "Bash(*BEGIN EC PRIVATE KEY*)",
+      "Bash(*BEGIN OPENSSH PRIVATE KEY*)",
       "Edit(*.tfstate*)",
       "Edit(.env)",
       "Edit(.env.local)",
