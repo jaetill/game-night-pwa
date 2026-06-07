@@ -277,6 +277,8 @@ data "aws_iam_policy_document" "iac_drift_trust" {
 # (and ideally add the missing permissions that caused the 2026-05-13
 # hang). Actions NOT included in this inline (intentional omissions for
 # when ReadOnlyAccess is eventually removed):
+#   - iam:GetAccountAuthorizationDetails (bulk account-wide IAM dump —
+#     top-tier recon action; not needed for tofu plan per-resource reads)
 #   - secretsmanager:GetSecretValue (Postmark + GitHub PAT)
 #   - ssm:GetParameter / GetParameters / GetParameterHistory
 #   - cognito-idp:ListUsers / AdminGetUser (PII — shared pool)
@@ -287,9 +289,19 @@ data "aws_iam_policy_document" "iac_drift_trust" {
 # ReadOnlyAccess is detached (#48).
 data "aws_iam_policy_document" "iac_drift_introspect" {
   statement {
-    sid       = "IAMRead"
-    effect    = "Allow"
-    actions   = ["iam:Get*", "iam:List*"]
+    sid    = "IAMRead"
+    effect = "Allow"
+    actions = [
+      "iam:GetRole",
+      "iam:GetRolePolicy",
+      "iam:ListRoles",
+      "iam:ListRolePolicies",
+      "iam:ListAttachedRolePolicies",
+      "iam:GetPolicy",
+      "iam:GetPolicyVersion",
+      "iam:ListPolicies",
+      "iam:ListInstanceProfiles",
+    ]
     resources = ["*"]
   }
   statement {
