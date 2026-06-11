@@ -140,6 +140,9 @@ test.describe('admin invite — portal user provisioning', () => {
     inbox,
   }) => {
     const apiBase = process.env.GAME_NIGHT_API_BASE.replace(/\/$/, '');
+    if (!apiBase.startsWith('https://')) {
+      throw new Error(`GAME_NIGHT_API_BASE must be an HTTPS URL, got: ${apiBase}`);
+    }
     const hostToken = process.env.GAME_NIGHT_HOST_AUTH_TOKEN;
     const nightId = process.env.GAME_NIGHT_TEST_NIGHT_ID;
 
