@@ -283,6 +283,8 @@ data "aws_iam_policy_document" "iac_drift_trust" {
 #   - ssm:GetParameter / GetParameters / GetParameterHistory
 #   - cognito-idp:ListUsers / AdminGetUser (PII — shared pool)
 #   - s3:GetObject (outside tfstate)
+#   - s3:ListBucket — data-plane object enumeration; iac_drift_tfstate
+#     already grants it scoped to the tfstate bucket ARN
 # The Cognito statement is wildcard-free so no future wildcard expansion
 # can accidentally re-introduce ListUsers. ReadOnlyAccess still grants
 # all of the above omissions today — they take effect only after
@@ -342,7 +344,6 @@ data "aws_iam_policy_document" "iac_drift_introspect" {
       "s3:GetReplicationConfiguration",
       "s3:GetBucketPublicAccessBlock",
       "s3:GetBucketOwnershipControls",
-      "s3:ListBucket",
       "s3:ListAllMyBuckets",
     ]
     resources = ["*"]
