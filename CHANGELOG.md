@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.1.1](https://github.com/jaetill/game-night-pwa/compare/v1.1.0...v1.1.1) (2026-06-13)
+
+
+### Bug Fixes
+
+* **drift-detector:** add -input=false + supply grafana_external_id so plan stops hanging ([#181](https://github.com/jaetill/game-night-pwa/issues/181)) ([8d7c12c](https://github.com/jaetill/game-night-pwa/commit/8d7c12c1a56cf292818625d8fbae9f50f1705ff5))
+* **e2e:** enforce HTTPS on GAME_NIGHT_API_BASE before sending Bearer token ([#185](https://github.com/jaetill/game-night-pwa/issues/185)) ([29d1e6c](https://github.com/jaetill/game-night-pwa/commit/29d1e6c7441299c9cb8c3252fce225c1e594c9db)), closes [#93](https://github.com/jaetill/game-night-pwa/issues/93)
+* **iac:** narrow iam:Get* wildcard to explicit actions in iac_drift_introspect ([#184](https://github.com/jaetill/game-night-pwa/issues/184)) ([d9efcdc](https://github.com/jaetill/game-night-pwa/commit/d9efcdcdfa51bee265c0741e3cf9999b073f747a)), closes [#68](https://github.com/jaetill/game-night-pwa/issues/68)
+* **iac:** remove s3:ListBucket wildcard from iac_drift_introspect ([#187](https://github.com/jaetill/game-night-pwa/issues/187)) ([#190](https://github.com/jaetill/game-night-pwa/issues/190)) ([ed2d794](https://github.com/jaetill/game-night-pwa/commit/ed2d794ee4cab2ab892c20bc73317a2a1c54bd31))
+* **iac:** replace lambda:Get* wildcard with explicit actions in iac_drift_introspect ([#189](https://github.com/jaetill/game-night-pwa/issues/189)) ([7edb47a](https://github.com/jaetill/game-night-pwa/commit/7edb47a28dcd34a5dbef4af9472ecd8f963940f6))
+
 ## [1.1.0](https://github.com/jaetill/game-night-pwa/compare/v1.0.0...v1.1.0) (2026-06-05)
 
 
