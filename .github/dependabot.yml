@@ -5,3 +5,13 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+  - package-ecosystem: "npm"
+    directory: "/lambda"
+    schedule:
+      interval: "weekly"
+      day: "monday"
