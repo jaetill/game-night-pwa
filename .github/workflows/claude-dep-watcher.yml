@@ -15,5 +15,5 @@ permissions:
 
 jobs:
   dep-watch:
-    uses: jaetill/agentic-dev-environment/.github/workflows/dep-watch.yml@main
+    uses: jaetill/agentic-dev-environment/.github/workflows/dep-watch.yml@03dbb5ad6b7ae68e38d77e95e08cab56adb577c4 # main 2026-06-16
     secrets: inherit
