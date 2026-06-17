@@ -121,16 +121,10 @@ resource "aws_iam_role_policy" "apiKeyAuthorizer_ssm" {
 }
 
 # ── bggProxy ────────────────────────────────────────────────────────────────
-resource "aws_iam_role_policy" "bggProxy_collection" {
-  name   = "S3CollectionAccess"
+resource "aws_iam_role_policy" "bggProxy_s3" {
+  name   = "S3Access"
   role   = aws_iam_role.bggProxy.id
-  policy = file("${path.module}/iam-policies/bggProxy-S3CollectionAccess.json")
-}
-
-resource "aws_iam_role_policy" "bggProxy_profile" {
-  name   = "S3ProfileAccess"
-  role   = aws_iam_role.bggProxy.id
-  policy = file("${path.module}/iam-policies/bggProxy-S3ProfileAccess.json")
+  policy = file("${path.module}/iam-policies/bggProxy-S3Access.json")
 }
 
 # ── createEvent ─────────────────────────────────────────────────────────────
