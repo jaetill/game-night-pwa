@@ -356,7 +356,7 @@ This project adopts the [Agentic Dev Environment](https://github.com/jaetill/age
 
 ### AI configuration
 
-The platform's subagents, slash commands, and hooks are delivered via the `ai-team` plugin subscription (per ADR-0015). `.claude/settings.json` retains only the plugin subscription (`enabledPlugins`) and the permissions block — hook scripts, agent definitions, and commands are no longer committed locally. The existing `.claude/worktrees/` setup remains untouched. The project's `.claude/mcp.json` (gitignored) and `.claude/settings.local.json` (gitignored) are also untouched.
+The platform's subagents, slash commands, and hooks are delivered via the `ai-team` plugin subscription (per platform ADR-0015). `.claude/settings.json` retains only the plugin subscription (`enabledPlugins`) and the permissions block — hook scripts, agent definitions, and commands are no longer committed locally. The existing `.claude/worktrees/` setup remains untouched. The project's `.claude/mcp.json` (gitignored) and `.claude/settings.local.json` (gitignored) are also untouched.
 
 ### `mcp/` (existing)
 
@@ -367,7 +367,7 @@ The custom MCP server at `mcp/` is application code — it is NOT touched by the
 | Phase | Status |
 |---|---|
 | Phase 1 — Documentation | ✅ Complete (docs/, mkdocs.yml, docs.yml workflow) |
-| Phase 2 — AI configuration | ✅ Migrated to `ai-team` plugin subscription (ADR-0015) — agents, commands, and hooks delivered by plugin; `.claude/settings.json` retains permissions block only |
+| Phase 2 — AI configuration | ✅ Migrated to `ai-team` plugin subscription (platform ADR-0015) — agents, commands, and hooks delivered by plugin; `.claude/settings.json` retains permissions block only |
 | Phase 3 — Quality gates | ✅ Complete (ESLint, Prettier, pre-commit, lint-staged, commitlint, vitest tiered coverage) |
 | Phase 4 — CI workflows | ✅ Complete (claude-pr-review, release-please, deploy.yml augmented with Sentry release step) |
 | Phase 5 — Observability | ✅ Complete (Sentry frontend init wired; all 8 Lambda handlers wrapped with Sentry.wrapHandler + structured logger on 2026-05-09; tests/lambdaHandlers.test.js guards regressions; Grafana Cloud CloudWatch pull wired 2026-05-12 — dashboard at grafana/dashboards/lambda-health.json) |
