@@ -61,7 +61,7 @@ jobs:
       # keeps the maps server-side for deobfuscation.
       - name: Upload source maps to Sentry
         if: env.SENTRY_AUTH_TOKEN != ''
-        uses: getsentry/action-release@v1
+        uses: getsentry/action-release@v3
         with:
           version: ${{ github.sha }}
           environment: prod
@@ -96,5 +96,5 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
 

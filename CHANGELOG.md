@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.1.1](https://github.com/jaetill/game-night-pwa/compare/v1.1.0...v1.1.1) (2026-06-18)
+
+
+### Bug Fixes
+
+* **ci:** add /mcp npm ecosystem entry to Dependabot config ([#209](https://github.com/jaetill/game-night-pwa/issues/209)) ([2bd8f63](https://github.com/jaetill/game-night-pwa/commit/2bd8f635fe8ad0d91aea079b43feb04aa2538fb5)), closes [#201](https://github.com/jaetill/game-night-pwa/issues/201)
+* **ci:** add npm ecosystem entries to Dependabot config ([#200](https://github.com/jaetill/game-night-pwa/issues/200)) ([b3690e5](https://github.com/jaetill/game-night-pwa/commit/b3690e5db39c77ad610606ae8950419c4c5d5ee3)), closes [#192](https://github.com/jaetill/game-night-pwa/issues/192)
+* **ci:** pin dep-watcher reusable to commit SHA and add Dependabot ([#178](https://github.com/jaetill/game-night-pwa/issues/178)) ([#191](https://github.com/jaetill/game-night-pwa/issues/191)) ([c852421](https://github.com/jaetill/game-night-pwa/commit/c8524219772956b2305f24e0124c287aca0ded12))
+* **ci:** pin iac-guard reusable workflow to commit SHA ([#216](https://github.com/jaetill/game-night-pwa/issues/216)) ([5fb7ec5](https://github.com/jaetill/game-night-pwa/commit/5fb7ec55c5377dc87564d813f85ddbb9233125d5)), closes [#171](https://github.com/jaetill/game-night-pwa/issues/171)
+* **ci:** pin release reusable to commit SHA to prevent secret leakage ([#199](https://github.com/jaetill/game-night-pwa/issues/199)) ([419eb18](https://github.com/jaetill/game-night-pwa/commit/419eb18b09850b5e2b822faa89208f16bed8ecea)), closes [#177](https://github.com/jaetill/game-night-pwa/issues/177)
+* **ci:** scope reusable secrets explicitly (ADR-0048) ([#217](https://github.com/jaetill/game-night-pwa/issues/217)) ([a0187a4](https://github.com/jaetill/game-night-pwa/commit/a0187a48ab1d06800434c87e6c49f5c3f8a9fda9))
+* **drift-detector:** add -input=false + supply grafana_external_id so plan stops hanging ([#181](https://github.com/jaetill/game-night-pwa/issues/181)) ([8d7c12c](https://github.com/jaetill/game-night-pwa/commit/8d7c12c1a56cf292818625d8fbae9f50f1705ff5))
+* **e2e:** enforce HTTPS on GAME_NIGHT_API_BASE before sending Bearer token ([#185](https://github.com/jaetill/game-night-pwa/issues/185)) ([29d1e6c](https://github.com/jaetill/game-night-pwa/commit/29d1e6c7441299c9cb8c3252fce225c1e594c9db)), closes [#93](https://github.com/jaetill/game-night-pwa/issues/93)
+* **iac:** narrow iam:Get* wildcard to explicit actions in iac_drift_introspect ([#184](https://github.com/jaetill/game-night-pwa/issues/184)) ([d9efcdc](https://github.com/jaetill/game-night-pwa/commit/d9efcdcdfa51bee265c0741e3cf9999b073f747a)), closes [#68](https://github.com/jaetill/game-night-pwa/issues/68)
+* **iac:** remove s3:ListBucket wildcard from iac_drift_introspect ([#187](https://github.com/jaetill/game-night-pwa/issues/187)) ([#190](https://github.com/jaetill/game-night-pwa/issues/190)) ([ed2d794](https://github.com/jaetill/game-night-pwa/commit/ed2d794ee4cab2ab892c20bc73317a2a1c54bd31))
+* **iac:** replace lambda:Get* wildcard with explicit actions in iac_drift_introspect ([#189](https://github.com/jaetill/game-night-pwa/issues/189)) ([7edb47a](https://github.com/jaetill/game-night-pwa/commit/7edb47a28dcd34a5dbef4af9472ecd8f963940f6))
+
 ## [1.1.0](https://github.com/jaetill/game-night-pwa/compare/v1.0.0...v1.1.0) (2026-06-05)
 
 
