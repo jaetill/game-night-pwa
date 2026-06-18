@@ -449,20 +449,6 @@ resource "aws_iam_role_policy" "iac_drift_tfstate" {
 # stays in sync automatically when functions are added or removed.
 data "aws_iam_policy_document" "github_deploy" {
   statement {
-    sid    = "S3DeployArtifacts"
-    effect = "Allow"
-    actions = [
-      "s3:PutObject",
-      "s3:GetObject",
-      "s3:ListBucket",
-    ]
-    resources = [
-      "arn:aws:s3:::jaetill-game-nights",
-      "arn:aws:s3:::jaetill-game-nights/*",
-    ]
-  }
-
-  statement {
     sid    = "LambdaUpdateGameNightOnly"
     effect = "Allow"
     actions = [
