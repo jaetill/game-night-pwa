@@ -45,7 +45,7 @@ jobs:
       - name: Build site
         run: mkdocs build --strict
       - name: Upload site as artifact (for download / preview)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: docs-site
           path: site/
