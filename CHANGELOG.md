@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.2](https://github.com/jaetill/game-night-pwa/compare/v1.1.1...v1.1.2) (2026-06-19)
+
+
+### Bug Fixes
+
+* **iac:** consolidate bggProxy IAM into single S3Access policy ([#133](https://github.com/jaetill/game-night-pwa/issues/133)) ([#207](https://github.com/jaetill/game-night-pwa/issues/207)) ([52c7639](https://github.com/jaetill/game-night-pwa/commit/52c763910d0de779f8ebe767b3de0b8598615177))
+* **iac:** remove ReadOnlyAccess from iac_drift role — narrow to inline policy ([#48](https://github.com/jaetill/game-night-pwa/issues/48)) ([#186](https://github.com/jaetill/game-night-pwa/issues/186)) ([5ea1827](https://github.com/jaetill/game-night-pwa/commit/5ea18273f28e64d71b7111cc47baec671ecd942e))
+* **iam:** remove unused S3 permissions from github-deploy role ([#221](https://github.com/jaetill/game-night-pwa/issues/221)) ([63bc3ff](https://github.com/jaetill/game-night-pwa/commit/63bc3ff5f79bbc9825aeee5005db05b92e38f79c)), closes [#65](https://github.com/jaetill/game-night-pwa/issues/65)
+
 ## [1.1.1](https://github.com/jaetill/game-night-pwa/compare/v1.1.0...v1.1.1) (2026-06-18)
 
 
