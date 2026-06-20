@@ -229,6 +229,80 @@ describe('makeNudgeErrorEntry (PII guard — issue #44)', () => {
   });
 });
 
+// Handler-level behavioral test for invite Postmark failure scrubbing (issue #72).
+// The static text-pattern check in errorMessageScrubbing.test.js won't survive a
+// catch-block refactor that reintroduces the leak; this test exercises the actual
+// handler response end-to-end via the _setForTest seam.
+describe('handler invite — Postmark failure scrubbing (issue #72)', () => {
+  const NIGHT = {
+    id: 'night-1',
+    hostUserId: 'host-user',
+    invited: [],
+    rsvps: [],
+    declined: [],
+    date: '2026-06-01',
+    time: '7:00 PM',
+    location: "Alice's Place",
+    description: '',
+  };
+
+  function makeInviteEvent() {
+    return {
+      httpMethod: 'POST',
+      resource: '/invite',
+      headers: { origin: 'https://gamenights.jaetill.com' },
+      requestContext: { authorizer: { userId: 'host-user' } },
+      body: JSON.stringify({ nightId: 'night-1', action: 'invite', email: 'newguest@example.com' }),
+    };
+  }
+
+  let mockSm, mockS3, mockCognito;
+
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    mockSm = {
+      send: vi.fn(async () => ({ SecretString: JSON.stringify({ POSTMARK_API_KEY: 'test-key' }) })),
+    };
+
+    mockS3 = {
+      send: vi.fn(async (cmd) => {
+        if (cmd.input?.Body !== undefined) return {};
+        return { Body: { transformToString: async () => JSON.stringify([NIGHT]) } };
+      }),
+    };
+
+    mockCognito = {
+      send: vi.fn(async (cmd) => {
+        if (cmd.input?.Filter)             return { Users: [] };
+        if (cmd.input?.TemporaryPassword)  return {};
+        if (cmd.input?.GroupName)          return {};
+        return { UserAttributes: [{ Name: 'name', Value: 'Alice' }] };
+      }),
+    };
+  });
+
+  afterEach(() => {
+    nudge._resetForTest();
+    vi.restoreAllMocks();
+  });
+
+  it('invite Postmark failure returns generic error, not e.message', async () => {
+    nudge._setForTest({
+      smClient: mockSm,
+      s3: mockS3,
+      cognito: mockCognito,
+      postmark: async () => { throw new Error('Postmark: bad API key'); },
+    });
+    const res = await nudge.handler(makeInviteEvent(), { awsRequestId: 'test-invite-500' });
+    expect(res.statusCode).toBe(500);
+    const body = JSON.parse(res.body);
+    expect(body.error).toBe('Failed to send invite email');
+    expect(res.body).not.toContain('Postmark');
+    expect(res.body).not.toContain('bad API key');
+  });
+});
+
 // Handler-level regression guard for PR #49 (issue #44 PII fix).
 // If a future edit restores `errors` in the response body, these tests break.
 describe('handler nudge — response body shape (PII regression guard, issue #51)', () => {
