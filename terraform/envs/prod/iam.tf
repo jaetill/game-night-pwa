@@ -273,7 +273,6 @@ data "aws_iam_policy_document" "iac_drift_introspect" {
       "iam:GetPolicy",
       "iam:GetPolicyVersion",
       "iam:ListPolicies",
-      "iam:ListInstanceProfiles",
     ]
     resources = ["*"]
   }
