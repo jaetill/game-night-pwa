@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.3](https://github.com/jaetill/game-night-pwa/compare/v1.1.2...v1.1.3) (2026-06-20)
+
+
+### Bug Fixes
+
+* **ci:** pin claude-implementer reusable workflow to SHA ([#226](https://github.com/jaetill/game-night-pwa/issues/226)) ([7c188d3](https://github.com/jaetill/game-night-pwa/commit/7c188d39c72afdec14c8e1a54d9ac00345084616)), closes [#219](https://github.com/jaetill/game-night-pwa/issues/219)
+* **iac:** remove iam:ListInstanceProfiles from iac_drift_introspect ([#224](https://github.com/jaetill/game-night-pwa/issues/224)) ([#227](https://github.com/jaetill/game-night-pwa/issues/227)) ([aa44515](https://github.com/jaetill/game-night-pwa/commit/aa44515640ace35193d1efda5ea345ead3960b3a))
+
 ## [1.1.2](https://github.com/jaetill/game-night-pwa/compare/v1.1.1...v1.1.2) (2026-06-19)
 
 
