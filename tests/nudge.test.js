@@ -382,3 +382,99 @@ describe('handler nudge — response body shape (PII regression guard, issue #51
     expect(res.body).not.toMatch(/@/); // no email-format strings in the response at all
   });
 });
+
+// Regression guard for security-review finding #165:
+// IAM cannot scope AdminAddUserToGroup to a specific group, so the only guard
+// is the code-level constant REQUIRED_GROUP. These tests pin that every
+// AdminAddUserToGroupCommand call uses GroupName='game-night-users', ensuring
+// a future refactor can't accidentally widen the group assignment to e.g. 'admins'.
+describe('handler invite — AdminAddUserToGroup always uses game-night-users (#165)', () => {
+  const NIGHT = {
+    id: 'night-1',
+    hostUserId: 'host-user',
+    invited: [],
+    rsvps: [],
+    declined: [],
+    date: '2026-06-01',
+    time: '7:00 PM',
+    location: "Alice's Place",
+    description: '',
+  };
+
+  function makeInviteEvent(email = 'guest@example.com') {
+    return {
+      httpMethod: 'POST',
+      resource: '/invite',
+      headers: { origin: 'https://gamenights.jaetill.com' },
+      requestContext: { authorizer: { userId: 'host-user' } },
+      body: JSON.stringify({ nightId: 'night-1', action: 'invite', email }),
+    };
+  }
+
+  function makeS3() {
+    return {
+      send: vi.fn(async (cmd) => {
+        if (cmd.input?.Body !== undefined) return {};
+        return { Body: { transformToString: async () => JSON.stringify([NIGHT]) } };
+      }),
+    };
+  }
+
+  function makeSm() {
+    return {
+      send: vi.fn(async () => ({ SecretString: JSON.stringify({ POSTMARK_API_KEY: 'test-key' }) })),
+    };
+  }
+
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    nudge._resetForTest();
+    vi.restoreAllMocks();
+  });
+
+  it('new-user invite calls AdminAddUserToGroup with GroupName=game-night-users', async () => {
+    const groupCalls = [];
+    const mockCognito = {
+      send: vi.fn(async (cmd) => {
+        if (cmd.input?.Filter)            return { Users: [] };
+        if (cmd.input?.TemporaryPassword) return {};
+        if (cmd.input?.GroupName !== undefined) {
+          groupCalls.push(cmd.input.GroupName);
+          return {};
+        }
+        return { UserAttributes: [{ Name: 'name', Value: 'Host' }] };
+      }),
+    };
+    nudge._setForTest({ smClient: makeSm(), s3: makeS3(), cognito: mockCognito, postmark: async () => {} });
+    const res = await nudge.handler(makeInviteEvent(), { awsRequestId: 'test-group-new' });
+    expect(res.statusCode).toBe(200);
+    expect(groupCalls.length).toBeGreaterThan(0);
+    for (const g of groupCalls) {
+      expect(g).toBe('game-night-users');
+    }
+  });
+
+  it('existing-user invite calls AdminAddUserToGroup with GroupName=game-night-users', async () => {
+    const groupCalls = [];
+    const mockCognito = {
+      send: vi.fn(async (cmd) => {
+        if (cmd.input?.Filter)            return { Users: [{ Username: 'existing-uuid' }] };
+        if (cmd.input?.GroupName !== undefined) {
+          groupCalls.push(cmd.input.GroupName);
+          return {};
+        }
+        return { UserAttributes: [{ Name: 'name', Value: 'Host' }] };
+      }),
+    };
+    nudge._setForTest({ smClient: makeSm(), s3: makeS3(), cognito: mockCognito, postmark: async () => {} });
+    const res = await nudge.handler(makeInviteEvent(), { awsRequestId: 'test-group-existing' });
+    expect(res.statusCode).toBe(200);
+    expect(groupCalls.length).toBeGreaterThan(0);
+    for (const g of groupCalls) {
+      expect(g).toBe('game-night-users');
+    }
+  });
+});
