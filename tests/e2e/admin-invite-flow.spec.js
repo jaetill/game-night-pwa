@@ -165,7 +165,15 @@ test.describe('admin invite — portal user provisioning', () => {
     // Fetch Response bodies are single-use streams.
     const responseText = await res.text().catch(() => '');
     expect(res.status, responseText).toBe(200);
-    const body = JSON.parse(responseText);
+    // Guard against non-JSON bodies (API Gateway timeout, 403 HTML, 502 cold-start):
+    // JSON.parse('') throws SyntaxError, hiding the status assertion message above.
+    // responseText is already surfaced there, so a parse failure here is silent.
+    let body = {};
+    try {
+      body = JSON.parse(responseText);
+    } catch {
+      // responseText already surfaced in the status assertion above
+    }
     // Lambda returns { sent: 1, provisioned: 'created'|'existing', inviteListChanged }.
     // Only 'created' exercises the new-user welcome path with the temp password
     // in the Postmark body; 'existing' just notifies an already-provisioned user.
