@@ -16,6 +16,12 @@
       "Effect": "Allow",
       "Action": ["secretsmanager:GetSecretValue"],
       "Resource": "arn:aws:secretsmanager:us-east-2:*:secret:game-night/prod/github-token-*"
+    },
+    {
+      "Sid": "RateLimitTable",
+      "Effect": "Allow",
+      "Action": ["dynamodb:UpdateItem"],
+      "Resource": "arn:aws:dynamodb:us-east-2:*:table/game-night-feedback-rl"
     }
   ]
 }

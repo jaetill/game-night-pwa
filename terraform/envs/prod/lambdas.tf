@@ -115,6 +115,7 @@ resource "aws_lambda_function" "feedback" {
       GITHUB_REPO_OWNER = "jaetill"
       GITHUB_REPO_NAME  = "game-night-pwa"
       GITHUB_SECRET_ID  = "game-night/prod/github-token"
+      RATE_LIMIT_TABLE  = aws_dynamodb_table.feedback_rate_limits.name
     })
   }
 
