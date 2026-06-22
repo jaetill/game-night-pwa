@@ -310,6 +310,14 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
  * upper+lower+digit+symbol.
  */
 async function ensureGameNightUser(email) {
+  // IAM cannot scope AdminAddUserToGroup to a specific group (only to the user
+  // pool). This is the code-level escalation guard: if REQUIRED_GROUP is ever
+  // changed, the function throws immediately rather than silently granting
+  // membership in the wrong group (issue #165).
+  if (REQUIRED_GROUP !== 'game-night-users') {
+    throw new Error(`GroupName must be 'game-night-users'; got '${REQUIRED_GROUP}'`);
+  }
+
   const emailLc = email.toLowerCase();
   const list = await cognito.send(new ListUsersCommand({
     UserPoolId: USER_POOL_ID,
@@ -532,6 +540,7 @@ function postmark(apiKey, msg) {
 function makeNudgeErrorEntry(e) { return { error: e.message }; }
 
 // Test seams — not part of the public API.
+exports._REQUIRED_GROUP = REQUIRED_GROUP;
 exports._buildHtml = buildHtml;
 exports._buildInviteHtml = buildInviteHtml;
 exports._escapeHtml = escapeHtml;
