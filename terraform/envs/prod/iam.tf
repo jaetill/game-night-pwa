@@ -352,6 +352,29 @@ data "aws_iam_policy_document" "iac_drift_introspect" {
     resources = ["*"]
   }
   statement {
+    sid    = "DynamoDBMetadataRead"
+    effect = "Allow"
+    actions = [
+      "dynamodb:DescribeTable",
+      "dynamodb:DescribeTimeToLive",
+      "dynamodb:ListTagsOfResource",
+    ]
+    # Scoped to the rate-limit table only; the tfstate lock table is already
+    # covered by the separate iac_drift_tfstate policy (dynamodb:GetItem).
+    resources = [
+      "arn:aws:dynamodb:${var.aws_region}:${var.aws_account_id}:table/game-night-feedback-rl",
+    ]
+  }
+
+  statement {
+    # ListTables does not support resource-level permissions — must be "*".
+    sid       = "DynamoDBListAll"
+    effect    = "Allow"
+    actions   = ["dynamodb:ListTables"]
+    resources = ["*"]
+  }
+
+  statement {
     sid       = "StsIdentity"
     effect    = "Allow"
     actions   = ["sts:GetCallerIdentity"]

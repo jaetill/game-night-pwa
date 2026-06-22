@@ -8,17 +8,22 @@
 //   GITHUB_REPO_OWNER  — defaults to "jaetill"
 //   GITHUB_REPO_NAME   — defaults to "game-night-pwa"
 //   GITHUB_SECRET_ID   — defaults to "game-night/prod/github-token"
+//   RATE_LIMIT_TABLE   — DynamoDB table name for distributed rate limiting
+//                        (e.g. "game-night-feedback-rl"). When unset, falls
+//                        back to per-instance in-memory rate limiting.
 //
 // Secrets Manager value at GITHUB_SECRET_ID must be a JSON object:
 //   { "GITHUB_TOKEN": "ghp_..." }
 //
-// IAM: see lambda/iam/feedback-inline.json — logs + secretsmanager:GetSecretValue.
+// IAM: see lambda/iam/feedback-inline.json — logs + secretsmanager:GetSecretValue
+//      + dynamodb:UpdateItem on the rate-limit table.
 
 'use strict';
 
 const { Sentry } = require('./lib/sentry');
 const logger = require('./lib/logger');
 const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
+const { DynamoDBClient, UpdateItemCommand } = require('@aws-sdk/client-dynamodb');
 
 // @octokit/rest is ESM-only since v18+; CJS cannot `require()` it directly.
 // We dynamic-import it lazily inside getOctokit() so the rest of the module
@@ -30,6 +35,7 @@ const REPO_OWNER = process.env.GITHUB_REPO_OWNER || 'jaetill';
 const REPO_NAME = process.env.GITHUB_REPO_NAME || 'game-night-pwa';
 const SECRET_ID = process.env.GITHUB_SECRET_ID || 'game-night/prod/github-token';
 const DEPLOY_ENV = process.env.DEPLOY_ENV || 'prod';
+const RATE_LIMIT_TABLE = process.env.RATE_LIMIT_TABLE || '';
 const _DEV_ENVS = new Set(['dev', 'staging']);
 
 const ALLOWED_ORIGINS = new Set([
@@ -70,11 +76,13 @@ function isSafePageUrl(url) {
   );
 }
 
-// ── In-memory rate limit (per warm Lambda instance) ─────────────────────────
+// ── Rate limiting ─────────────────────────────────────────────────────────────
 const WINDOW_MS = 60 * 60 * 1000; // 1 hour
 const LIMIT = 10;
 const RATE_LIMITS_MAX_KEYS = 10_000; // bound memory: at ~80 bytes per entry, ~1 MB
 
+// In-memory fallback — per warm Lambda instance only. Used when RATE_LIMIT_TABLE
+// is unset (local dev / test) or when DynamoDB is temporarily unavailable.
 function makeRateLimiter() {
   const buckets = new Map();
   return function checkRateLimit(ip) {
@@ -100,6 +108,50 @@ function makeRateLimiter() {
 
     existing.count += 1;
     return { allowed: true };
+  };
+}
+
+// Distributed rate limiter backed by DynamoDB — consistent across all warm
+// instances and survives cold starts. Uses an hour-aligned fixed window: the
+// key encodes both IP and window boundary, so each new hour gets a fresh item
+// automatically. TTL is set to 2 × WINDOW_MS so DynamoDB's async sweeper
+// cleans up stale items without requiring an explicit delete.
+//
+// Falls back to the in-memory limiter on any DynamoDB error (fail-open) so
+// transient table unavailability doesn't break the feedback endpoint.
+function makeDynamoRateLimiter(dynamoClient) {
+  const fallback = makeRateLimiter();
+  return async function checkRateLimit(ip) {
+    const now = Date.now();
+    const windowStart = Math.floor(now / WINDOW_MS) * WINDOW_MS;
+    const pk = `rl#${ip}#${windowStart}`;
+    const ttl = Math.floor((windowStart + WINDOW_MS * 2) / 1000);
+
+    try {
+      const result = await dynamoClient.send(new UpdateItemCommand({
+        TableName: RATE_LIMIT_TABLE,
+        Key: { pk: { S: pk } },
+        // ADD atomically increments the counter; SET only writes ttl on first
+        // request (if_not_exists prevents overwriting the expiry on later calls).
+        UpdateExpression: 'ADD #cnt :one SET #ttl = if_not_exists(#ttl, :ttl)',
+        ExpressionAttributeNames: { '#cnt': 'count', '#ttl': 'ttl' },
+        ExpressionAttributeValues: {
+          ':one': { N: '1' },
+          ':ttl': { N: String(ttl) },
+        },
+        ReturnValues: 'UPDATED_NEW',
+      }));
+
+      const count = parseInt(result.Attributes.count.N, 10);
+      if (count > LIMIT) {
+        const retryAfter = Math.ceil((windowStart + WINDOW_MS - now) / 1000);
+        return { allowed: false, retryAfter };
+      }
+      return { allowed: true };
+    } catch (err) {
+      logger.warn('feedback.rate_limit_dynamo_failed', { error: err.message });
+      return fallback(ip);
+    }
   };
 }
 
@@ -159,7 +211,20 @@ function respond(status, body, headers) {
 
 function createHandler(deps = {}) {
   const smClient = deps.smClient || new SecretsManagerClient({ region: REGION });
-  const checkRateLimit = deps.checkRateLimit || makeRateLimiter();
+
+  // Rate-limit resolution order:
+  //   1. deps.checkRateLimit — test seam (sync or async function)
+  //   2. deps.dynamoClient   — test seam for DynamoDB integration tests
+  //   3. RATE_LIMIT_TABLE env var set — create a real DynamoDB client
+  //   4. fallback            — in-memory per-instance (dev / no table configured)
+  let checkRateLimit;
+  if (deps.checkRateLimit) {
+    checkRateLimit = deps.checkRateLimit;
+  } else {
+    const dynamoClient = deps.dynamoClient ||
+      (RATE_LIMIT_TABLE ? new DynamoDBClient({ region: REGION }) : null);
+    checkRateLimit = dynamoClient ? makeDynamoRateLimiter(dynamoClient) : makeRateLimiter();
+  }
 
   let _secrets;
   async function getSecrets() {
@@ -213,7 +278,7 @@ function createHandler(deps = {}) {
     // (ALB, local dev, test harness). Removed.
     const ip = event.requestContext?.identity?.sourceIp || 'unknown';
 
-    const rl = checkRateLimit(ip);
+    const rl = await checkRateLimit(ip);
     if (!rl.allowed) {
       logger.info('feedback.rate_limited', { request_id: context?.awsRequestId });
       return respond(429,
@@ -311,5 +376,6 @@ exports.handler = createHandler();
 exports._createHandler = createHandler;
 exports._validate = validate;
 exports._makeRateLimiter = makeRateLimiter;
+exports._makeDynamoRateLimiter = makeDynamoRateLimiter;
 exports._escapeMarkdown = escapeMarkdown;
 exports._isSafePageUrl = isSafePageUrl;
