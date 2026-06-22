@@ -56,13 +56,12 @@ per-function IAM roles. This is good baseline hygiene.
   ```json
   { "Sid": "ReadWriteCollections", "Action": ["s3:GetObject", "s3:PutObject"], "Resource": "arn:aws:s3:::jaetill-game-nights/collections/*" }
   { "Sid": "ReadWriteProfiles",    "Action": ["s3:GetObject", "s3:PutObject"], "Resource": "arn:aws:s3:::jaetill-game-nights/profiles/*" }
-  { "Sid": "ListBucketForExistenceChecks", "Action": "s3:ListBucket", "Resource": "arn:aws:s3:::jaetill-game-nights" }
   ```
 
 **Code uses:**
 - `s3:GetObject` on `collections/{userId}.json` and `profiles/{userId}.json`
 - `s3:PutObject` on `collections/{userId}.json` and `profiles/{userId}.json`
-- `s3:ListBucket` — unconditional, allows S3 to return `NoSuchKey` instead of `AccessDenied` for missing keys (issue #124)
+- `s3:ListBucket` intentionally NOT granted — S3 returns `AccessDenied` (with `s3:ListBucket` in the message) for missing keys; `_s3Get` handles this as 404 (issue #145)
 
 **Findings:**
 - Permissions match code exactly. Well scoped. No issues.

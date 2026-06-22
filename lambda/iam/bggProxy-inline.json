@@ -18,12 +18,6 @@
         "s3:PutObject"
       ],
       "Resource": "arn:aws:s3:::jaetill-game-nights/profiles/*"
-    },
-    {
-      "Sid": "ListBucketForExistenceChecks",
-      "Effect": "Allow",
-      "Action": "s3:ListBucket",
-      "Resource": "arn:aws:s3:::jaetill-game-nights"
     }
   ]
 }

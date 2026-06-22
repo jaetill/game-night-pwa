@@ -1,6 +1,6 @@
 # ADR-0015: Grant unconditional s3:ListBucket to bggProxy and consolidate its IAM policies
 
-- **Status:** Proposed
+- **Status:** Superseded (partial) — the `s3:ListBucket` grant was subsequently removed (issue #145, 2026-06-22); the consolidation into a single policy file still stands
 - **Date:** 2026-06-17
 - **Deciders:** Jason
 - **Tags:** security, iam, s3, lambda
@@ -89,3 +89,4 @@ Chosen option: **Option A (unconditional ListBucket, consolidated policy)**, bec
 - [PR #123](https://github.com/jaetill/game-night-pwa/pulls/123) — original P1 fix that introduced the (broken) condition
 - [AWS docs: ListBucket and error responses](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-with-s3-policy-actions.html) — documents that `s3:ListBucket` controls 404-vs-403 for missing keys
 - [ADR-0003](./0003-security-hardening-low-findings.md) — prior security hardening ADR
+- [Issue #145](https://github.com/jaetill/game-night-pwa/issues/145) — unconditional `s3:ListBucket` allows full-bucket key enumeration; `s3:ListBucket` grant removed, code guard in `_s3Get` is now the primary missing-key handler
