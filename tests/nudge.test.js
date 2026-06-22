@@ -15,6 +15,7 @@ const {
   _escapeHtml: escapeHtml,
   _isValidInviteEmail: isValidInviteEmail,
   _makeNudgeErrorEntry: makeNudgeErrorEntry,
+  _REQUIRED_GROUP: REQUIRED_GROUP,
 } = nudge;
 
 const BASE = {
@@ -226,6 +227,87 @@ describe('makeNudgeErrorEntry (PII guard — issue #44)', () => {
   it('returns only the error field (no extra keys)', () => {
     const entry = makeNudgeErrorEntry(new Error('x'));
     expect(Object.keys(entry)).toEqual(['error']);
+  });
+});
+
+// GroupName escalation guard (issue #165).
+// IAM cannot scope AdminAddUserToGroup to a specific group (only to the user
+// pool). These tests pin the GroupName that ensureGameNightUser actually passes
+// to Cognito so any future refactor that changes REQUIRED_GROUP breaks loudly.
+describe('ensureGameNightUser — GroupName is always game-night-users (issue #165)', () => {
+  const NIGHT_165 = {
+    id: 'night-165',
+    hostUserId: 'host-user',
+    invited: [],
+    rsvps: [],
+    declined: [],
+  };
+
+  function makeInviteEvent165(email) {
+    return {
+      httpMethod: 'POST',
+      resource: '/invite',
+      headers: { origin: 'https://gamenights.jaetill.com' },
+      requestContext: { authorizer: { userId: 'host-user' } },
+      body: JSON.stringify({ nightId: 'night-165', action: 'invite', email }),
+    };
+  }
+
+  function baseMocks(cognitoSendFn) {
+    return {
+      smClient: { send: vi.fn(async () => ({ SecretString: JSON.stringify({ POSTMARK_API_KEY: 'k' }) })) },
+      s3: {
+        send: vi.fn(async (cmd) =>
+          cmd.input?.Body !== undefined
+            ? {}
+            : { Body: { transformToString: async () => JSON.stringify([NIGHT_165]) } }
+        ),
+      },
+      cognito: { send: cognitoSendFn },
+      postmark: async () => {},
+    };
+  }
+
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    nudge._resetForTest();
+    vi.restoreAllMocks();
+  });
+
+  it('REQUIRED_GROUP constant is hardcoded to game-night-users', () => {
+    expect(REQUIRED_GROUP).toBe('game-night-users');
+  });
+
+  it('passes GroupName="game-night-users" to Cognito for an existing user', async () => {
+    const groupNames = [];
+    nudge._setForTest(baseMocks(vi.fn(async (cmd) => {
+      if (cmd.input?.Filter)    return { Users: [{ Username: 'existing-uuid' }] };
+      if (cmd.input?.GroupName) { groupNames.push(cmd.input.GroupName); return {}; }
+      return { UserAttributes: [{ Name: 'name', Value: 'Host' }] };
+    })));
+
+    await nudge.handler(makeInviteEvent165('existing@example.com'), { awsRequestId: 'test-165-existing' });
+
+    expect(groupNames).toHaveLength(1);
+    expect(groupNames[0]).toBe('game-night-users');
+  });
+
+  it('passes GroupName="game-night-users" to Cognito for a newly provisioned user', async () => {
+    const groupNames = [];
+    nudge._setForTest(baseMocks(vi.fn(async (cmd) => {
+      if (cmd.input?.Filter)           return { Users: [] };
+      if (cmd.input?.TemporaryPassword) return {};
+      if (cmd.input?.GroupName)        { groupNames.push(cmd.input.GroupName); return {}; }
+      return { UserAttributes: [{ Name: 'name', Value: 'Host' }] };
+    })));
+
+    await nudge.handler(makeInviteEvent165('newguest@example.com'), { awsRequestId: 'test-165-new' });
+
+    expect(groupNames).toHaveLength(1);
+    expect(groupNames[0]).toBe('game-night-users');
   });
 });
 
