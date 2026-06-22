@@ -121,6 +121,14 @@ resource "aws_iam_role_policy" "apiKeyAuthorizer_ssm" {
 }
 
 # ── bggProxy ────────────────────────────────────────────────────────────────
+# s3:ListBucket is intentionally unconditional. A StringLike s3:prefix
+# condition is a no-op when S3 evaluates a GetObject request for a missing
+# key: s3:prefix is absent in that context, so StringLike evaluates to false
+# and the Allow statement never fires — S3 continues to return AccessDenied
+# instead of NoSuchKey (see #124). Accepted risk: a compromised bggProxy
+# role can enumerate bucket keys (Cognito username enumeration). Object
+# contents remain gated by the scoped GetObject/PutObject statements.
+# Tradeoff analysis: #146.
 resource "aws_iam_role_policy" "bggProxy_s3" {
   name   = "S3Access"
   role   = aws_iam_role.bggProxy.id
