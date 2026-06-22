@@ -6,7 +6,8 @@
     "agentic-dev-environment": {
       "source": {
         "source": "github",
-        "repo": "jaetill/agentic-dev-environment"
+        "repo": "jaetill/agentic-dev-environment",
+        "ref": "ceb351765fa079aae9f260874045a470d44ceed1"
       }
     }
   },

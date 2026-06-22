@@ -358,6 +358,8 @@ This project adopts the [Agentic Dev Environment](https://github.com/jaetill/age
 
 The platform's subagents, slash commands, and hooks are delivered via the `ai-team` plugin subscription (per platform ADR-0015). `.claude/settings.json` retains only the plugin subscription (`enabledPlugins`) and the permissions block — hook scripts, agent definitions, and commands are no longer committed locally. The existing `.claude/worktrees/` setup remains untouched. The project's `.claude/mcp.json` (gitignored) and `.claude/settings.local.json` (gitignored) are also untouched.
 
+**Plugin pinning:** The `agentic-dev-environment` marketplace source is pinned to a specific commit SHA via the `ref` field in `extraKnownMarketplaces`. Hook scripts execute shell commands during Claude Code sessions, so unpinned HEAD resolution is a supply-chain risk. To update the pin: review the upstream diff at `jaetill/agentic-dev-environment`, confirm no hook regressions, then update the `ref` SHA in `.claude/settings.json`.
+
 ### `mcp/` (existing)
 
 The custom MCP server at `mcp/` is application code — it is NOT touched by the platform integration. It continues to be configured via `.claude/mcp.json` (gitignored).
