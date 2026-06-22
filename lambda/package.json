@@ -4,7 +4,7 @@
   "private": true,
   "description": "Shared dependencies for game-night Lambda functions. Each function is bundled with its handler + node_modules into a deployment zip.",
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.633.0",
+    "@aws-sdk/client-s3": "^3.1073.0",
     "@aws-sdk/client-cognito-identity-provider": "^3.633.0",
     "@aws-sdk/client-secrets-manager": "^3.1070.0",
     "@aws-sdk/client-ssm": "^3.1071.0",
