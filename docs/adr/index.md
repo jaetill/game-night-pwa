@@ -28,3 +28,5 @@ Per platform [ADR-0008](https://github.com/jaetill/agentic-dev-environment/blob/
 - [ADR-0003 — Security hardening for LOW findings](0003-security-hardening-low-findings.md) (Proposed)
 - [ADR-0013 — Autonomous Team Architecture](0013-autonomous-team-architecture.md) (Proposed)
 - [ADR-0015 — Unconditional ListBucket for bggProxy](0015-unconditional-listbucket-for-bggproxy.md) (Proposed)
+- [ADR-0016 — Remove s3:ListBucket from bggProxy role to prevent key enumeration](0016-remove-listbucket-from-bggproxy.md) (Proposed)
+- [ADR-0017 — DynamoDB distributed rate limiting for feedback](0017-dynamodb-distributed-rate-limiting.md) (Proposed)
