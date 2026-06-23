@@ -15,11 +15,16 @@ const { _createHandler, _validate, _escapeMarkdown, _isSafePageUrl, _makeDynamoR
 // Simulates DynamoDB UpdateItem with an in-process counter map keyed by the
 // same pk the real limiter uses.  Returned `getCount(pk)` lets tests inspect
 // the accumulated state without hitting a real table.
-function makeMockDynamo({ fail = false } = {}) {
+// `failWith` sets the thrown error's `name` property (e.g. 'ThrottlingException').
+function makeMockDynamo({ fail = false, failWith = null } = {}) {
   const counts = new Map();
   const client = {
     send: vi.fn(async (cmd) => {
-      if (fail) throw new Error('DynamoDB unavailable');
+      if (fail || failWith) {
+        const err = new Error(failWith || 'DynamoDB unavailable');
+        if (failWith) err.name = failWith;
+        throw err;
+      }
       const pk = cmd.input.Key.pk.S;
       const next = (counts.get(pk) || 0) + 1;
       counts.set(pk, next);
@@ -576,5 +581,38 @@ describe('lambda/feedback.js — DynamoDB-backed rate limiter', () => {
     expect(cmd.input.UpdateExpression).toContain('if_not_exists');
     expect(cmd.input.ExpressionAttributeValues[':ttl']).toBeDefined();
     expect(cmd.input.Key.pk.S).toMatch(/^rl#3\.3\.3\.3#/);
+  });
+
+  it.each([
+    'ProvisionedThroughputExceededException',
+    'RequestLimitExceeded',
+    'ThrottlingException',
+  ])('fails closed (returns 429) when DynamoDB throws %s', async (errorName) => {
+    // Throttle errors mean DynamoDB is under load, likely from the attacker.
+    // Falling back to the per-instance counter would let them exploit multiple
+    // warm instances; we must rate-limit instead.
+    const { client: dynamo } = makeMockDynamo({ failWith: errorName });
+    const handler = _createHandler({
+      smClient: makeMockSm(),
+      Octokit: makeMockOctokit().Octokit,
+      dynamoClient: dynamo,
+    });
+    const res = await handler(makeEvent('POST', VALID_BODY, { ip: '7.7.7.7' }), { awsRequestId: `rid-throttle-${errorName}` });
+    expect(res.statusCode).toBe(429);
+    expect(JSON.parse(res.body).error).toBe('rate_limited');
+    expect(res.headers['Retry-After']).toBe('60');
+  });
+
+  it('fails open (allows request) when DynamoDB throws a non-throttle error', async () => {
+    // Genuine service disruption (e.g. InternalServerError) → fall back to
+    // per-instance in-memory limiter so feedback stays available.
+    const { client: dynamo } = makeMockDynamo({ failWith: 'InternalServerError' });
+    const handler = _createHandler({
+      smClient: makeMockSm(),
+      Octokit: makeMockOctokit().Octokit,
+      dynamoClient: dynamo,
+    });
+    const res = await handler(makeEvent('POST', VALID_BODY, { ip: '8.8.8.8' }), { awsRequestId: 'rid-ise-failopen' });
+    expect(res.statusCode).toBe(201);
   });
 });
