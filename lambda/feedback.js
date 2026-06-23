@@ -81,6 +81,16 @@ const WINDOW_MS = 60 * 60 * 1000; // 1 hour
 const LIMIT = 10;
 const RATE_LIMITS_MAX_KEYS = 10_000; // bound memory: at ~80 bytes per entry, ~1 MB
 
+// DynamoDB error names that indicate the table is under load, not offline.
+// Under these conditions the rate limiter is most critical (an attacker
+// may have caused the throttling deliberately), so we fail-closed rather
+// than falling back to the per-instance counter.
+const DYNAMO_THROTTLE_ERRORS = new Set([
+  'ProvisionedThroughputExceededException',
+  'RequestLimitExceeded',
+  'ThrottlingException',
+]);
+
 // In-memory fallback — per warm Lambda instance only. Used when RATE_LIMIT_TABLE
 // is unset (local dev / test) or when DynamoDB is temporarily unavailable.
 function makeRateLimiter() {
@@ -117,8 +127,11 @@ function makeRateLimiter() {
 // automatically. TTL is set to 2 × WINDOW_MS so DynamoDB's async sweeper
 // cleans up stale items without requiring an explicit delete.
 //
-// Falls back to the in-memory limiter on any DynamoDB error (fail-open) so
-// transient table unavailability doesn't break the feedback endpoint.
+// Error handling distinguishes two failure modes:
+// • Throttling (DYNAMO_THROTTLE_ERRORS): fail-closed — return rate-limited so
+//   an attacker cannot trigger DynamoDB saturation to bypass the global limit.
+// • Genuine service disruption: fail-open — fall back to per-instance in-memory
+//   counter so the endpoint stays available during a real DynamoDB outage.
 function makeDynamoRateLimiter(dynamoClient) {
   const fallback = makeRateLimiter();
   return async function checkRateLimit(ip) {
@@ -149,7 +162,10 @@ function makeDynamoRateLimiter(dynamoClient) {
       }
       return { allowed: true };
     } catch (err) {
-      logger.warn('feedback.rate_limit_dynamo_failed', { error: err.message });
+      logger.warn('feedback.rate_limit_dynamo_failed', { error: err.message, errorName: err.name });
+      if (DYNAMO_THROTTLE_ERRORS.has(err.name)) {
+        return { allowed: false, retryAfter: 60 };
+      }
       return fallback(ip);
     }
   };
