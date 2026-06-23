@@ -1,0 +1,54 @@
+# Dependabot auto-merge — patch/minor only (ADR-0052).
+#
+# WHY THIS WORKS / THE COUPLING: Dependabot PRs run with a read-only token and
+# NO secrets, so the required `claude-pr-review` review checks (code-review,
+# security-review, functional-test, e2e-test) — which mint
+# CLAUDE_CODE_OAUTH_TOKEN — would FAIL on a Dependabot PR and block it forever.
+# The platform `claude-pr-review` reusable (jaetill/agentic-dev-environment)
+# short-circuits exactly those required checks to GREEN for the dependabot[bot]
+# author (Part A of ADR-0052). Without that short-circuit, the required checks
+# never go green and `gh pr merge --auto` below would never fire. This file is
+# the second half of that coupled change.
+#
+# Trigger is `pull_request` (NOT pull_request_target): the safe trigger that
+# does not expose secrets to untrusted PR head code. We only need fetch-metadata
+# and `gh pr merge`, both of which work with the default GITHUB_TOKEN granted
+# the permissions below.
+#
+# Patch + minor bumps auto-merge (squash). MAJOR bumps are commented and left
+# for manual human review — never auto-merged.
+
+name: Dependabot auto-merge
+
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  dependabot-auto-merge:
+    # Only act on Dependabot's own PRs.
+    if: ${{ github.actor == 'dependabot[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge for patch/minor updates
+        if: ${{ steps.meta.outputs.update-type == 'version-update:semver-patch' || steps.meta.outputs.update-type == 'version-update:semver-minor' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR_URL"
+
+      - name: Flag major updates for manual review
+        if: ${{ steps.meta.outputs.update-type == 'version-update:semver-major' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          gh pr comment "$PR_URL" --body "🚦 **Major version bump (\`${{ steps.meta.outputs.dependency-names }}\`) — manual review required.** Auto-merge applies to patch/minor only (ADR-0052). Review the changelog for breaking changes, then merge by hand."
