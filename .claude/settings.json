@@ -36,6 +36,7 @@
       "Bash(*GH_TOKEN=ghp_*)",
       "Bash(*GH_TOKEN=github_pat_*)",
       "Bash(*GH_TOKEN=ghs_*)",
+      "Bash(*GH_TOKEN=gho_*)",
       "Bash(*BEGIN PRIVATE KEY*)",
       "Bash(*BEGIN RSA PRIVATE KEY*)",
       "Bash(*BEGIN EC PRIVATE KEY*)",
