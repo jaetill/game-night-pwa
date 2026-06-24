@@ -50,5 +50,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
+          DEP_NAMES: ${{ steps.meta.outputs.dependency-names }}
         run: |
-          gh pr comment "$PR_URL" --body "🚦 **Major version bump (\`${{ steps.meta.outputs.dependency-names }}\`) — manual review required.** Auto-merge applies to patch/minor only (ADR-0052). Review the changelog for breaking changes, then merge by hand."
+          gh pr comment "$PR_URL" --body "🚦 **Major version bump (\`${DEP_NAMES}\`) — manual review required.** Auto-merge applies to patch/minor only (ADR-0052). Review the changelog for breaking changes, then merge by hand."
