@@ -253,7 +253,11 @@ function createHandler(deps = {}) {
       '## Context',
       body.page_url && isSafePageUrl(body.page_url) ? `- Page: ${escapeMarkdown(body.page_url)}` : null,
       body.user_agent ? `- UA: ${escapeMarkdown(body.user_agent)}` : null,
-      `- Source IP: ${ip}`,
+      // Deliberately NOT recording the caller's source IP here. The raw IP is
+      // PII, and this issue body may live in a public repo. Abuse tracing does
+      // not need it in the issue: the per-IP rate limiter above already acts on
+      // the raw `ip` server-side, and the honeypot path logs `ip` to CloudWatch
+      // for any genuine forensic need — neither requires exposing it publicly.
       `- Lambda request: ${context?.awsRequestId || 'unknown'}`,
       '',
       '## Triage',
