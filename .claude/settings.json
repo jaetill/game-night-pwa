@@ -40,6 +40,7 @@
       "Bash(*BEGIN PRIVATE KEY*)",
       "Bash(*BEGIN RSA PRIVATE KEY*)",
       "Bash(*BEGIN EC PRIVATE KEY*)",
+      "Bash(*BEGIN OPENSSH PRIVATE KEY*)",
       "Bash(*>*.ssh/*)",
       "Bash(*>>*.ssh/*)",
       "Bash(*>*.aws/credentials*)",
