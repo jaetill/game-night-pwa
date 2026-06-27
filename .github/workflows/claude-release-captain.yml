@@ -34,6 +34,12 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           show_full_output: true
+          # release-please PRs are authored by the fleet GitHub App
+          # (jaetill-ai-triage-team[bot]) when FLEET_APP_* secrets are present,
+          # or github-actions[bot] on the fallback path. claude-code-action
+          # refuses to act on bot-authored PRs unless they are allow-listed, so
+          # without this the release-readiness check fails on every release PR.
+          allowed_bots: 'jaetill-ai-triage-team[bot],github-actions[bot]'
           prompt: |
             Act as the release-captain subagent defined in .claude/agents/release-captain.md.
 
