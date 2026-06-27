@@ -39,17 +39,11 @@ describe('bggProxy IAM policy', () => {
         expect(s.Resource).toBe('arn:aws:s3:::jaetill-game-nights/profiles/*');
       });
 
-      it('allows s3:ListBucket on the bucket without a StringLike prefix condition', () => {
-        const s = find(policy, 'ListBucketForExistenceChecks');
-        expect(s).toBeDefined();
-        const actions = Array.isArray(s.Action) ? s.Action : [s.Action];
-        expect(actions).toContain('s3:ListBucket');
-        expect(s.Resource).toBe('arn:aws:s3:::jaetill-game-nights');
-        // StringLike on s3:prefix is absent in GetObject evaluation context — the
-        // condition evaluates false and the Allow never fires (issue #124). The
-        // statement must be unconditional so S3 can return NoSuchKey instead of
-        // AccessDenied when a key is missing.
-        expect(s.Condition?.StringLike?.['s3:prefix']).toBeUndefined();
+      it('does not grant s3:ListBucket (code guard handles AccessDenied-as-404, issue #145)', () => {
+        const allActions = stmts(policy).flatMap((s) =>
+          Array.isArray(s.Action) ? s.Action : [s.Action]
+        );
+        expect(allActions).not.toContain('s3:ListBucket');
       });
     });
   }

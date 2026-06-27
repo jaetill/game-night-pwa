@@ -13,6 +13,8 @@
 //
 // IAM:
 //   s3:GetObject + s3:PutObject on profiles/* and collections/*
+//   s3:ListBucket intentionally NOT granted — S3 returns AccessDenied (with
+//   's3:ListBucket' in the message) for missing keys; _s3Get handles this as 404.
 //
 // Note on naming: this Lambda predates the BGG integration and now also
 // serves /profiles. The historical name is preserved to avoid disturbing

@@ -1,9 +1,10 @@
 // Tests for s3Get() in lambda/bggProxy.mjs — AccessDenied catch (issue #125).
 //
-// When a user has no S3 object yet, AWS may return AccessDenied with a message
-// containing 's3:ListBucket' instead of NoSuchKey (IAM-driven 404 masking).
-// The root cause is fixed via unconditional s3:ListBucket in the IAM policy (issue #124).
-// This guard remains as defense-in-depth for propagation lag and future regressions.
+// When a user has no S3 object yet, AWS returns AccessDenied with a message
+// containing 's3:ListBucket' instead of NoSuchKey (IAM-driven 404 masking —
+// S3 hides key existence when the caller lacks s3:ListBucket).
+// The bggProxy role intentionally omits s3:ListBucket (issue #145, least privilege),
+// so this code guard is the primary mechanism for handling missing-object cases.
 //
 // _s3Get is exported for testing (consistent with the nudge.js _buildHtml pattern).
 
