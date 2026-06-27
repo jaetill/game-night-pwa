@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.1.4](https://github.com/jaetill/game-night-pwa/compare/v1.1.3...v1.1.4) (2026-06-27)
+
+
+### Bug Fixes
+
+* **ci:** allow fleet App bot in release-captain allowed_bots ([#264](https://github.com/jaetill/game-night-pwa/issues/264)) ([25bf1ab](https://github.com/jaetill/game-night-pwa/commit/25bf1aba73caac8ec913312196ff8911fcefaf45)), closes [#183](https://github.com/jaetill/game-night-pwa/issues/183)
+* **ci:** drop unused IMPLEMENTER_PAT forwarding from implementer caller (refs [#363](https://github.com/jaetill/game-night-pwa/issues/363)) ([#263](https://github.com/jaetill/game-night-pwa/issues/263)) ([4ca7e6e](https://github.com/jaetill/game-night-pwa/commit/4ca7e6ecee90327f2f2ef3767a70ed4a8c53f83c))
+* **ci:** pin claude-pr-review reusable workflow to SHA ([#218](https://github.com/jaetill/game-night-pwa/issues/218)) ([#229](https://github.com/jaetill/game-night-pwa/issues/229)) ([eef318a](https://github.com/jaetill/game-night-pwa/commit/eef318aa3c18ecf083ea3d43cd2a92344dfeb32a))
+* **ci:** prevent script injection in dependabot-auto-merge workflow ([#262](https://github.com/jaetill/game-night-pwa/issues/262)) ([30d20c1](https://github.com/jaetill/game-night-pwa/commit/30d20c1b973f9b32528caf24ab87cb64a1e3da92)), closes [#259](https://github.com/jaetill/game-night-pwa/issues/259)
+* **docs:** add -detailed-exitcode to tofu plan flag in CLAUDE.md ([#247](https://github.com/jaetill/game-night-pwa/issues/247)) ([6e07d59](https://github.com/jaetill/game-night-pwa/commit/6e07d591973a239f612b275ab60c76c931fb0754)), closes [#75](https://github.com/jaetill/game-night-pwa/issues/75)
+* **e2e:** guard JSON.parse against non-JSON API error responses ([#95](https://github.com/jaetill/game-night-pwa/issues/95)) ([#248](https://github.com/jaetill/game-night-pwa/issues/248)) ([51651f7](https://github.com/jaetill/game-night-pwa/commit/51651f75ae12cf6bf23f676e1de42b39e0c02ebb))
+* **feedback:** fail-closed on DynamoDB throttling errors in rate limiter ([#265](https://github.com/jaetill/game-night-pwa/issues/265)) ([84f1c36](https://github.com/jaetill/game-night-pwa/commit/84f1c365f0a7bd1b606281eff46599b727deff44)), closes [#253](https://github.com/jaetill/game-night-pwa/issues/253)
+* **feedback:** replace per-instance rate limiter with DynamoDB-backed distributed counter ([#252](https://github.com/jaetill/game-night-pwa/issues/252)) ([360b2d3](https://github.com/jaetill/game-night-pwa/commit/360b2d3417c9d2cc965c19307bb634c95db0532a))
+* **feedback:** stop writing caller source IP into issue body ([#63](https://github.com/jaetill/game-night-pwa/issues/63)) ([#257](https://github.com/jaetill/game-night-pwa/issues/257)) ([2f93bea](https://github.com/jaetill/game-night-pwa/commit/2f93beae4fc09150ff120fdb35d624dac0cd4ef0))
+* **iam:** remove s3:ListBucket from bggProxy role to prevent key enumeration ([#145](https://github.com/jaetill/game-night-pwa/issues/145)) ([#251](https://github.com/jaetill/game-night-pwa/issues/251)) ([04b9f3d](https://github.com/jaetill/game-night-pwa/commit/04b9f3d59db00583b888a721fe07c21a68725beb))
+* omit the IP from the issue body entirely. The IP was only context for abuse tracing; that need is already met server-side without exposing it -- the per-IP rate limiter still acts on the raw IP, and the honeypot path still logs the IP to CloudWatch. No public exposure is required, so a salted hash would add no value here. Rate-limiting and logging logic are unchanged. ([2f93bea](https://github.com/jaetill/game-night-pwa/commit/2f93beae4fc09150ff120fdb35d624dac0cd4ef0))
+* **security:** add GH_TOKEN=gho_* deny rule to close OAuth token gap ([#255](https://github.com/jaetill/game-night-pwa/issues/255)) ([f8c41b4](https://github.com/jaetill/game-night-pwa/commit/f8c41b4d76f7a390d423a80d7e332a50fb20e86a)), closes [#246](https://github.com/jaetill/game-night-pwa/issues/246)
+* **security:** add OpenSSH key + gho_ token deny patterns to settings ([#254](https://github.com/jaetill/game-night-pwa/issues/254)) ([25115b6](https://github.com/jaetill/game-night-pwa/commit/25115b62b7b3704bdfabffc4f158dea9b2bc4162)), closes [#155](https://github.com/jaetill/game-night-pwa/issues/155) [#246](https://github.com/jaetill/game-night-pwa/issues/246)
+* **security:** pin AdminAddUserToGroup to game-night-users via assertion + tests ([#250](https://github.com/jaetill/game-night-pwa/issues/250)) ([fedfcd3](https://github.com/jaetill/game-night-pwa/commit/fedfcd3c6ce40afcfa34968a3bab04f17ac53dc4)), closes [#165](https://github.com/jaetill/game-night-pwa/issues/165)
+* **security:** pin dependabot/fetch-metadata to commit SHA (closes [#260](https://github.com/jaetill/game-night-pwa/issues/260)) ([#261](https://github.com/jaetill/game-night-pwa/issues/261)) ([a6f0131](https://github.com/jaetill/game-night-pwa/commit/a6f0131471882591caf039aa8550d85109ef9eae))
+* **settings:** add Bash redirect deny patterns for credential paths ([#242](https://github.com/jaetill/game-night-pwa/issues/242)) ([ceeae94](https://github.com/jaetill/game-night-pwa/commit/ceeae944b4ae4948f415d8cb69fd0d81cc9fd28a))
+* **settings:** add GH_TOKEN deny patterns to close gh-CLI credential-exposure gap ([#245](https://github.com/jaetill/game-night-pwa/issues/245)) ([14ef20a](https://github.com/jaetill/game-night-pwa/commit/14ef20a7b2fc6b8a56760515f7337d8ea3c675df)), closes [#153](https://github.com/jaetill/game-night-pwa/issues/153)
+* **settings:** pin agentic-dev-environment plugin to commit SHA ([#249](https://github.com/jaetill/game-night-pwa/issues/249)) ([cda8018](https://github.com/jaetill/game-night-pwa/commit/cda8018b4b11a574c184063ce3f786459bf7e561))
+
 ## [1.1.3](https://github.com/jaetill/game-night-pwa/compare/v1.1.2...v1.1.3) (2026-06-20)
 
 
