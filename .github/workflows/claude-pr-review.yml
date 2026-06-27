@@ -13,6 +13,6 @@ permissions:
   id-token: write
 jobs:
   review:
-    uses: jaetill/agentic-dev-environment/.github/workflows/claude-pr-review.yml@20305ab7d1515b6c42c562863d21d61624341354 # main 2026-06-21
+    uses: jaetill/agentic-dev-environment/.github/workflows/claude-pr-review.yml@6859953981679181b26d578453fe1c64b5a9bd0c # main 2026-06-27
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
