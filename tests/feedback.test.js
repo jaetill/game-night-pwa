@@ -9,7 +9,30 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { _createHandler, _validate, _escapeMarkdown, _isSafePageUrl } = require('../lambda/feedback.js');
+const { _createHandler, _validate, _escapeMarkdown, _isSafePageUrl, _makeDynamoRateLimiter } = require('../lambda/feedback.js');
+
+// ── DynamoDB mock factory ──────────────────────────────────────────────────
+// Simulates DynamoDB UpdateItem with an in-process counter map keyed by the
+// same pk the real limiter uses.  Returned `getCount(pk)` lets tests inspect
+// the accumulated state without hitting a real table.
+function makeMockDynamo({ fail = false } = {}) {
+  const counts = new Map();
+  const client = {
+    send: vi.fn(async (cmd) => {
+      if (fail) throw new Error('DynamoDB unavailable');
+      const pk = cmd.input.Key.pk.S;
+      const next = (counts.get(pk) || 0) + 1;
+      counts.set(pk, next);
+      return {
+        Attributes: {
+          count: { N: String(next) },
+          ttl: { N: String(Math.floor(Date.now() / 1000) + 7200) },
+        },
+      };
+    }),
+  };
+  return { client, getCount: (pk) => counts.get(pk) || 0 };
+}
 
 // ── Mock factories ─────────────────────────────────────────────────────────
 function makeMockSm({ secretValue = { GITHUB_TOKEN: 'ghp_fake' }, fail = false } = {}) {
@@ -232,6 +255,22 @@ describe('lambda/feedback.js — handler', () => {
     expect(ok.captured.length).toBe(1);
     expect(ok.captured[0].body).not.toContain('tester@example.com');
     expect(ok.captured[0].body).not.toContain('Email:');
+  });
+
+  it('caller source IP is NOT included in the public GitHub issue body', async () => {
+    // The raw IP is PII and the issue may live in a public repo (PR #257).
+    // It is still used server-side for rate limiting and CloudWatch logging,
+    // just never written into the triage-visible issue body.
+    const ok = makeMockOctokit();
+    const handler = _createHandler({ smClient: makeMockSm(), Octokit: ok.Octokit });
+    const res = await handler(
+      makeEvent('POST', VALID_BODY, { ip: '203.0.113.77' }),
+      { awsRequestId: 'rid-no-ip' },
+    );
+    expect(res.statusCode).toBe(201);
+    expect(ok.captured.length).toBe(1);
+    expect(ok.captured[0].body).not.toContain('203.0.113.77');
+    expect(ok.captured[0].body).not.toContain('Source IP:');
   });
 
   it('long descriptions are truncated in the issue title', async () => {
@@ -467,5 +506,75 @@ describe('lambda/feedback.js — _validate helper', () => {
 
   it('rejects oversized page_url', () => {
     expect(_validate({ ...VALID_BODY, page_url: 'a'.repeat(3000) })).toMatch(/page_url/);
+  });
+});
+
+describe('lambda/feedback.js — DynamoDB-backed rate limiter', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('blocks the 11th request from the same IP via DynamoDB counter', async () => {
+    const { client: dynamo } = makeMockDynamo();
+    const handler = _createHandler({
+      smClient: makeMockSm(),
+      Octokit: makeMockOctokit().Octokit,
+      dynamoClient: dynamo,
+    });
+    const ip = '5.6.7.8';
+    for (let i = 0; i < 10; i++) {
+      const res = await handler(makeEvent('POST', VALID_BODY, { ip }), { awsRequestId: `rid-drl-${i}` });
+      expect(res.statusCode).toBe(201);
+    }
+    const eleventh = await handler(makeEvent('POST', VALID_BODY, { ip }), { awsRequestId: 'rid-drl-11' });
+    expect(eleventh.statusCode).toBe(429);
+    expect(JSON.parse(eleventh.body).error).toBe('rate_limited');
+    expect(eleventh.headers['Retry-After']).toBeDefined();
+  });
+
+  it('different IPs use separate DynamoDB counters', async () => {
+    const { client: dynamo } = makeMockDynamo();
+    const handler = _createHandler({
+      smClient: makeMockSm(),
+      Octokit: makeMockOctokit().Octokit,
+      dynamoClient: dynamo,
+    });
+    for (let i = 0; i < 10; i++) {
+      await handler(makeEvent('POST', VALID_BODY, { ip: '10.0.0.1' }), { awsRequestId: `rid-a-${i}` });
+    }
+    const otherIp = await handler(makeEvent('POST', VALID_BODY, { ip: '10.0.0.2' }), { awsRequestId: 'rid-b-1' });
+    expect(otherIp.statusCode).toBe(201);
+  });
+
+  it('falls back to in-memory limiter when DynamoDB throws', async () => {
+    const { client: dynamo } = makeMockDynamo({ fail: true });
+    const handler = _createHandler({
+      smClient: makeMockSm(),
+      Octokit: makeMockOctokit().Octokit,
+      dynamoClient: dynamo,
+    });
+    // In-memory fallback should allow the request through
+    const res = await handler(makeEvent('POST', VALID_BODY), { awsRequestId: 'rid-ddb-fail' });
+    expect(res.statusCode).toBe(201);
+  });
+
+  it('DynamoDB client receives UpdateItem with ADD expression and TTL', async () => {
+    const { client: dynamo } = makeMockDynamo();
+    const handler = _createHandler({
+      smClient: makeMockSm(),
+      Octokit: makeMockOctokit().Octokit,
+      dynamoClient: dynamo,
+    });
+    await handler(makeEvent('POST', VALID_BODY, { ip: '3.3.3.3' }), { awsRequestId: 'rid-ddb-inspect' });
+    expect(dynamo.send).toHaveBeenCalledOnce();
+    const cmd = dynamo.send.mock.calls[0][0];
+    expect(cmd.input.UpdateExpression).toContain('ADD');
+    expect(cmd.input.UpdateExpression).toContain('if_not_exists');
+    expect(cmd.input.ExpressionAttributeValues[':ttl']).toBeDefined();
+    expect(cmd.input.Key.pk.S).toMatch(/^rl#3\.3\.3\.3#/);
   });
 });
