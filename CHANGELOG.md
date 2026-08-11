@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0](https://github.com/jaetill/game-night-pwa/compare/v1.1.4...v1.2.0) (2026-08-11)
+
+
+### Features
+
+* web push RSVP notifications, one-click email RSVP, calendar invites ([#328](https://github.com/jaetill/game-night-pwa/issues/328)) ([a0f7ba6](https://github.com/jaetill/game-night-pwa/commit/a0f7ba68abf4d38a6d451177abba240c5c1aa588))
+
+
+### Bug Fixes
+
+* overhaul sync, auth, invite, and feedback flows ([#323](https://github.com/jaetill/game-night-pwa/issues/323)) ([332fd22](https://github.com/jaetill/game-night-pwa/commit/332fd2240f5f9fc62d81abc9e3635ca590d5e5c1))
+
 ## [1.1.4](https://github.com/jaetill/game-night-pwa/compare/v1.1.3...v1.1.4) (2026-06-27)
 
 
