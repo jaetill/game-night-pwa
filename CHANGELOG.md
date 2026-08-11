@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/jaetill/game-night-pwa/compare/v1.2.0...v1.2.1) (2026-08-11)
+
+
+### Bug Fixes
+
+* request notification permission before awaiting service worker (iOS transient activation) ([#329](https://github.com/jaetill/game-night-pwa/issues/329)) ([7270386](https://github.com/jaetill/game-night-pwa/commit/7270386d4d2e690f79b447bc180ec95ed13590e0))
+
 ## [1.2.0](https://github.com/jaetill/game-night-pwa/compare/v1.1.4...v1.2.0) (2026-08-11)
 
 
