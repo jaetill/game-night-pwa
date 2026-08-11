@@ -9,7 +9,12 @@
 //
 // Imported once from app.js after auth bootstraps.
 
-const FEEDBACK_ENDPOINT = `${import.meta.env.VITE_API_URL}/feedback`;
+import { API_BASE } from './config.js';
+
+// Previously built from VITE_API_URL, whose configured value included the
+// /get-token route path — feedback posts went to /get-token/feedback and
+// always failed. Now shares the same base URL as every other API call.
+const FEEDBACK_ENDPOINT = `${API_BASE}/feedback`;
 
 // ── Public bootstrapping ────────────────────────────────────────────────────
 export function initFeedbackWidget() {

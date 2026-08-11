@@ -1,9 +1,10 @@
 import { syncAndRender } from '../utils/index.js';
 import { saveGameNights } from '../data/index.js';
+import { tombstoneNight } from '../data/storage.js';
 import { getCurrentUser } from '../auth/userStore.js';
 import { btn, input } from '../ui/elements.js';
 import { toastSuccess, toastError, toastInfo } from '../ui/toast.js';
-import { DEBUG_MODE } from '../config.js';
+import { DEBUG_MODE, API_BASE } from '../config.js';
 import { injectPreviewData, clearPreviewData, hasPreviewData } from '../utils/previewData.js';
 import { getDisplayName } from '../utils/userDirectory.js';
 import { authFetch } from '../utils/authFetch.js';
@@ -13,7 +14,29 @@ import { renderGameNights } from './renderGameNights.js';
 import { renderGameNightForm } from './renderGameNightForm.js';
 import { openGameSelectionModal } from './gameSelectionModal.js';
 
-const API_BASE = 'https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod';
+/**
+ * Fire-and-forget invite email via POST /invite (nudgeNonResponders Lambda).
+ * `value` is either an email address (Invite box, Saved groups) or a Cognito
+ * userId (Recent guests checkboxes — the Lambda resolves the email itself).
+ * Failures are logged, not surfaced — the person is already on the invited
+ * list; the email is best-effort.
+ */
+function sendInviteEmail(nightId, value) {
+  const payload = value.includes('@')
+    ? { nightId, action: 'invite', email: value }
+    : { nightId, action: 'invite', userId: value };
+  return authFetch(`${API_BASE}/invite`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).then(async res => {
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.warn('Invite email failed:', value, err.error || res.status);
+    }
+    return null;
+  }).catch(e => console.warn('Invite email error:', value, e.message));
+}
 
 export function renderHostGameControls(night, nights) {
   const container = document.createElement('div');
@@ -69,16 +92,7 @@ export function renderHostGameControls(night, nights) {
       syncAndRender(nights);
       toastSuccess(`${email} invited!`);
       // Send invite email (fire-and-forget — don't block on failure)
-      authFetch(`${API_BASE}/invite`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nightId: night.id, action: 'invite', email }),
-      }).then(async res => {
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          console.warn('Invite email failed:', err.error || res.status);
-        }
-      }).catch(e => console.warn('Invite email error:', e.message));
+      sendInviteEmail(night.id, email);
     } else {
       toastInfo(`${email} is already invited.`);
       inviteInput.value = '';
@@ -183,7 +197,10 @@ export function renderHostGameControls(night, nights) {
         if (added.length > 0) {
           night.lastModified = Date.now();
           syncAndRender(nights);
-          toastSuccess(`${added.length} from "${group.name}" invited!`);
+          toastSuccess(`${added.length} from "${group.name}" invited — sending emails…`);
+          // Previously this only updated the invited list; no emails went
+          // out. Each added member now gets the invite email too.
+          added.forEach(e => sendInviteEmail(night.id, e));
         }
       };
 
@@ -294,7 +311,10 @@ export function renderHostGameControls(night, nights) {
       if (added.length > 0) {
         night.lastModified = Date.now();
         syncAndRender(nights);
-        toastSuccess(`${added.length} guest${added.length > 1 ? 's' : ''} invited!`);
+        toastSuccess(`${added.length} guest${added.length > 1 ? 's' : ''} invited — sending emails…`);
+        // Previously this only updated the invited list; no emails went out.
+        // Recent guests are stored as userIds — the Lambda resolves the email.
+        added.forEach(v => sendInviteEmail(night.id, v));
       }
     };
 
@@ -353,9 +373,13 @@ export function renderHostActions(night, nights) {
     if (!confirm('Cancel this game night? This cannot be undone.')) return;
     cancelBtn.disabled = true;
     try {
-      const updated = nights.filter(n => n.id !== night.id);
-      syncAndRender(updated);
-      await saveGameNights(updated);
+      // Tombstone instead of removing — other clients still have this night
+      // in localStorage, and a tombstone is the only way their merge learns
+      // about the deletion instead of resurrecting the night.
+      const idx = nights.findIndex(n => n.id === night.id);
+      if (idx !== -1) nights[idx] = tombstoneNight(night);
+      await saveGameNights(nights);
+      renderGameNights(nights, getCurrentUser());
       toastInfo('Event cancelled.');
     } catch (err) {
       toastError('Could not cancel event.');
@@ -411,7 +435,9 @@ export function renderHostActions(night, nights) {
         injectPreviewData(night);
         toastSuccess('Preview data injected — not saved to cloud.');
       }
-      syncAndRender(nights);
+      // Render only — the old syncAndRender call uploaded the fake guests to
+      // the cloud, contradicting the toast.
+      renderGameNights(nights, getCurrentUser());
     };
     container.appendChild(previewBtn);
   }

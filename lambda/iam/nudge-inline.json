@@ -22,7 +22,8 @@
       "Action": [
         "cognito-idp:ListUsers",
         "cognito-idp:AdminCreateUser",
-        "cognito-idp:AdminAddUserToGroup"
+        "cognito-idp:AdminAddUserToGroup",
+        "cognito-idp:AdminSetUserPassword"
       ],
       "Resource": "arn:aws:cognito-idp:us-east-2:214599503944:userpool/us-east-2_xneeJzaDJ"
     }

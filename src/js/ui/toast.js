@@ -7,10 +7,18 @@ export function toast(message, type = 'info') {
 
   const el = document.createElement('div');
   el.className = `toast toast-${type} pointer-events-auto`;
-  el.innerHTML = `
-    <span class="font-bold text-base leading-none mt-0.5">${ICONS[type]}</span>
-    <span>${message}</span>
-  `;
+
+  // textContent, not innerHTML — messages interpolate user-typed strings
+  // (e.g. invite email addresses) and must never be parsed as HTML.
+  const icon = document.createElement('span');
+  icon.className = 'font-bold text-base leading-none mt-0.5';
+  icon.textContent = ICONS[type];
+
+  const text = document.createElement('span');
+  text.textContent = message;
+
+  el.appendChild(icon);
+  el.appendChild(text);
 
   container.appendChild(el);
   setTimeout(() => {

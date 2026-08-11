@@ -117,7 +117,7 @@ export function renderSuggestions(night, nights) {
     const list = document.createElement('ul');
     list.className = 'mt-3 space-y-2';
 
-    bringing.forEach((s, i) => {
+    bringing.forEach(s => {
       const li = document.createElement('li');
       li.className = 'text-sm text-gray-700 flex items-center gap-2';
 
@@ -150,7 +150,11 @@ export function renderSuggestions(night, nights) {
         delBtn.className += ' text-xs py-0 px-1.5 ml-auto shrink-0';
         delBtn.setAttribute('aria-label', `Remove: ${s.title}`);
         delBtn.onclick = () => {
-          night.suggestions.splice(i, 1);
+          // Index into the ORIGINAL array — `bringing` is a filtered copy, so
+          // a positional index would delete the wrong entry whenever legacy
+          // non-object suggestions exist.
+          const idx = night.suggestions.indexOf(s);
+          if (idx !== -1) night.suggestions.splice(idx, 1);
           night.lastModified = Date.now();
           syncAndRender(nights);
         };

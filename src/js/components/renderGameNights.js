@@ -16,7 +16,12 @@ export function renderGameNights(nights, currentUser) {
   if (!container) return;
   container.innerHTML = '';
 
-  if (!nights.length) {
+  // Tombstones (deleted nights) stay in the `nights` array — which child
+  // components receive and save, so deletions propagate on merge — but they
+  // are never rendered.
+  const visible = nights.filter(n => !n.deleted);
+
+  if (!visible.length) {
     container.innerHTML = `
       <div class="text-center py-12 text-gray-400">
         <div class="text-4xl mb-2">🎲</div>
@@ -26,15 +31,20 @@ export function renderGameNights(nights, currentUser) {
     return;
   }
 
+  // Parse date+time as LOCAL time. `new Date('2026-08-07')` (date-only) parses
+  // as UTC midnight, which in US timezones is the evening BEFORE — that bug
+  // moved events into "Past nights" on the day they happened. Appending an
+  // explicit time forces local-time parsing; missing/empty time falls back to
+  // midnight so the Date is always valid.
+  const nightStart = n => new Date(`${n.date}T${n.time || '00:00'}`);
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const sorted = [...nights].sort(
-    (a, b) => new Date(`${a.date}T${a.time}`) - new Date(`${b.date}T${b.time}`)
-  );
+  const sorted = [...visible].sort((a, b) => nightStart(a) - nightStart(b));
 
-  const upcoming = sorted.filter(n => new Date(n.date) >= today);
-  const past     = sorted.filter(n => new Date(n.date) <  today);
+  const upcoming = sorted.filter(n => nightStart(n) >= today);
+  const past     = sorted.filter(n => nightStart(n) <  today);
 
   function renderNightCard(night) {
     const isExpanded = expandedNightIds.has(night.id);

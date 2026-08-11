@@ -121,7 +121,18 @@ export const handler = Sentry.wrapHandler(async (event, context) => {
       const clean = (v) => typeof v === 'string' ? v.replace(/[<>]/g, '') : v;
       const { displayName, bggUsername, contactEmail, phone, address } = profile;
       try {
+        // Read-merge-write: profiles/{userId}.json is shared with the groups
+        // Lambda (which stores the `groups` key in the same object). Writing
+        // only the whitelisted fields used to DELETE the caller's saved
+        // groups every time they saved their profile.
+        let existing = {};
+        try {
+          existing = JSON.parse(await s3Get(`profiles/${callerId}.json`, '{}')) || {};
+        } catch {
+          existing = {}; // corrupt/missing — don't block the profile save
+        }
         await s3Put(`profiles/${callerId}.json`, {
+          ...existing,
           displayName:  clean(displayName),
           bggUsername:  clean(bggUsername),
           contactEmail: clean(contactEmail),
