@@ -86,7 +86,7 @@ Lambda (JWKS via `aws-jwt-verify`, API keys in a module-scoped Map).
 | POST | `/nudge` | nudgeNonResponders | browser | Send reminders to non-responders |
 | POST | `/invite` | nudgeNonResponders | browser, MCP | Send invite email to a new guest |
 | GET | `/get-token` | GeneratePresignedGetUrl | browser, MCP | Presigned URL — only `gameNights.json` or `collections/{caller}.json` |
-| POST | `/upload-token` | GeneratePresignedPost | browser | Validate + write `gameNights.json` (no longer issues a presigned URL despite the name) |
+| POST | `/upload-token` | GeneratePresignedPost | browser | Validate + write `gameNights.json` (no longer issues a presigned URL despite the name). Deletions are tombstones (`{id, hostUserId, deleted:true, lastModified}`); writes are ETag-conditional (If-Match) with one retry; unknown nights hosted by others are silently dropped (stale-client resurrection attempts) |
 | GET, POST | `/bgg` | bggProxy | browser | Caller's BGG collection (userId in body must match caller) |
 | GET, POST | `/profiles` | bggProxy | browser | Caller's profile (whitelisted fields only) |
 | POST | `/create-event` | createEvent | MCP | Create a new game night event |
@@ -155,7 +155,7 @@ ui/toast.js                       — toast notifications
 ## Deployment
 - `deploy.yml` has three jobs: **test → build → deploy**
 - Tests run via `npm test` (Vitest) before any deploy
-- Frontend built with `VITE_API_URL` and `VITE_ADMIN_NAMES` from GitHub secrets
+- Frontend build needs no API env vars — the API base URL is hardcoded in `src/js/config.js` (`API_BASE`). The old `VITE_API_URL` secret included a route path and broke the feedback widget; `VITE_ADMIN_NAMES` was never referenced by code. Both removed.
 - Deployed to GitHub Pages (not S3) — no CloudFront, no invalidation step
 - Lambdas are **not deployed by this workflow** — deployed manually or separately
 
@@ -292,8 +292,9 @@ Claude Code picks it up automatically on startup.
 - **Managed Login v2 requires per-client branding** (`create-managed-login-branding --use-cognito-provided-values`). Without it the Hosted UI shows "Login pages unavailable. Please contact an administrator." This client's branding ID is `26736f11-feed-4a3f-994d-643e07b2e93d`.
 - **Group enforcement happens at the authorizer**, not in each Lambda. The dual-mode `apiKeyAuthorizer` rejects any Cognito JWT that lacks `cognito:groups: game-night-users`. The frontend's `app.js` redirect is just a UX nicety — the real gate is the API Gateway authorizer.
 - **Access-token user-pool ops** (e.g. UpdateUserAttributes for the deferred profile sync) require the `aws.cognito.signin.user.admin` scope. Already granted in this client's allowed scopes.
-- `VITE_ADMIN_NAMES` controls who sees host controls — set in GitHub secrets.
+- Host controls are per-night (`night.hostUserId === currentUser.userId`); any member can create a night (they become its host). There is no admin allowlist — the old `VITE_ADMIN_NAMES` var was never wired to anything and has been removed.
 - BGG XML API has CORS restrictions — bggProxy Lambda exists to work around this.
+- **Sync model (2026-08):** deletions are tombstones, `loadGameNights()` no longer pushes on load (saves happen only on actual mutations), local-only nights hosted by others are dropped as stale ("zombies"), and the upload Lambda uses S3 conditional writes. Auth tokens auto-refresh in `authFetch` before every API call. `profiles/{userId}.json` is shared between bggProxy (`/profiles`) and the groups Lambda — both must read-merge-write, never blind-overwrite.
 
 ---
 

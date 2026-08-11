@@ -50,6 +50,9 @@ async function readProfile(userId) {
     return JSON.parse(text);
   } catch (e) {
     if (e.name === 'NoSuchKey') return {};
+    // Without s3:ListBucket, S3 masks a missing key as AccessDenied — treat it
+    // as "no profile yet" (same guard as bggProxy/searchGames, issue #81).
+    if (e.name === 'AccessDenied' && e.message?.includes('s3:ListBucket')) return {};
     throw e;
   }
 }

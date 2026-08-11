@@ -1,58 +1,22 @@
+// Utility functions for game-night player signups. `night.selectedGames` is
+// an OBJECT MAP keyed by gameId: { [gameId]: { maxPlayers, title, thumbnail,
+// signedUpPlayers[], interestedPlayers[] } }. (Legacy array-shaped helpers —
+// createGameNight/addSelectedGame/removeSelectedGame — were dead code written
+// against a data shape the app no longer uses, and have been removed. Games
+// are added/removed by the host controls in renderGameNightHostControls.js
+// and renderSelectedGames.js, which operate on the map directly.)
+
 import { getCurrentUser } from '../auth/userStore.js';
-
-
-export function createGameNight({ date, time, snacks }) {
-  return {
-    id: Date.now().toString(),
-    date,
-    time,
-    snacks,
-    description: '',        // Optional
-    location: '',           // Required
-    invited: [],
-    rsvps: [],
-    declined: [],
-    suggestions: [],
-    selectedGames: [], // now an map of { gameId: maxPlayers, signedUpPlayers }
-    hostUserId: getCurrentUser().userId,
-    lastModified: Date.now()
-  };
-}
-
-export function addSelectedGame(night, gameId, maxPlayers = 4) {
-  if (!night.selectedGames.some(g => g.gameId === gameId)) {
-    night.selectedGames.push({
-      gameId,
-      maxPlayers,
-      signedUpPlayers: []
-    });
-    night.lastModified = Date.now();
-  }
-}
-
-export function removeSelectedGame(night, gameId) {
-  night.selectedGames = night.selectedGames.filter(g => g.gameId !== gameId);
-  night.lastModified = Date.now();
-}
 
 export function joinGame(night, gameId) {
   const user = getCurrentUser();
-  if (!user) {
-    alert('No user session found.');
-    return false;
-  }
+  if (!user) return false;
 
   const isRSVPd = night.rsvps?.some(r => r.userId === user.userId);
-  if (!isRSVPd) {
-    alert('Please RSVP before signing up for games.');
-    return false;
-  }
+  if (!isRSVPd) return false;
 
- const game = night.selectedGames[gameId];
-  if (!game) {
-    console.warn('Game not found in this night.');
-    return false;
-  }
+  const game = night.selectedGames[gameId];
+  if (!game) return false;
 
   const alreadySignedUp = game.signedUpPlayers?.some(p => p.userId === user.userId);
   if (alreadySignedUp) return false;
@@ -62,8 +26,6 @@ export function joinGame(night, gameId) {
   night.lastModified = Date.now();
   return true;
 }
-// This module provides utility functions for managing game nights and player signups
-// It includes functions to create game nights, add/remove games, and manage player signups
 
 export function withdrawFromAllGames(night, user) {
   if (!night.selectedGames || typeof night.selectedGames !== 'object') return;
@@ -73,11 +35,6 @@ export function withdrawFromAllGames(night, user) {
     withdrawInterest(night, gameId, user);
   });
 }
-
-
-// This module provides utility functions for managing game nights and player signups
-// It includes functions to create game nights, add/remove games, and manage player signups
-
 
 export function isGameFull(night, gameId) {
   const game = night.selectedGames[gameId];
@@ -89,7 +46,7 @@ export function withdrawFromGame(night, gameId, user) {
   const game = night.selectedGames[gameId];
   if (!game) return;
 
-  game.signedUpPlayers = game.signedUpPlayers.filter(
+  game.signedUpPlayers = (game.signedUpPlayers || []).filter(
     p => p.userId !== user.userId
   );
   night.lastModified = Date.now();
@@ -122,5 +79,3 @@ export function withdrawInterest(night, gameId, user) {
   );
   night.lastModified = Date.now();
 }
-
-

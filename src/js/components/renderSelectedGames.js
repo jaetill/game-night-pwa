@@ -1,5 +1,5 @@
 import { ownedGames, saveGameNights } from '../data/index.js';
-import { joinGame, withdrawFromGame, isGameFull } from '../utils/index.js';
+import { joinGame, withdrawFromGame, isGameFull, expressInterest, withdrawInterest } from '../utils/index.js';
 import { isHost } from '../auth/permissions.js';
 import { getDisplayName } from '../utils/userDirectory.js';
 import { btn } from '../ui/elements.js';
@@ -182,6 +182,28 @@ export function renderSelectedGames(night, currentUser, nights) {
         fullBtn.disabled = true;
         fullBtn.className += ' text-xs opacity-50';
         btnRow.appendChild(fullBtn);
+      }
+
+      // Interest toggle — anyone with an RSVP who isn't signed up for this
+      // game can flag interest (e.g. "I'd play this if a seat opens").
+      if (!isSignedUp) {
+        const isInterested = interestedPlayers.some(p => p.userId === currentUser.userId);
+        const interestBtn  = btn(isInterested ? '★ Interested' : '☆ Interested', 'ghost');
+        interestBtn.className += ' text-xs';
+        interestBtn.title = isInterested ? 'Remove your interest' : 'Mark yourself as interested';
+        interestBtn.onclick = async () => {
+          interestBtn.disabled = true;
+          try {
+            if (isInterested) withdrawInterest(night, gameId, currentUser);
+            else              expressInterest(night, gameId);
+            await saveGameNights(nights);
+            renderGameNights(nights, currentUser);
+          } catch {
+            toastError('Could not update. Try again.');
+            interestBtn.disabled = false;
+          }
+        };
+        btnRow.appendChild(interestBtn);
       }
 
       if (btnRow.children.length) info.appendChild(btnRow);

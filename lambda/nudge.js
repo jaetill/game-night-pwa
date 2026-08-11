@@ -30,6 +30,7 @@ const {
   ListUsersCommand,
   AdminCreateUserCommand,
   AdminAddUserToGroupCommand,
+  AdminSetUserPasswordCommand,
 } = require('@aws-sdk/client-cognito-identity-provider');
 const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
 const https  = require('https');
@@ -108,7 +109,7 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
   try { body = JSON.parse(event.body || '{}'); }
   catch { return respond(400, { error: 'Invalid JSON' }, CORS); }
 
-  const { nightId, action, email: inviteEmail } = body;
+  const { nightId, action, email: inviteEmail, userId: inviteUserId } = body;
   if (!nightId) return respond(400, { error: 'nightId required' }, CORS);
 
   // ── Load game nights from S3 ──
@@ -129,12 +130,72 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
   // ── Verify caller is the host ──
   if (night.hostUserId !== callerId) return respond(403, { error: 'Only the host can do this' }, CORS);
 
-  // ── Invite action: provision Cognito user + send invite email ─────────────
+  // ── Invite action: provision Cognito user (email) or resolve an existing
+  //    member (userId), then send the invite email ───────────────────────────
+  //
+  // Two entry shapes:
+  //   { action:'invite', email }  — invite by email address; provisions a
+  //                                 Cognito account if none exists (original path)
+  //   { action:'invite', userId } — invite an EXISTING member by Cognito
+  //                                 username. Used by the "Recent guests"
+  //                                 checkboxes, which store userIds, not
+  //                                 emails. The email is resolved via
+  //                                 AdminGetUser; no provisioning happens.
   if (action === 'invite') {
-    if (!isValidInviteEmail(inviteEmail)) {
-      return respond(400, { error: 'Valid email required for invite' }, CORS);
+    const byUserId = typeof inviteUserId === 'string' && inviteUserId.length > 0 && !inviteUserId.includes('@');
+
+    let targetEmail;      // where the Postmark invite goes
+    let inviteKey;        // what goes in night.invited[] (email or userId)
+    let inviteeName;      // greeting name
+    let provisioned = { result: 'existing', tempPassword: null };
+
+    if (byUserId) {
+      let u;
+      try {
+        u = await cognito.send(new AdminGetUserCommand({ UserPoolId: USER_POOL_ID, Username: inviteUserId }));
+      } catch {
+        return respond(404, { error: 'No such user' }, CORS);
+      }
+      const emailAttr = u.UserAttributes?.find(a => a.Name === 'email');
+      if (!emailAttr?.Value) {
+        return respond(400, { error: 'User has no email on file' }, CORS);
+      }
+      const nameAttr = u.UserAttributes?.find(a => a.Name === 'name');
+      targetEmail = emailAttr.Value;
+      inviteKey   = inviteUserId;
+      inviteeName = nameAttr?.Value || targetEmail.split('@')[0];
+      // Idempotent; keeps a meal-planner-only user able to RSVP here. Same
+      // escalation guard as ensureGameNightUser (issue #165).
+      if (REQUIRED_GROUP !== 'game-night-users') {
+        throw new Error(`GroupName must be 'game-night-users'; got '${REQUIRED_GROUP}'`);
+      }
+      try {
+        await cognito.send(new AdminAddUserToGroupCommand({
+          UserPoolId: USER_POOL_ID,
+          Username:   inviteUserId,
+          GroupName:  REQUIRED_GROUP,
+        }));
+      } catch (e) {
+        logger.warn('cognito.group_add_failed', { request_id: context?.awsRequestId, error: e.message });
+      }
+      // Never-signed-in member: refresh their (possibly expired) temp
+      // password so the invite carries working credentials. Non-fatal —
+      // worst case the email goes out without a credentials block.
+      if (u.UserStatus === 'FORCE_CHANGE_PASSWORD') {
+        try {
+          provisioned = await resetTempPassword(inviteUserId);
+        } catch (e) {
+          logger.warn('cognito.temp_password_reset_failed', { request_id: context?.awsRequestId, error: e.message });
+        }
+      }
+    } else {
+      if (!isValidInviteEmail(inviteEmail)) {
+        return respond(400, { error: 'Valid email or userId required for invite' }, CORS);
+      }
+      targetEmail = inviteEmail;
+      inviteKey   = inviteEmail;
+      inviteeName = inviteEmail.split('@')[0];
     }
-    const inviteEmailLc = inviteEmail.toLowerCase();
 
     // Get host display name
     let hostName = callerId;
@@ -144,16 +205,16 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
       if (attr?.Value) hostName = attr.Value;
     } catch { /* non-fatal */ }
 
-    // Add email to night.invited[] so renderRSVP's gate
-    // (`night.invited.includes(email)`) recognises the new user. Idempotent —
-    // skipped if already present. The frontend host-controls flow already
-    // updates invited[] client-side, but MCP's invite_to_event tool doesn't,
-    // and /invite is the canonical "this person is invited" event regardless
-    // of caller.
+    // Add the invite key to night.invited[] so renderRSVP's gate recognises
+    // the user. Idempotent — skipped if already present. The frontend
+    // host-controls flow already updates invited[] client-side, but MCP's
+    // invite_to_event tool doesn't, and /invite is the canonical "this person
+    // is invited" event regardless of caller.
+    const inviteKeyLc = inviteKey.toLowerCase();
     let inviteListChanged = false;
-    if (!night.invited?.some(e => typeof e === 'string' && e.toLowerCase() === inviteEmailLc)) {
+    if (!night.invited?.some(e => typeof e === 'string' && e.toLowerCase() === inviteKeyLc)) {
       night.invited = Array.isArray(night.invited) ? night.invited : [];
-      night.invited.push(inviteEmail);
+      night.invited.push(inviteKey);
       night.lastModified = Date.now();
       inviteListChanged = true;
       try {
@@ -170,20 +231,22 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
       }
     }
 
-    // Provision Cognito account + group membership.
+    // Provision Cognito account + group membership (email path only —
+    // userId invites are existing members by definition).
     // If the user already exists, AdminCreateUser is skipped — but we still
     // ensure they're in `game-night-users` so a meal-planner-only user can
     // RSVP to a game night they're invited to.
-    let provisioned = { result: 'existing', tempPassword: null };
-    try {
-      provisioned = await ensureGameNightUser(inviteEmail);
-    } catch (e) {
-      logger.error('cognito.provisioning_failed', { request_id: context?.awsRequestId, error: e.message });
-      Sentry.captureException(e);
-      // Fall through — still send the Postmark invite. If provisioning failed
-      // for a transient reason, the host can retry; if the email was malformed
-      // for Cognito's standards, the friend will see a Sign-In page where they
-      // can request access.
+    if (!byUserId) {
+      try {
+        provisioned = await ensureGameNightUser(inviteEmail);
+      } catch (e) {
+        logger.error('cognito.provisioning_failed', { request_id: context?.awsRequestId, error: e.message });
+        Sentry.captureException(e);
+        // Fall through — still send the Postmark invite. If provisioning failed
+        // for a transient reason, the host can retry; if the email was malformed
+        // for Cognito's standards, the friend will see a Sign-In page where they
+        // can request access.
+      }
     }
 
     const dateStr = formatDate(night.date);
@@ -192,22 +255,24 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
       timeStr:      night.time     || '',
       location:     night.location || '',
       description:  night.description || '',
-      isNewAccount: provisioned.result === 'created',
-      signInEmail:  inviteEmail.toLowerCase(),
+      // 'reset' (re-issued temp password) shows the credentials block too —
+      // the recipient has never signed in and needs working credentials.
+      isNewAccount: provisioned.result === 'created' || provisioned.result === 'reset',
+      signInEmail:  targetEmail.toLowerCase(),
       tempPassword: provisioned.tempPassword,
     };
-    const name = inviteEmail.split('@')[0];
+    const name = inviteeName;
 
     try {
       await (_postmarkFn ?? postmark)(POSTMARK_KEY, {
-        To:            inviteEmail,
+        To:            targetEmail,
         From:          FROM_EMAIL,
         Subject:       `You're invited to game night${dateStr ? ` on ${dateStr}` : ''}!`,
         TextBody:      buildInviteText({ ...ctx, name }),
         HtmlBody:      buildInviteHtml({ ...ctx, name }),
         MessageStream: 'outbound',
       });
-      logger.info('invite.sent', { request_id: context?.awsRequestId, provisioned: provisioned.result });
+      logger.info('invite.sent', { request_id: context?.awsRequestId, provisioned: provisioned.result, by_user_id: byUserId });
       return respond(200, { sent: 1, provisioned: provisioned.result, inviteListChanged }, CORS);
     } catch (e) {
       logger.error('postmark.invite_failed', { request_id: context?.awsRequestId, error: e.message });
@@ -326,11 +391,20 @@ async function ensureGameNightUser(email) {
   }));
 
   if (list.Users && list.Users.length > 0) {
+    const existing = list.Users[0];
     await cognito.send(new AdminAddUserToGroupCommand({
       UserPoolId: USER_POOL_ID,
-      Username:   list.Users[0].Username,
+      Username:   existing.Username,
       GroupName:  REQUIRED_GROUP,
     }));
+    // Provisioned-but-never-signed-in users hold a temp password that expires
+    // after 7 days. Without this reset, a re-invite sent a credentials-free
+    // email to someone whose credentials no longer worked — a dead end only
+    // fixable in the Cognito console. Issue a fresh temp password so the
+    // invite email carries working credentials again.
+    if (existing.UserStatus === 'FORCE_CHANGE_PASSWORD') {
+      return await resetTempPassword(existing.Username);
+    }
     return { result: 'existing', tempPassword: null };
   }
 
@@ -353,6 +427,23 @@ async function ensureGameNightUser(email) {
   }));
 
   return { result: 'created', tempPassword };
+}
+
+/**
+ * Re-issue a temporary password for a user stuck in FORCE_CHANGE_PASSWORD
+ * (their original temp password may have expired). Permanent:false keeps the
+ * user in FORCE_CHANGE_PASSWORD so first sign-in still prompts for a new
+ * password. Requires cognito-idp:AdminSetUserPassword on the pool.
+ */
+async function resetTempPassword(username) {
+  const tempPassword = generateTempPassword();
+  await cognito.send(new AdminSetUserPasswordCommand({
+    UserPoolId: USER_POOL_ID,
+    Username:   username,
+    Password:   tempPassword,
+    Permanent:  false,
+  }));
+  return { result: 'reset', tempPassword };
 }
 
 /**

@@ -1,12 +1,22 @@
 import { getCurrentUser } from '../auth/userStore.js';
 import { authFetch } from '../utils/authFetch.js';
-
-const API_BASE = 'https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod';
+import { API_BASE } from '../config.js';
 
 /**
  * Ensures a game night object has full structure and valid fields.
+ * Tombstones (deleted nights) pass through untouched — they intentionally
+ * carry only { id, hostUserId, deleted, lastModified }.
  */
 export function sanitizeNight(night) {
+  if (night.deleted) {
+    return {
+      id:           night.id,
+      hostUserId:   night.hostUserId,
+      deleted:      true,
+      lastModified: typeof night.lastModified === 'number' ? night.lastModified : Date.now(),
+    };
+  }
+
   let selectedGames = {};
 
   if (Array.isArray(night.selectedGames)) {
@@ -40,15 +50,31 @@ export function sanitizeNight(night) {
     rsvps: Array.isArray(night.rsvps) ? night.rsvps : [],
     declined: Array.isArray(night.declined) ? night.declined : [],
     suggestions: Array.isArray(night.suggestions) ? night.suggestions : [],
-    hostUserId: night.hostUserId || getCurrentUser().userId,
+    hostUserId: night.hostUserId || getCurrentUser()?.userId,
     lastModified: typeof night.lastModified === 'number' ? night.lastModified : Date.now()
   };
 }
 
 /**
- * Merges cloud and local game night data using most recent `lastModified`.
+ * Returns a tombstone for a night — used instead of removing it from the
+ * array so other clients learn about the deletion on merge instead of
+ * resurrecting the night from their localStorage.
  */
-function mergeNights(cloudNights, localNights) {
+export function tombstoneNight(night) {
+  return {
+    id:           night.id,
+    hostUserId:   night.hostUserId,
+    deleted:      true,
+    lastModified: Date.now(),
+  };
+}
+
+/**
+ * Merges cloud and local game night data using most recent `lastModified`.
+ * Tombstones win like any other version — a deletion is just a newer write.
+ * Exported for tests.
+ */
+export function mergeNights(cloudNights, localNights) {
   const byId = new Map();
   const all = [...cloudNights, ...localNights].map(sanitizeNight);
 
@@ -60,6 +86,21 @@ function mergeNights(cloudNights, localNights) {
   });
 
   return Array.from(byId.values());
+}
+
+/**
+ * Drops "zombie" nights: local-only entries hosted by someone else. Nights
+ * hosted by other people can only ever have arrived FROM the cloud, so if the
+ * cloud no longer has one (deleted before tombstones existed), the local copy
+ * is stale and pushing it would be rejected by the server. Own nights are
+ * kept — they may be freshly created and not yet uploaded.
+ * Exported for tests.
+ */
+export function dropZombieNights(merged, cloudNights, currentUserId) {
+  const cloudIds = new Set(cloudNights.map(n => String(n.id)));
+  return merged.filter(n =>
+    cloudIds.has(String(n.id)) || n.hostUserId === currentUserId
+  );
 }
 
 /**
@@ -102,8 +143,12 @@ export async function saveGameNights(nights) {
 }
 
 /**
- * Loads cloud and local data, merges, saves locally, and uploads merged set.
- * Always requests a fresh presigned URL and retries if expired.
+ * Loads cloud and local data, merges, and saves the merged view locally.
+ *
+ * Deliberately does NOT push back to the cloud on load — the old
+ * push-on-every-load behavior meant every page view rewrote the shared file,
+ * racing other users and resurrecting deleted nights. Local-only changes
+ * (e.g. made while a save failed) reach the cloud on the next actual save.
  */
 export async function loadGameNights() {
   try {
@@ -125,11 +170,14 @@ export async function loadGameNights() {
     const cloudData = await dataRes.json();
 
     const localData = JSON.parse(localStorage.getItem('gameNights') || '[]');
-    const merged = mergeNights(cloudData, localData);
+    const merged = dropZombieNights(
+      mergeNights(cloudData, localData),
+      cloudData,
+      getCurrentUser()?.userId,
+    );
 
     syncGameNights(merged);
     localStorage.setItem('gameNightsCloud', JSON.stringify(cloudData));
-    await pushGameNightsToCloud(merged);
 
     return merged;
   } catch (err) {

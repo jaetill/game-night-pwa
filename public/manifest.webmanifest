@@ -1,10 +1,11 @@
 {
-  "name": "Game Night RSVP",
-  "short_name": "RSVP",
+  "name": "Game Night",
+  "short_name": "Game Night",
+  "description": "Organize board game nights: events, RSVPs, and game sign-ups.",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#4CAF50",
+  "theme_color": "#d97706",
   "icons": [
     {
       "src": "icons/icon-192.png",
@@ -17,8 +18,4 @@
       "type": "image/png"
     }
   ]
-
-
-
-
 }
