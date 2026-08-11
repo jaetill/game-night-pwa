@@ -30,7 +30,65 @@ locals {
     groups                  = "arn:aws:apigateway:us-east-2:lambda:path/2015-03-31/functions/${aws_lambda_function.groups.arn}/invocations"
     nudge                   = "arn:aws:apigateway:us-east-2:lambda:path/2015-03-31/functions/${aws_lambda_function.nudgeNonResponders.arn}/invocations"
     searchGames             = "arn:aws:apigateway:us-east-2:lambda:path/2015-03-31/functions/${aws_lambda_function.searchGames.arn}/invocations"
+    pushSubscriptions       = "arn:aws:apigateway:us-east-2:lambda:path/2015-03-31/functions/${aws_lambda_function.pushSubscriptions.arn}/invocations"
+    rsvpLink                = "arn:aws:apigateway:us-east-2:lambda:path/2015-03-31/functions/${aws_lambda_function.rsvpLink.arn}/invocations"
   }
+}
+
+# ════════════════════════════════════════════════════════════════════════
+# /push — pushSubscriptions Lambda (POST + OPTIONS; Lambda handles CORS)
+# ════════════════════════════════════════════════════════════════════════
+resource "aws_api_gateway_method" "push_post" {
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  resource_id   = aws_api_gateway_resource.push.id
+  http_method   = "POST"
+  authorization = "CUSTOM"
+  authorizer_id = aws_api_gateway_authorizer.api_key.id
+}
+
+resource "aws_api_gateway_integration" "push_post" {
+  rest_api_id             = aws_api_gateway_rest_api.main.id
+  resource_id             = aws_api_gateway_resource.push.id
+  http_method             = aws_api_gateway_method.push_post.http_method
+  type                    = "AWS_PROXY"
+  integration_http_method = "POST"
+  uri                     = local.invoke_uri.pushSubscriptions
+}
+
+resource "aws_api_gateway_method" "push_options" {
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  resource_id   = aws_api_gateway_resource.push.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "push_options" {
+  rest_api_id             = aws_api_gateway_rest_api.main.id
+  resource_id             = aws_api_gateway_resource.push.id
+  http_method             = aws_api_gateway_method.push_options.http_method
+  type                    = "AWS_PROXY"
+  integration_http_method = "POST"
+  uri                     = local.invoke_uri.pushSubscriptions
+}
+
+# ════════════════════════════════════════════════════════════════════════
+# /rsvp — rsvpLink Lambda (GET only, PUBLIC — auth is the HMAC-signed token;
+# recipients land here from email links, no CORS/preflight involved)
+# ════════════════════════════════════════════════════════════════════════
+resource "aws_api_gateway_method" "rsvp_get" {
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  resource_id   = aws_api_gateway_resource.rsvp.id
+  http_method   = "GET"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "rsvp_get" {
+  rest_api_id             = aws_api_gateway_rest_api.main.id
+  resource_id             = aws_api_gateway_resource.rsvp.id
+  http_method             = aws_api_gateway_method.rsvp_get.http_method
+  type                    = "AWS_PROXY"
+  integration_http_method = "POST"
+  uri                     = local.invoke_uri.rsvpLink
 }
 
 # ════════════════════════════════════════════════════════════════════════════

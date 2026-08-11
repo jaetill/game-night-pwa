@@ -39,6 +39,7 @@
 const { Sentry } = require('./lib/sentry');
 const logger = require('./lib/logger');
 const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
+const push = require('./lib/push');
 
 const BUCKET = process.env.S3_BUCKET || 'jaetill-game-nights';
 const KEY    = 'gameNights.json';
@@ -159,6 +160,56 @@ function validateChanges(current, incoming, userId) {
 }
 exports._validateChanges = validateChanges;
 
+const RSVP_TYPE_LABEL = {
+  playing:    'is in',
+  any_game:   'wants to be put in a game',
+  if_needed:  'will play if needed',
+  spectating: 'is coming to hang out',
+};
+
+/**
+ * Diff the actor's RSVP changes between the previously-stored nights and the
+ * accepted upload, and describe them as host-notification events.
+ * Only the ACTOR's own additions/removals are reported (non-hosts can't
+ * legally change anyone else's RSVP — validateChanges enforces that), and
+ * the host is never notified about their own edits.
+ * Exported for unit tests.
+ */
+function diffRsvpEvents(current, accepted, actorId) {
+  const currentById = new Map(current.map(n => [String(n.id), n]));
+  const events = [];
+
+  for (const night of accepted) {
+    if (night.deleted === true) continue;
+    const before = currentById.get(String(night.id));
+    if (!before || before.deleted === true) continue;           // new night — actor is its host
+    if (night.hostUserId === actorId) continue;                 // host's own edit
+
+    const beforeRsvps = new Map((before.rsvps || []).map(r => [r.userId, r]));
+    const afterRsvps  = new Map((night.rsvps  || []).map(r => [r.userId, r]));
+    const beforeDecl  = new Set(before.declined || []);
+    const afterDecl   = new Set(night.declined  || []);
+
+    const mine = afterRsvps.get(actorId);
+    if (mine && !beforeRsvps.has(actorId)) {
+      events.push({ hostUserId: night.hostUserId, nightId: night.id, date: night.date,
+        body: `${mine.name || actorId} ${RSVP_TYPE_LABEL[mine.type] || 'responded'}` });
+    } else if (!mine && beforeRsvps.has(actorId) && !afterDecl.has(actorId)) {
+      const prev = beforeRsvps.get(actorId);
+      events.push({ hostUserId: night.hostUserId, nightId: night.id, date: night.date,
+        body: `${prev.name || actorId} cancelled their RSVP` });
+    }
+    if (afterDecl.has(actorId) && !beforeDecl.has(actorId)) {
+      const prev = beforeRsvps.get(actorId);
+      events.push({ hostUserId: night.hostUserId, nightId: night.id, date: night.date,
+        body: `${prev?.name || actorId} can't make it` });
+    }
+  }
+
+  return events;
+}
+exports._diffRsvpEvents = diffRsvpEvents;
+
 // Exported for unit tests — production handler calls with module-level s3 client.
 // Returns { nights: [], etag: undefined } when the key is absent or the IAM role
 // lacks s3:ListBucket (S3 returns AccessDenied in that case rather than
@@ -248,6 +299,23 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
         ...(etag ? { IfMatch: etag } : { IfNoneMatch: '*' }),
       }));
       logger.info('upload.saved', { request_id: context?.awsRequestId, count: accepted.length, attempt });
+
+      // Best-effort Web Push to hosts about the actor's RSVP changes.
+      // Failures never affect the save response.
+      try {
+        const events = diffRsvpEvents(current, accepted, userId);
+        for (const ev of events) {
+          await push.notifyUser(s3, ev.hostUserId, {
+            title: '🎲 Game Night RSVP',
+            body:  `${ev.body}${ev.date ? ` (${ev.date})` : ''}`,
+            url:   'https://gamenights.jaetill.com/',
+            tag:   `rsvp-${ev.nightId}`,
+          });
+        }
+      } catch (e) {
+        logger.warn('push.notify_failed', { request_id: context?.awsRequestId, error: e.message });
+      }
+
       return respond(200, { saved: accepted.length }, CORS);
     } catch (err) {
       if (isPreconditionFailure(err) && attempt < MAX_ATTEMPTS) {

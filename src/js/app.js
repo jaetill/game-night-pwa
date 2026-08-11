@@ -5,6 +5,7 @@ import { loadProfile } from './auth/profile.js';
 import { buildDirectoryFromNights } from './utils/userDirectory.js';
 import { toastError } from './ui/toast.js';
 import { isAuthenticated, startLogin, parseIdToken } from './auth.js';
+import { registerServiceWorker, clearBadge } from './utils/push.js';
 // Side-effect import: mounts the "💬 Feedback" button (Standard 11 Tier 2).
 // Available before auth so unauthenticated users can also report issues.
 import './feedback.js';
@@ -41,6 +42,14 @@ async function init() {
 
     buildDirectoryFromNights(nights);
     renderApp({ nights, currentUser: { userId, name, email } });
+
+    // Web Push plumbing — register the SW (idempotent) and clear the
+    // home-screen badge now that the user is looking at the app.
+    registerServiceWorker();
+    clearBadge();
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') clearBadge();
+    });
   } catch (err) {
     console.error('Init failed:', err);
     const container = document.getElementById('gameNightList');

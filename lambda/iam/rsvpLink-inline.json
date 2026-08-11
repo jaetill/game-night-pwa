@@ -1,0 +1,51 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CloudWatchLogs",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:us-east-2:*:log-group:/aws/lambda/rsvpLink*"
+    },
+    {
+      "Sid": "ReadWriteGameNights",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::jaetill-game-nights/gameNights.json"
+    },
+    {
+      "Sid": "ReadWritePushSubscriptions",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::jaetill-game-nights/push-subscriptions/*"
+    },
+    {
+      "Sid": "ResolveInvitees",
+      "Effect": "Allow",
+      "Action": [
+        "cognito-idp:ListUsers",
+        "cognito-idp:AdminGetUser"
+      ],
+      "Resource": "arn:aws:cognito-idp:us-east-2:214599503944:userpool/us-east-2_xneeJzaDJ"
+    },
+    {
+      "Sid": "SecretsRead",
+      "Effect": "Allow",
+      "Action": ["secretsmanager:GetSecretValue"],
+      "Resource": [
+        "arn:aws:secretsmanager:us-east-2:*:secret:game-night/prod/rsvp-link-*",
+        "arn:aws:secretsmanager:us-east-2:*:secret:game-night/prod/push-vapid-*"
+      ]
+    }
+  ]
+}

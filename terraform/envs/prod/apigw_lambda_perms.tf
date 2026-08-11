@@ -174,3 +174,21 @@ resource "aws_lambda_permission" "searchGames_get" {
   principal     = "apigateway.amazonaws.com"
   source_arn    = "arn:aws:execute-api:us-east-2:${var.aws_account_id}:${aws_api_gateway_rest_api.main.id}/*/GET/*"
 }
+
+# ── pushSubscriptions (1 statement — wildcard method on /push) ─────────────
+resource "aws_lambda_permission" "pushSubscriptions_invoke" {
+  statement_id  = "apigateway-invoke-push"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.pushSubscriptions.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "arn:aws:execute-api:us-east-2:${var.aws_account_id}:${aws_api_gateway_rest_api.main.id}/*/*/push"
+}
+
+# ── rsvpLink (1 statement — GET /rsvp) ─────────────────────────────────────
+resource "aws_lambda_permission" "rsvpLink_get" {
+  statement_id  = "apigateway-invoke-rsvp"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.rsvpLink.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "arn:aws:execute-api:us-east-2:${var.aws_account_id}:${aws_api_gateway_rest_api.main.id}/*/GET/rsvp"
+}

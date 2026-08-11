@@ -1,5 +1,6 @@
 import { renderGameNights } from './renderGameNights.js';
 import { renderGlobalHostPanel } from './renderGlobalHostPanel.js';
+import { renderNotifyToggle } from './renderNotifyToggle.js';
 
 export function renderApp({ nights, currentUser }) {
   const root = document.getElementById('app');
@@ -7,11 +8,20 @@ export function renderApp({ nights, currentUser }) {
 
   root.innerHTML = '';
 
-  // Section heading
+  // Section heading + notification bell (bell renders only when the
+  // browser supports Web Push — see renderNotifyToggle.js)
+  const headingRow = document.createElement('div');
+  headingRow.className = 'flex items-center justify-between mb-4';
+
   const heading = document.createElement('h2');
-  heading.className = 'text-lg font-bold text-gray-700 mb-4';
+  heading.className = 'text-lg font-bold text-gray-700';
   heading.textContent = 'Upcoming Game Nights';
-  root.appendChild(heading);
+  headingRow.appendChild(heading);
+
+  const bell = renderNotifyToggle();
+  if (bell) headingRow.appendChild(bell);
+
+  root.appendChild(headingRow);
 
   const listContainer = document.createElement('ul');
   listContainer.id = 'gameNightList';

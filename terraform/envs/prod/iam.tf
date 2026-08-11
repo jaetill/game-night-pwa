@@ -72,6 +72,18 @@ resource "aws_iam_role" "searchGames" {
   assume_role_policy = data.aws_iam_policy_document.lambda_trust.json
 }
 
+resource "aws_iam_role" "pushSubscriptions" {
+  name               = "pushSubscriptions-lambda-role"
+  assume_role_policy = data.aws_iam_policy_document.lambda_trust.json
+  description        = "Execution role for the pushSubscriptions Lambda (Web Push subscribe/unsubscribe)"
+}
+
+resource "aws_iam_role" "rsvpLink" {
+  name               = "rsvpLink-lambda-role"
+  assume_role_policy = data.aws_iam_policy_document.lambda_trust.json
+  description        = "Execution role for the rsvpLink Lambda (one-click RSVP from email links)"
+}
+
 # ════════════════════════════════════════════════════════════════════════════
 # game-night-github-deploy — used by the deploy.yml workflow via OIDC
 # Trust policy is fetched live (refines per-branch claims).
@@ -190,6 +202,20 @@ resource "aws_iam_role_policy" "searchGames_s3" {
   name   = "s3-access"
   role   = aws_iam_role.searchGames.id
   policy = file("${path.module}/iam-policies/searchGames-s3-access.json")
+}
+
+# ── pushSubscriptions ────────────────────────────────────────────────
+resource "aws_iam_role_policy" "pushSubscriptions_inline" {
+  name   = "pushSubscriptions-inline"
+  role   = aws_iam_role.pushSubscriptions.id
+  policy = file("${path.module}/iam-policies/pushSubscriptions-inline.json")
+}
+
+# ── rsvpLink ──────────────────────────────────────────────────────────
+resource "aws_iam_role_policy" "rsvpLink_inline" {
+  name   = "rsvpLink-inline"
+  role   = aws_iam_role.rsvpLink.id
+  policy = file("${path.module}/iam-policies/rsvpLink-inline.json")
 }
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -454,6 +480,8 @@ data "aws_iam_policy_document" "github_deploy" {
       aws_lambda_function.groups.arn,
       aws_lambda_function.nudgeNonResponders.arn,
       aws_lambda_function.searchGames.arn,
+      aws_lambda_function.pushSubscriptions.arn,
+      aws_lambda_function.rsvpLink.arn,
     ]
   }
 }
@@ -493,4 +521,12 @@ resource "aws_iam_role_policy" "GeneratePresignedPost_logs" {
   name   = "GeneratePresignedPost-logs"
   role   = aws_iam_role.GeneratePresignedPost.id
   policy = file("${path.module}/iam-policies/GeneratePresignedPost-logs.json")
+}
+
+# Web Push host notifications on RSVP changes: read subscriptions + prune
+# dead endpoints (s3), read the VAPID keypair (secretsmanager).
+resource "aws_iam_role_policy" "GeneratePresignedPost_push_notify" {
+  name   = "push-notify"
+  role   = aws_iam_role.GeneratePresignedPost.id
+  policy = file("${path.module}/iam-policies/GeneratePresignedPost-push-notify.json")
 }
