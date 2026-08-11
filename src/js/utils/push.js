@@ -46,12 +46,16 @@ export async function getPushState() {
 
 /** Must be called from a user gesture (button click). */
 export async function subscribeToPush() {
+  // Ask permission FIRST. iOS only shows the prompt while the tap's
+  // "transient activation" is alive — any await before this call (like
+  // waiting on the service worker) can expire it, and iOS then silently
+  // auto-denies without ever showing the Allow dialog.
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') throw new Error('denied');
+
   const reg = (await navigator.serviceWorker.getRegistration()) || (await registerServiceWorker());
   if (!reg) throw new Error('unsupported');
   await navigator.serviceWorker.ready;
-
-  const permission = await Notification.requestPermission();
-  if (permission !== 'granted') throw new Error('denied');
 
   const sub = await reg.pushManager.subscribe({
     userVisibleOnly: true,
