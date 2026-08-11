@@ -16,4 +16,10 @@ export const COGNITO = {
   scopes:      ['openid', 'email', 'profile', 'aws.cognito.signin.user.admin'],
 };
 
+// Single source of truth for the API Gateway base URL. Every module (and the
+// feedback widget) imports this — the old per-module copies plus a
+// VITE_API_URL env var (whose value included a route path) caused the
+// feedback widget to post to a nonexistent endpoint.
+export const API_BASE = 'https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod';
+
 export const DEBUG_MODE = false;

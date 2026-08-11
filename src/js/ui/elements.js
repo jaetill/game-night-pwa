@@ -33,12 +33,13 @@ export function div(...classes) {
 }
 
 export function formatDate(dateStr, timeStr) {
-  try {
-    const d = new Date(`${dateStr}T${timeStr}`);
-    const day  = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-    const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-    return { day, time };
-  } catch {
-    return { day: dateStr, time: timeStr };
+  // Missing time (e.g. events created via the MCP server) must not produce
+  // an Invalid Date — fall back to midnight for the date and show no time.
+  const d = new Date(`${dateStr}T${timeStr || '00:00'}`);
+  if (Number.isNaN(d.getTime())) {
+    return { day: dateStr || '', time: timeStr || '' };
   }
+  const day  = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const time = timeStr ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
+  return { day, time };
 }

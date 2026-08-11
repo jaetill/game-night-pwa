@@ -1,10 +1,10 @@
 import { parseIdToken } from '../auth.js';
 import { authFetch } from '../utils/authFetch.js';
+import { API_BASE } from '../config.js';
 
 import { getCurrentUser, setCurrentUser } from './userStore.js';
 
 const PROFILE_KEY = 'userProfile';
-const API_BASE    = 'https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod';
 
 /** Returns the locally-cached profile for the current user. */
 export function getProfile() {

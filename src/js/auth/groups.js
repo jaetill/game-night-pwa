@@ -1,6 +1,6 @@
 import { authFetch } from '../utils/authFetch.js';
+import { API_BASE } from '../config.js';
 
-const API_BASE = 'https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod';
 const CACHE_KEY = 'userGroups';
 
 /** Returns cached groups array from localStorage. */
