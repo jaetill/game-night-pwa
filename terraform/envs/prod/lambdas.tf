@@ -235,6 +235,7 @@ resource "aws_lambda_function" "nudgeNonResponders" {
       APP_URL              = "https://gamenights.jaetill.com"
       COGNITO_USER_POOL_ID = "us-east-2_xneeJzaDJ"
       FROM_EMAIL           = "jason@jaetill.com"
+      API_BASE_URL         = "https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod"
     })
   }
 
@@ -273,6 +274,70 @@ resource "aws_lambda_function" "searchGames" {
   logging_config {
     log_format = "Text"
     log_group  = "/aws/lambda/searchGames"
+  }
+
+  lifecycle {
+    ignore_changes = [filename, source_code_hash]
+  }
+}
+
+# ── pushSubscriptions ─────────────────────────────────────────────────
+resource "aws_lambda_function" "pushSubscriptions" {
+  function_name = "pushSubscriptions"
+  role          = aws_iam_role.pushSubscriptions.arn
+  handler       = "push.handler"
+  runtime       = "nodejs22.x"
+  architectures = ["x86_64"]
+  memory_size   = 128
+  timeout       = 5
+  description   = "POST /push - store/remove the caller's Web Push subscriptions"
+
+  filename = "${path.module}/placeholder.zip"
+
+  environment {
+    variables = merge(local.observability_env, {
+      S3_BUCKET = "jaetill-game-nights"
+    })
+  }
+
+  ephemeral_storage { size = 512 }
+
+  logging_config {
+    log_format = "Text"
+    log_group  = "/aws/lambda/pushSubscriptions"
+  }
+
+  lifecycle {
+    ignore_changes = [filename, source_code_hash]
+  }
+}
+
+# ── rsvpLink ───────────────────────────────────────────────────────────
+resource "aws_lambda_function" "rsvpLink" {
+  function_name = "rsvpLink"
+  role          = aws_iam_role.rsvpLink.arn
+  handler       = "rsvpLink.handler"
+  runtime       = "nodejs22.x"
+  architectures = ["x86_64"]
+  memory_size   = 128
+  timeout       = 10
+  description   = "GET /rsvp - one-click RSVP from HMAC-signed email links (public route)"
+
+  filename = "${path.module}/placeholder.zip"
+
+  environment {
+    variables = merge(local.observability_env, {
+      S3_BUCKET            = "jaetill-game-nights"
+      COGNITO_USER_POOL_ID = "us-east-2_xneeJzaDJ"
+      APP_URL              = "https://gamenights.jaetill.com/"
+    })
+  }
+
+  ephemeral_storage { size = 512 }
+
+  logging_config {
+    log_format = "Text"
+    log_group  = "/aws/lambda/rsvpLink"
   }
 
   lifecycle {

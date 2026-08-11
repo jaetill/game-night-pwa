@@ -35,6 +35,8 @@ const {
 const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
 const https  = require('https');
 const crypto = require('node:crypto');
+const { signRsvpToken } = require('./lib/rsvpToken');
+const { buildIcs } = require('./lib/ics');
 
 const REQUIRED_GROUP = 'game-night-users';
 
@@ -52,10 +54,49 @@ async function getSecrets() {
   return _secrets;
 }
 
+let _rsvpLinkSecret;
+async function getRsvpLinkSecret() {
+  if (!_rsvpLinkSecret) {
+    const res = await smClient.send(new GetSecretValueCommand({ SecretId: 'game-night/prod/rsvp-link' }));
+    _rsvpLinkSecret = JSON.parse(res.SecretString).secret;
+  }
+  return _rsvpLinkSecret;
+}
+
+/**
+ * Build the three one-click RSVP URLs for a recipient. `invitee` is the
+ * invite key exactly as stored in night.invited[] (email or userId) — the
+ * rsvpLink Lambda resolves it back to a Cognito user on click.
+ * Tokens expire 2 days after the event date (or 45 days out when the night
+ * has no date), so stale emails can't mutate long-gone events.
+ */
+async function makeRsvpLinks(night, invitee) {
+  const secret = await getRsvpLinkSecret();
+  const exp = night.date
+    ? new Date(night.date + 'T23:59:59').getTime() + 2 * 24 * 60 * 60 * 1000
+    : Date.now() + 45 * 24 * 60 * 60 * 1000;
+  const mk = (choice) => `${API_BASE_URL}/rsvp?token=${encodeURIComponent(signRsvpToken({ nightId: night.id, invitee, exp }, secret))}&choice=${choice}`;
+  return { yes: mk('playing'), ifNeeded: mk('if_needed'), no: mk('declined') };
+}
+
+// Postmark attachment array for the night's calendar file, or null when the
+// night has no parseable date.
+function icsAttachment(night, hostName) {
+  const ics = buildIcs(night, { hostName, appUrl: APP_URL });
+  if (!ics) return null;
+  return [{
+    Name:        'game-night.ics',
+    Content:     Buffer.from(ics, 'utf-8').toString('base64'),
+    ContentType: 'text/calendar; method=PUBLISH; charset=utf-8',
+  }];
+}
+
 const BUCKET       = process.env.S3_BUCKET            || 'jaetill-game-nights';
 const USER_POOL_ID = process.env.COGNITO_USER_POOL_ID || 'us-east-2_xneeJzaDJ';
 const FROM_EMAIL   = process.env.FROM_EMAIL;
 const APP_URL      = process.env.APP_URL               || 'https://gamenights.jaetill.com/';
+// Base URL for the public one-click RSVP route (rsvpLink Lambda).
+const API_BASE_URL = process.env.API_BASE_URL          || 'https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod';
 
 const ALLOWED_ORIGINS = new Set([
   'https://gamenights.jaetill.com',
@@ -263,14 +304,22 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
     };
     const name = inviteeName;
 
+    // One-click RSVP links + calendar attachment — both best-effort: a
+    // failure building either never blocks the invite itself.
+    let rsvpLinks = null;
+    try { rsvpLinks = await makeRsvpLinks(night, inviteKey); }
+    catch (e) { logger.warn('rsvp_links.build_failed', { request_id: context?.awsRequestId, error: e.message }); }
+    const attachments = icsAttachment(night, hostName);
+
     try {
       await (_postmarkFn ?? postmark)(POSTMARK_KEY, {
         To:            targetEmail,
         From:          FROM_EMAIL,
         Subject:       `You're invited to game night${dateStr ? ` on ${dateStr}` : ''}!`,
-        TextBody:      buildInviteText({ ...ctx, name }),
-        HtmlBody:      buildInviteHtml({ ...ctx, name }),
+        TextBody:      buildInviteText({ ...ctx, name, rsvpLinks }),
+        HtmlBody:      buildInviteHtml({ ...ctx, name, rsvpLinks }),
         MessageStream: 'outbound',
+        ...(attachments ? { Attachments: attachments } : {}),
       });
       logger.info('invite.sent', { request_id: context?.awsRequestId, provisioned: provisioned.result, by_user_id: byUserId });
       return respond(200, { sent: 1, provisioned: provisioned.result, inviteListChanged }, CORS);
@@ -302,13 +351,13 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
   const targets = [];
   for (const id of nonResponders) {
     if (id.includes('@')) {
-      targets.push({ email: id, name: id.split('@')[0] });
+      targets.push({ email: id, name: id.split('@')[0], inviteKey: id });
     } else {
       try {
         const u        = await cognito.send(new AdminGetUserCommand({ UserPoolId: USER_POOL_ID, Username: id }));
         const emailAttr = u.UserAttributes?.find(a => a.Name === 'email');
         const nameAttr  = u.UserAttributes?.find(a => a.Name === 'name');
-        if (emailAttr?.Value) targets.push({ email: emailAttr.Value, name: nameAttr?.Value || id });
+        if (emailAttr?.Value) targets.push({ email: emailAttr.Value, name: nameAttr?.Value || id, inviteKey: id });
       } catch { /* user not found — skip */ }
     }
   }
@@ -322,17 +371,22 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
   const ctx     = { hostName, dateStr, timeStr: night.time || '', location: night.location || '', description: night.description || '' };
 
   // ── Send via Postmark ──
+  const nudgeAttachments = icsAttachment(night, hostName);
   let sent = 0;
   const errors = [];
-  for (const { email, name } of targets) {
+  for (const { email, name, inviteKey } of targets) {
+    let rsvpLinks = null;
+    try { rsvpLinks = await makeRsvpLinks(night, inviteKey); }
+    catch (e) { logger.warn('rsvp_links.build_failed', { request_id: context?.awsRequestId, error: e.message }); }
     try {
       await (_postmarkFn ?? postmark)(POSTMARK_KEY, {
         To:            email,
         From:          FROM_EMAIL,
         Subject:       `Reminder: Game night${dateStr ? ` on ${dateStr}` : ''}`,
-        TextBody:      buildText({ ...ctx, name }),
-        HtmlBody:      buildHtml({ ...ctx, name }),
+        TextBody:      buildText({ ...ctx, name, rsvpLinks }),
+        HtmlBody:      buildHtml({ ...ctx, name, rsvpLinks }),
         MessageStream: 'outbound',
+        ...(nudgeAttachments ? { Attachments: nudgeAttachments } : {}),
       });
       sent++;
     } catch (e) {
@@ -482,7 +536,34 @@ function formatDate(dateStr) {
   } catch { return dateStr; }
 }
 
-function buildInviteText({ name, hostName, dateStr, timeStr, location, description, isNewAccount, signInEmail, tempPassword }) {
+// Plain-text one-click RSVP block (shared by invite + nudge text bodies).
+function rsvpLinksText(rsvpLinks) {
+  if (!rsvpLinks) return [];
+  return [
+    '',
+    'One-click RSVP (no sign-in needed):',
+    `  I'm in:              ${rsvpLinks.yes}`,
+    `  I'll play if needed: ${rsvpLinks.ifNeeded}`,
+    `  Can't make it:       ${rsvpLinks.no}`,
+  ];
+}
+
+// HTML one-click RSVP button row (shared by invite + nudge HTML bodies).
+// Table layout — email clients ignore flexbox.
+function rsvpLinksHtml(rsvpLinks) {
+  if (!rsvpLinks) return '';
+  const btn = (href, bg, label) =>
+    `<td style="padding-right:8px;"><a href="${href}" style="display:inline-block;background:${bg};color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:600;font-size:14px;">${label}</a></td>`;
+  return `
+  <table role="presentation" cellpadding="0" cellspacing="0" style="margin:14px 0 2px;"><tr>
+    ${btn(rsvpLinks.yes, '#16a34a', "I'm in 🎲")}
+    ${btn(rsvpLinks.ifNeeded, '#d97706', 'If needed')}
+    ${btn(rsvpLinks.no, '#64748b', "Can't make it")}
+  </tr></table>
+  <p style="font-size:12px;color:#94a3b8;margin:4px 0 0;">One tap — no sign-in needed.</p>`;
+}
+
+function buildInviteText({ name, hostName, dateStr, timeStr, location, description, isNewAccount, signInEmail, tempPassword, rsvpLinks }) {
   const lines = [
     `Hi${name ? ` ${name}` : ''}!`,
     '',
@@ -492,7 +573,8 @@ function buildInviteText({ name, hostName, dateStr, timeStr, location, descripti
       (location ? ` at ${location}` : '') + '.',
   ];
   if (description) lines.push('', description);
-  lines.push('', `RSVP at: ${APP_URL}`);
+  lines.push(...rsvpLinksText(rsvpLinks));
+  lines.push('', `Or RSVP and pick games in the app: ${APP_URL}`);
   if (isNewAccount && tempPassword) {
     lines.push(
       '',
@@ -508,7 +590,7 @@ function buildInviteText({ name, hostName, dateStr, timeStr, location, descripti
   return lines.join('\n');
 }
 
-function buildInviteHtml({ name, hostName, dateStr, timeStr, location, description, isNewAccount, signInEmail, tempPassword }) {
+function buildInviteHtml({ name, hostName, dateStr, timeStr, location, description, isNewAccount, signInEmail, tempPassword, rsvpLinks }) {
   // Escape every user-supplied field in the email body — same discipline
   // as buildHtml (per code-review findings #20 and #21 on PR #18).
   // `dateStr`/`timeStr` come from gameNights.json (host-written) and
@@ -535,7 +617,8 @@ function buildInviteHtml({ name, hostName, dateStr, timeStr, location, descripti
   <p><strong>${escapeHtml(hostName)}</strong> has invited you to game night${when ? ` ${when}` : ''}${location ? ` at <strong>${escapeHtml(location)}</strong>` : ''}.</p>
   ${description ? `<p style="color:#64748b;font-style:italic;">${escapeHtml(description)}</p>` : ''}
   <p>Let ${escapeHtml(hostName)} know if you can make it:</p>
-  <p>
+  ${rsvpLinksHtml(rsvpLinks)}
+  <p style="margin-top:18px;">
     <a href="${APP_URL}"
        style="display:inline-block;background:#4f46e5;color:#fff;padding:10px 22px;border-radius:6px;text-decoration:none;font-weight:600;">
       View invitation →
@@ -558,7 +641,7 @@ function escapeHtml(s) {
     .replace(/'/g, '&#39;');
 }
 
-function buildText({ name, hostName, dateStr, timeStr, location, description }) {
+function buildText({ name, hostName, dateStr, timeStr, location, description, rsvpLinks }) {
   const lines = [
     `Hi${name ? ` ${name}` : ''}!`,
     '',
@@ -568,6 +651,7 @@ function buildText({ name, hostName, dateStr, timeStr, location, description }) 
       (location  ? ` at ${location}`  : '') + '.',
   ];
   if (description) lines.push('', description);
+  lines.push(...rsvpLinksText(rsvpLinks));
   lines.push(
     '',
     `Haven't responded yet? Head over to the app to let them know if you can make it:`,
@@ -578,7 +662,7 @@ function buildText({ name, hostName, dateStr, timeStr, location, description }) 
   return lines.join('\n');
 }
 
-function buildHtml({ name, hostName, dateStr, timeStr, location, description }) {
+function buildHtml({ name, hostName, dateStr, timeStr, location, description, rsvpLinks }) {
   const when = [dateStr && `<strong>${escapeHtml(dateStr)}</strong>`, timeStr && `at <strong>${escapeHtml(timeStr)}</strong>`].filter(Boolean).join(' ');
   return `<!DOCTYPE html>
 <html>
@@ -588,7 +672,8 @@ function buildHtml({ name, hostName, dateStr, timeStr, location, description }) 
   <p><strong>${escapeHtml(hostName)}</strong> wanted to remind you about game night${when ? ` ${when}` : ''}${location ? ` at <strong>${escapeHtml(location)}</strong>` : ''}.</p>
   ${description ? `<p style="color:#64748b;font-style:italic;">${escapeHtml(description)}</p>` : ''}
   <p>Haven't replied yet? Let ${escapeHtml(hostName)} know if you can make it:</p>
-  <p>
+  ${rsvpLinksHtml(rsvpLinks)}
+  <p style="margin-top:18px;">
     <a href="${APP_URL}"
        style="display:inline-block;background:#4f46e5;color:#fff;padding:10px 22px;border-radius:6px;text-decoration:none;font-weight:600;">
       Open Game Night →
@@ -639,7 +724,7 @@ exports._isValidInviteEmail = isValidInviteEmail;
 exports._makeNudgeErrorEntry = makeNudgeErrorEntry;
 
 exports._setForTest = function({ smClient: sm, s3: s3arg, cognito: cog, postmark: pm } = {}) {
-  if (sm)    { smClient = sm; _secrets = null; }
+  if (sm)    { smClient = sm; _secrets = null; _rsvpLinkSecret = null; }
   if (s3arg) s3 = s3arg;
   if (cog)   cognito = cog;
   if (pm)    _postmarkFn = pm;
@@ -650,4 +735,5 @@ exports._resetForTest = function() {
   cognito     = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION || 'us-east-2' });
   _postmarkFn = null;
   _secrets    = null;
+  _rsvpLinkSecret = null;
 };

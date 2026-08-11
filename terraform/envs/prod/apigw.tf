@@ -87,6 +87,18 @@ resource "aws_api_gateway_resource" "upload_token" {
   path_part   = "upload-token"
 }
 
+resource "aws_api_gateway_resource" "push" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  parent_id   = aws_api_gateway_rest_api.main.root_resource_id
+  path_part   = "push"
+}
+
+resource "aws_api_gateway_resource" "rsvp" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  parent_id   = aws_api_gateway_rest_api.main.root_resource_id
+  path_part   = "rsvp"
+}
+
 # ── Authorizers (2) ─────────────────────────────────────────────────────────
 # `apiKeyAuthorizer` is the dual-mode (X-API-Key OR Cognito JWT) used by
 # every authenticated route. `CognitoAuth` is a legacy COGNITO_USER_POOLS

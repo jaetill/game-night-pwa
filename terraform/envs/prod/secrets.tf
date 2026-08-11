@@ -30,3 +30,25 @@ resource "aws_secretsmanager_secret" "github_token" {
 data "aws_secretsmanager_secret" "postmark" {
   name = "shared/postmark-api-key"
 }
+
+# ── Web Push / one-click RSVP secrets ────────────────────────────────────
+# Created via CLI (values set out-of-band, same discipline as github-token)
+# and imported into Terraform state.
+
+resource "aws_secretsmanager_secret" "push_vapid" {
+  name        = "game-night/prod/push-vapid"
+  description = "VAPID keypair for game-night web push"
+
+  lifecycle {
+    ignore_changes = [recovery_window_in_days, force_overwrite_replica_secret]
+  }
+}
+
+resource "aws_secretsmanager_secret" "rsvp_link" {
+  name        = "game-night/prod/rsvp-link"
+  description = "HMAC secret for one-click RSVP email links"
+
+  lifecycle {
+    ignore_changes = [recovery_window_in_days, force_overwrite_replica_secret]
+  }
+}

@@ -28,6 +28,10 @@ dist-ssr
 lambda/*.zip
 build/
 
+# Terraform plan files (binary; can embed sensitive variable values)
+*.tfplan
+tfplan
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

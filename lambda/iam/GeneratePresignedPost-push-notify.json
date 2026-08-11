@@ -1,0 +1,20 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadWritePushSubscriptions",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::jaetill-game-nights/push-subscriptions/*"
+    },
+    {
+      "Sid": "VapidSecretRead",
+      "Effect": "Allow",
+      "Action": ["secretsmanager:GetSecretValue"],
+      "Resource": "arn:aws:secretsmanager:us-east-2:*:secret:game-night/prod/push-vapid-*"
+    }
+  ]
+}

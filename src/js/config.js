@@ -22,4 +22,9 @@ export const COGNITO = {
 // feedback widget to post to a nonexistent endpoint.
 export const API_BASE = 'https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod';
 
+// VAPID public key for Web Push (non-secret by design — the browser sends
+// it to the push service on subscribe; the private half lives in Secrets
+// Manager `game-night/prod/push-vapid`).
+export const VAPID_PUBLIC_KEY = 'BE9VkZO4RO4hT3bGhViNJvZXSKHOzU48AG7_cUGQmB9ho8RLuwaAJu3SY7T_IJzcVViDq9G__acPZOhafGa3ydo';
+
 export const DEBUG_MODE = false;
