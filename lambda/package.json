@@ -8,7 +8,7 @@
     "@aws-sdk/client-dynamodb": "^3.1105.0",
     "@aws-sdk/client-s3": "^3.1106.0",
     "@aws-sdk/client-secrets-manager": "^3.1105.0",
-    "@aws-sdk/client-ssm": "^3.1105.0",
+    "@aws-sdk/client-ssm": "^3.1110.0",
     "@aws-sdk/s3-request-presigner": "^3.1105.0",
     "@octokit/rest": "^22.0.1",
     "@sentry/aws-serverless": "^10.69.0",
