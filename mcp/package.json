@@ -12,6 +12,6 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "@aws-sdk/client-s3": "^3.1105.0"
+    "@aws-sdk/client-s3": "^3.1110.0"
   }
 }
