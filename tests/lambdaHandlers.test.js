@@ -28,6 +28,11 @@ const cjsHandlers = [
   'searchGames',
   'groups',
   'feedback',
+  // rsvpLink and push were missing from this list — both are deployed
+  // handlers behind live API Gateway routes (GET /rsvp, POST /push), so a
+  // load-time break in either would have shipped unnoticed.
+  'rsvpLink',
+  'push',
 ];
 
 describe('lambda handlers load', () => {

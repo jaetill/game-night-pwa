@@ -36,6 +36,7 @@ const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/clien
 const { CognitoIdentityProviderClient, AdminGetUserCommand, ListUsersCommand } = require('@aws-sdk/client-cognito-identity-provider');
 const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
 const { verifyRsvpToken } = require('./lib/rsvpToken');
+const { identityFields } = require('./lib/identity');
 const push = require('./lib/push');
 
 const BUCKET       = process.env.S3_BUCKET || 'jaetill-game-nights';
@@ -113,9 +114,16 @@ async function loadNightsWithMeta() {
 }
 
 /**
- * Resolve an invite key (email or Cognito username) to { userId, name }.
+ * Resolve an invite key (email or Cognito username) to
+ * { userId, name, email?, matched }.
+ *
  * Falls back to the raw key when Cognito has no matching user — the app's
  * invited[]/rsvps[] handling tolerates email-shaped ids.
+ *
+ * `matched` reports whether Cognito actually resolved the invitee, so the
+ * caller can log it. An unmatched RSVP still saves, but it lands in rsvps[]
+ * under an email-shaped userId that will never equal the userId the app sees
+ * once that person signs in — worth being able to spot in the logs.
  */
 async function resolveInvitee(invitee) {
   const isEmail = invitee.includes('@');
@@ -130,16 +138,16 @@ async function resolveInvitee(invitee) {
       if (list.Users && list.Users.length > 0) {
         const u = list.Users[0];
         const nameAttr = u.Attributes?.find(a => a.Name === 'name');
-        return { userId: u.Username, name: nameAttr?.Value || emailLc.split('@')[0] };
+        return { userId: u.Username, name: nameAttr?.Value || emailLc.split('@')[0], email: emailLc, matched: true };
       }
-      return { userId: emailLc, name: emailLc.split('@')[0] };
+      return { userId: emailLc, name: emailLc.split('@')[0], email: emailLc, matched: false };
     }
     const u = await cognito.send(new AdminGetUserCommand({ UserPoolId: USER_POOL_ID, Username: invitee }));
     const nameAttr = u.UserAttributes?.find(a => a.Name === 'name');
     const emailAttr = u.UserAttributes?.find(a => a.Name === 'email');
-    return { userId: invitee, name: nameAttr?.Value || emailAttr?.Value?.split('@')[0] || invitee, email: emailAttr?.Value };
+    return { userId: invitee, name: nameAttr?.Value || emailAttr?.Value?.split('@')[0] || invitee, email: emailAttr?.Value, matched: true };
   } catch {
-    return { userId: invitee, name: isEmail ? invitee.split('@')[0] : invitee };
+    return { userId: invitee, name: isEmail ? invitee.split('@')[0] : invitee, email: isEmail ? invitee : undefined, matched: false };
   }
 }
 
@@ -189,6 +197,18 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
 
   const who = await resolveInvitee(payload.invitee);
 
+  // Logged BEFORE the write. A click that fails partway (S3 down, night
+  // deleted, lost race) still leaves a record that this person tried — which
+  // is exactly the case where someone says "I RSVP'd" and the data disagrees.
+  const whoFields = identityFields(who);
+  logger.info('rsvp_link.attempt', {
+    request_id: context?.awsRequestId,
+    night_id:   payload.nightId,
+    choice,
+    resolved:   who.matched,
+    ...whoFields,
+  });
+
   const MAX_ATTEMPTS = 2;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     let nights, etag;
@@ -224,7 +244,13 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
       return htmlPage(500, { emoji: '😵', headline: 'Something went wrong', detail: 'Please RSVP in the app instead.' });
     }
 
-    logger.info('rsvp_link.saved', { request_id: context?.awsRequestId, choice, attempt });
+    logger.info('rsvp_link.saved', {
+      request_id: context?.awsRequestId,
+      night_id:   night.id,
+      choice,
+      attempt,
+      ...whoFields,
+    });
 
     // Best-effort host notification — never blocks the response.
     if (night.hostUserId && night.hostUserId !== who.userId) {

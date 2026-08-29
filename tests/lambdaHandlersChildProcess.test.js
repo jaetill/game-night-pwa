@@ -35,6 +35,8 @@ const cjsHandlers = [
   'searchGames',
   'groups',
   'feedback',
+  'rsvpLink',
+  'push',
 ];
 
 // ESM handler — dynamic `import()` in a child process.
