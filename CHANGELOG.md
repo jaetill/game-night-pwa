@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/jaetill/game-night-pwa/compare/v1.2.1...v1.3.0) (2026-08-29)
+
+
+### Features
+
+* **observability:** attribute every mutation to a caller ([#346](https://github.com/jaetill/game-night-pwa/issues/346)) ([9de78c3](https://github.com/jaetill/game-night-pwa/commit/9de78c3d8ec250de655d6177eed0a048683190fb))
+
 ## [1.2.1](https://github.com/jaetill/game-night-pwa/compare/v1.2.0...v1.2.1) (2026-08-11)
 
 
