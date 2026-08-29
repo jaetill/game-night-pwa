@@ -32,6 +32,7 @@
 
 const { Sentry } = require('./lib/sentry');
 const logger = require('./lib/logger');
+const { identityFields, routeFromMethodArn } = require('./lib/identity');
 const { CognitoJwtVerifier } = require('aws-jwt-verify');
 const { SSMClient, GetParameterCommand } = require('@aws-sdk/client-ssm');
 
@@ -84,7 +85,7 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
 async function authenticateApiKey(apiKey, methodArn, context) {
   const hit = apiKeyCache.get(apiKey);
   if (hit && hit.expiresAt > Date.now()) {
-    return allow(hit.userId, methodArn);
+    return allow(hit.userId, methodArn, context, 'api_key_cached');
   }
 
   let userId;
@@ -107,7 +108,7 @@ async function authenticateApiKey(apiKey, methodArn, context) {
   if (!userId) return deny(methodArn);
 
   apiKeyCache.set(apiKey, { userId, expiresAt: Date.now() + API_KEY_TTL_MS });
-  return allow(userId, methodArn);
+  return allow(userId, methodArn, context, 'api_key');
 }
 
 // aws-jwt-verify error names that represent expected user-driven failures.
@@ -146,14 +147,23 @@ async function authenticateJwt(authHeader, methodArn, context) {
     return deny(methodArn);
   }
 
+  const userId = payload['cognito:username'] || payload.sub;
+
   const groups = payload['cognito:groups'] || [];
   if (!groups.includes(REQUIRED_GROUP)) {
-    logger.info('auth.group_missing', { request_id: context?.awsRequestId, required_group: REQUIRED_GROUP });
+    // Attribute the denial: "which user is bouncing off the group gate" is a
+    // real support question (a half-provisioned invitee looks identical to a
+    // meal-planner token from the outside).
+    logger.info('auth.group_missing', {
+      request_id: context?.awsRequestId,
+      required_group: REQUIRED_GROUP,
+      route: routeFromMethodArn(methodArn),
+      ...identityFields({ userId, email: payload.email }),
+    });
     return deny(methodArn);
   }
 
-  const userId = payload['cognito:username'] || payload.sub;
-  return allow(userId, methodArn);
+  return allow(userId, methodArn, context, 'jwt', payload.email);
 }
 
 // ── Policy builders ────────────────────────────────────────────────────────
@@ -185,7 +195,21 @@ function buildPolicy(effect, principalId, methodArn, context = {}) {
   };
 }
 
-function allow(userId, methodArn) {
+/**
+ * Allow, and record who was allowed.
+ *
+ * This is the single choke point every authenticated request passes through,
+ * so one line here makes the whole API attributable — including routes whose
+ * own handlers log nothing useful. `auth_mode` distinguishes the browser
+ * (jwt) from the MCP server (api_key), which is otherwise invisible.
+ */
+function allow(userId, methodArn, context, authMode, email) {
+  logger.info('auth.allowed', {
+    request_id: context?.awsRequestId,
+    auth_mode:  authMode,
+    route:      routeFromMethodArn(methodArn),
+    ...identityFields({ userId, email }),
+  });
   return buildPolicy('Allow', userId, methodArn, { userId });
 }
 
