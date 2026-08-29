@@ -37,6 +37,7 @@ const https  = require('https');
 const crypto = require('node:crypto');
 const { signRsvpToken } = require('./lib/rsvpToken');
 const { buildIcs } = require('./lib/ics');
+const { emailHash, identityFields } = require('./lib/identity');
 
 const REQUIRED_GROUP = 'game-night-users';
 
@@ -321,7 +322,14 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
         MessageStream: 'outbound',
         ...(attachments ? { Attachments: attachments } : {}),
       });
-      logger.info('invite.sent', { request_id: context?.awsRequestId, provisioned: provisioned.result, by_user_id: byUserId });
+      logger.info('invite.sent', {
+        request_id:     context?.awsRequestId,
+        night_id:       nightId,
+        provisioned:    provisioned.result,
+        by_user_id:     byUserId,
+        recipient_hash: emailHash(targetEmail),
+        ...identityFields({ userId: callerId }),
+      });
       return respond(200, { sent: 1, provisioned: provisioned.result, inviteListChanged }, CORS);
     } catch (e) {
       logger.error('postmark.invite_failed', { request_id: context?.awsRequestId, error: e.message });
@@ -389,14 +397,35 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
         ...(nudgeAttachments ? { Attachments: nudgeAttachments } : {}),
       });
       sent++;
+      // Per-recipient, so "was this specific person nudged, and did their
+      // link get built?" is answerable without cross-referencing Postmark.
+      logger.info('nudge.sent', {
+        request_id:     context?.awsRequestId,
+        night_id:       night.id,
+        recipient_hash: emailHash(email),
+        invite_key:     inviteKey?.includes('@') ? undefined : inviteKey,
+        rsvp_links:     !!rsvpLinks,
+      });
     } catch (e) {
-      logger.error('postmark.nudge_failed', { request_id: context?.awsRequestId, error: e.message });
+      logger.error('postmark.nudge_failed', {
+        request_id:     context?.awsRequestId,
+        night_id:       night.id,
+        recipient_hash: emailHash(email),
+        error:          e.message,
+      });
       Sentry.captureException(e);
       errors.push(makeNudgeErrorEntry(e));
     }
   }
 
-  logger.info('nudge.complete', { request_id: context?.awsRequestId, sent, total: targets.length, errors: errors.length });
+  logger.info('nudge.complete', {
+    request_id: context?.awsRequestId,
+    night_id:   night.id,
+    sent,
+    total:      targets.length,
+    errors:     errors.length,
+    ...identityFields({ userId: callerId }),
+  });
   return respond(200, { sent, total: targets.length, errorCount: errors.length }, CORS);
 });
 

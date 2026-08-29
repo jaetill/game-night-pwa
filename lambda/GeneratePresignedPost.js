@@ -39,6 +39,7 @@
 const { Sentry } = require('./lib/sentry');
 const logger = require('./lib/logger');
 const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { identityFields } = require('./lib/identity');
 const push = require('./lib/push');
 
 const BUCKET = process.env.S3_BUCKET || 'jaetill-game-nights';
@@ -175,6 +176,32 @@ const RSVP_TYPE_LABEL = {
  * the host is never notified about their own edits.
  * Exported for unit tests.
  */
+/**
+ * Ids of nights whose serialized content differs between the stored array and
+ * the array about to be written (plus any night that appeared or vanished).
+ *
+ * Cheap and deliberately shallow — this is a log field, not business logic.
+ * Night ids are UUIDs, so nothing here is PII.
+ *
+ * Exported for unit tests.
+ */
+function changedNightIds(current, accepted) {
+  const beforeById = new Map((current || []).map(n => [String(n.id), JSON.stringify(n)]));
+  const changed = [];
+
+  for (const night of accepted || []) {
+    const id = String(night.id);
+    const before = beforeById.get(id);
+    if (before === undefined || before !== JSON.stringify(night)) changed.push(id);
+    beforeById.delete(id);
+  }
+  // Anything left in beforeById was dropped from the payload entirely.
+  for (const id of beforeById.keys()) changed.push(id);
+
+  return changed;
+}
+exports._changedNightIds = changedNightIds;
+
 function diffRsvpEvents(current, accepted, actorId) {
   const currentById = new Map(current.map(n => [String(n.id), n]));
   const events = [];
@@ -298,7 +325,16 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
         // each other's changes (last-writer-wins on the whole file).
         ...(etag ? { IfMatch: etag } : { IfNoneMatch: '*' }),
       }));
-      logger.info('upload.saved', { request_id: context?.awsRequestId, count: accepted.length, attempt });
+      logger.info('upload.saved', {
+        request_id:   context?.awsRequestId,
+        count:        accepted.length,
+        attempt,
+        // Which nights this write actually altered. A save that reports
+        // success while changing nothing is the signature of a client whose
+        // in-memory mutation never made it into the payload.
+        changed_night_ids: changedNightIds(current, accepted),
+        ...identityFields({ userId }),
+      });
 
       // Best-effort Web Push to hosts about the actor's RSVP changes.
       // Failures never affect the save response.
