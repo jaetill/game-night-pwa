@@ -39,6 +39,7 @@ describe.each([
   ['buildInviteText', buildInviteText, 'text'],
   ['buildText',       buildText,       'text'],
 ])('%s', (_name, build, kind) => {
+  // `kind` gates the HTML-only escaping case below.
   it('includes the food plan when present', () => {
     const out = build({ ...BASE, food: 'Chili and cornbread', sidesOpen: false, rsvpLinks: LINKS });
     expect(out).toContain('Chili and cornbread');
@@ -67,7 +68,7 @@ describe.each([
     const out = build({ ...BASE, food: 'Chili', sidesOpen: true, rsvpLinks: null });
     expect(out).toContain('Chili');
     expect(out).toContain('Bringing a side?');
-    expect(out).toContain(kind === 'html' ? 'Sign up in the app' : 'Sign up in the app');
+    expect(out).toContain('Sign up in the app');
   });
 
   if (kind === 'html') {

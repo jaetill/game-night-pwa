@@ -262,6 +262,10 @@ describe('renderPickerPage', () => {
     const rsvpd = renderPickerPage(makeNight({ rsvps: [{ userId: 'me-uuid', name: 'Deb', type: 'if_needed' }] }), ME, TOKEN, null);
     expect(rsvpd).toContain("You&#39;ll play if needed");
     expect(rsvpd).not.toContain('choice=if_needed');
+
+    // An RSVP type this page doesn't know about still gets a label.
+    const odd = renderPickerPage(makeNight({ rsvps: [{ userId: 'me-uuid', name: 'Deb', type: 'future_type' }] }), ME, TOKEN, null);
+    expect(odd).toContain("You&#39;ve RSVP&#39;d");
   });
 
   it('renders the food plan, existing sides, and the side form only when allowSides', () => {
@@ -335,11 +339,14 @@ describe('handler', () => {
     expect(puts).toHaveLength(0);
   });
 
-  it('games renders the picker without writing', async () => {
+  it('games renders the picker without writing, with hardening headers', async () => {
     rsvpLink._setForTest(mocks([makeNight()]));
     const res = await rsvpLink.handler(evt({ token: tok(), choice: 'games' }), ctx);
     expect(res.statusCode).toBe(200);
     expect(res.headers['Content-Type']).toMatch(/text\/html/);
+    expect(res.headers['X-Frame-Options']).toBe('DENY');
+    expect(res.headers['Content-Security-Policy']).toMatch(/default-src 'none'/);
+    expect(res.headers['Content-Security-Policy']).toMatch(/form-action 'self'/);
     expect(res.body).toContain('Catan');
     expect(res.body).toContain('Chili');
     expect(puts).toHaveLength(0);

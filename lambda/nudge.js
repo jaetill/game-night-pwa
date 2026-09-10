@@ -591,7 +591,7 @@ function rsvpLinksText(rsvpLinks) {
 // Plain-text food block (shared by invite + nudge text bodies).
 function foodText({ food, sidesOpen, rsvpLinks }) {
   if (!food) return [];
-  const lines = ['', `Food: ${food}`, `  (Feel free to bring your own meal if you prefer - no obligation to eat with the group.)`];
+  const lines = ['', `Food: ${food}`, `  (Feel free to bring your own meal if you prefer — no obligation to eat with the group.)`];
   if (sidesOpen) {
     lines.push(rsvpLinks?.games
       ? `  Bringing a side? Sign up here: ${rsvpLinks.games}`
@@ -607,7 +607,7 @@ function rsvpLinksHtml(rsvpLinks) {
   const btn = (href, bg, label) =>
     `<td style="padding-right:8px;"><a href="${href}" style="display:inline-block;background:${bg};color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:600;font-size:14px;">${label}</a></td>`;
   const gamesLink = rsvpLinks.games
-    ? ` <a href="${rsvpLinks.games}" style="color:#4f46e5;font-weight:600;">See the games &amp; pick one →</a>`
+    ? ` <a href="${escapeHtml(rsvpLinks.games)}" style="color:#4f46e5;font-weight:600;">See the games &amp; pick one →</a>`
     : '';
   return `
   <table role="presentation" cellpadding="0" cellspacing="0" style="margin:14px 0 2px;"><tr>
@@ -625,7 +625,7 @@ function foodHtml({ food, sidesOpen, rsvpLinks }) {
   const sideLine = sidesOpen
     ? `<p style="margin:8px 0 0;font-size:13px;">Bringing a side? ${
         rsvpLinks?.games
-          ? `<a href="${rsvpLinks.games}" style="color:#d97706;font-weight:600;">Sign up here</a> — no sign-in needed.`
+          ? `<a href="${escapeHtml(rsvpLinks.games)}" style="color:#d97706;font-weight:600;">Sign up here</a> — no sign-in needed.`
           : 'Sign up in the app.'
       }</p>`
     : '';

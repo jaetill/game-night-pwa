@@ -103,7 +103,16 @@ const BTN        = 'display:inline-block;padding:8px 14px;border-radius:6px;text
 function htmlResponse(status, body) {
   return {
     statusCode: status,
-    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+    headers: {
+      'Content-Type':            'text/html; charset=utf-8',
+      'Cache-Control':           'no-store',
+      'X-Content-Type-Options':  'nosniff',
+      'X-Frame-Options':         'DENY',
+      'Referrer-Policy':         'no-referrer',
+      // Inline styles only; game thumbnails are BGG-hosted images; the side
+      // form posts back to this same route. No scripts anywhere.
+      'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; img-src https: data:; form-action 'self'; base-uri 'none'",
+    },
     body,
   };
 }
@@ -163,7 +172,7 @@ function renderPickerPage(night, who, token, banner) {
     any_game:   "You're in (put me in a game)",
     if_needed:  "You'll play if needed",
     spectating: "You're hanging out",
-  }[myRsvp?.type ?? 'playing'];
+  }[myRsvp?.type ?? 'playing'] ?? "You've RSVP'd";
   const declined = (night.declined || []).includes(who.userId);
 
   const when = [formatDate(night.date), night.time].filter(Boolean).join(' · ');
@@ -398,16 +407,17 @@ function applyGameAction(night, who, choice, { gameId, desc } = {}) {
 
   if (choice === 'side' || choice === 'unside') {
     if (!night.food || !night.allowSides) return note('warn', "The host isn't taking sides for this night.");
-    const hadSide = Array.isArray(night.sides) && night.sides.some(s => s.userId === userId);
-    night.sides = (Array.isArray(night.sides) ? night.sides : []).filter(s => s.userId !== userId);
+    const sides   = Array.isArray(night.sides) ? night.sides : [];
+    const hadSide = sides.some(s => s.userId === userId);
     if (choice === 'side') {
       const clean = String(desc ?? '').replace(/\s+/g, ' ').trim().slice(0, MAX_SIDE_DESC);
-      if (!clean) return note('warn', 'Tell us what you\'re bringing.');
-      night.sides.push({ userId, name, description: clean });
+      if (!clean) return note('warn', "Tell us what you're bringing.");
+      night.sides = [...sides.filter(s => s.userId !== userId), { userId, name, description: clean }];
       night.lastModified = Date.now();
       return { ok: true, changed: true, banner: { tone: 'ok', text: `Thanks — you're bringing ${clean}.` } };
     }
     if (!hadSide) return note('ok', "You weren't signed up for a side.");
+    night.sides = sides.filter(s => s.userId !== userId);
     night.lastModified = Date.now();
     return { ok: true, changed: true, banner: { tone: 'ok', text: 'Side removed.' } };
   }
