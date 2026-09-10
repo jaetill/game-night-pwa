@@ -77,7 +77,15 @@ async function makeRsvpLinks(night, invitee) {
     ? new Date(night.date + 'T23:59:59').getTime() + 2 * 24 * 60 * 60 * 1000
     : Date.now() + 45 * 24 * 60 * 60 * 1000;
   const mk = (choice) => `${API_BASE_URL}/rsvp?token=${encodeURIComponent(signRsvpToken({ nightId: night.id, invitee, exp }, secret))}&choice=${choice}`;
-  return { yes: mk('playing'), ifNeeded: mk('if_needed'), no: mk('declined') };
+  // `games` opens the no-login picker page (view + join/interested/side)
+  // without changing the recipient's RSVP.
+  return { yes: mk('playing'), ifNeeded: mk('if_needed'), no: mk('declined'), games: mk('games') };
+}
+
+// Food-plan fields shared by invite + nudge bodies. `sidesOpen` means the
+// host is taking side-dish sign-ups (night.allowSides).
+function foodCtx(night) {
+  return { food: night.food || '', sidesOpen: !!(night.food && night.allowSides) };
 }
 
 // Postmark attachment array for the night's calendar file, or null when the
@@ -297,6 +305,7 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
       timeStr:      night.time     || '',
       location:     night.location || '',
       description:  night.description || '',
+      ...foodCtx(night),
       // 'reset' (re-issued temp password) shows the credentials block too —
       // the recipient has never signed in and needs working credentials.
       isNewAccount: provisioned.result === 'created' || provisioned.result === 'reset',
@@ -376,7 +385,7 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
 
   // ── Build email content ──
   const dateStr = formatDate(night.date);
-  const ctx     = { hostName, dateStr, timeStr: night.time || '', location: night.location || '', description: night.description || '' };
+  const ctx     = { hostName, dateStr, timeStr: night.time || '', location: night.location || '', description: night.description || '', ...foodCtx(night) };
 
   // ── Send via Postmark ──
   const nudgeAttachments = icsAttachment(night, hostName);
@@ -568,13 +577,27 @@ function formatDate(dateStr) {
 // Plain-text one-click RSVP block (shared by invite + nudge text bodies).
 function rsvpLinksText(rsvpLinks) {
   if (!rsvpLinks) return [];
-  return [
+  const lines = [
     '',
     'One-click RSVP (no sign-in needed):',
     `  I'm in:              ${rsvpLinks.yes}`,
     `  I'll play if needed: ${rsvpLinks.ifNeeded}`,
     `  Can't make it:       ${rsvpLinks.no}`,
   ];
+  if (rsvpLinks.games) lines.push(`  See the games / pick one: ${rsvpLinks.games}`);
+  return lines;
+}
+
+// Plain-text food block (shared by invite + nudge text bodies).
+function foodText({ food, sidesOpen, rsvpLinks }) {
+  if (!food) return [];
+  const lines = ['', `Food: ${food}`, `  (Feel free to bring your own meal if you prefer — no obligation to eat with the group.)`];
+  if (sidesOpen) {
+    lines.push(rsvpLinks?.games
+      ? `  Bringing a side? Sign up here: ${rsvpLinks.games}`
+      : `  Bringing a side? Sign up in the app.`);
+  }
+  return lines;
 }
 
 // HTML one-click RSVP button row (shared by invite + nudge HTML bodies).
@@ -583,16 +606,38 @@ function rsvpLinksHtml(rsvpLinks) {
   if (!rsvpLinks) return '';
   const btn = (href, bg, label) =>
     `<td style="padding-right:8px;"><a href="${href}" style="display:inline-block;background:${bg};color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:600;font-size:14px;">${label}</a></td>`;
+  const gamesLink = rsvpLinks.games
+    ? ` <a href="${escapeHtml(rsvpLinks.games)}" style="color:#4f46e5;font-weight:600;">See the games &amp; pick one →</a>`
+    : '';
   return `
   <table role="presentation" cellpadding="0" cellspacing="0" style="margin:14px 0 2px;"><tr>
     ${btn(rsvpLinks.yes, '#16a34a', "I'm in 🎲")}
     ${btn(rsvpLinks.ifNeeded, '#d97706', 'If needed')}
     ${btn(rsvpLinks.no, '#64748b', "Can't make it")}
   </tr></table>
-  <p style="font-size:12px;color:#94a3b8;margin:4px 0 0;">One tap — no sign-in needed.</p>`;
+  <p style="font-size:12px;color:#94a3b8;margin:4px 0 0;">One tap — no sign-in needed.${gamesLink}</p>`;
 }
 
-function buildInviteText({ name, hostName, dateStr, timeStr, location, description, isNewAccount, signInEmail, tempPassword, rsvpLinks }) {
+// HTML food block (shared by invite + nudge HTML bodies). `food` is
+// host-written text from gameNights.json — escaped like everything else.
+function foodHtml({ food, sidesOpen, rsvpLinks }) {
+  if (!food) return '';
+  const sideLine = sidesOpen
+    ? `<p style="margin:8px 0 0;font-size:13px;">Bringing a side? ${
+        rsvpLinks?.games
+          ? `<a href="${escapeHtml(rsvpLinks.games)}" style="color:#d97706;font-weight:600;">Sign up here</a> — no sign-in needed.`
+          : 'Sign up in the app.'
+      }</p>`
+    : '';
+  return `
+  <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;margin:16px 0 4px;">
+    <p style="margin:0;font-size:14px;"><strong>🍽️ Food:</strong> ${escapeHtml(food)}</p>
+    <p style="margin:4px 0 0;font-size:12px;color:#94a3b8;">Feel free to bring your own meal if you prefer — no obligation to eat with the group.</p>
+    ${sideLine}
+  </div>`;
+}
+
+function buildInviteText({ name, hostName, dateStr, timeStr, location, description, food, sidesOpen, isNewAccount, signInEmail, tempPassword, rsvpLinks }) {
   const lines = [
     `Hi${name ? ` ${name}` : ''}!`,
     '',
@@ -602,6 +647,7 @@ function buildInviteText({ name, hostName, dateStr, timeStr, location, descripti
       (location ? ` at ${location}` : '') + '.',
   ];
   if (description) lines.push('', description);
+  lines.push(...foodText({ food, sidesOpen, rsvpLinks }));
   lines.push(...rsvpLinksText(rsvpLinks));
   lines.push('', `Or RSVP and pick games in the app: ${APP_URL}`);
   if (isNewAccount && tempPassword) {
@@ -619,7 +665,7 @@ function buildInviteText({ name, hostName, dateStr, timeStr, location, descripti
   return lines.join('\n');
 }
 
-function buildInviteHtml({ name, hostName, dateStr, timeStr, location, description, isNewAccount, signInEmail, tempPassword, rsvpLinks }) {
+function buildInviteHtml({ name, hostName, dateStr, timeStr, location, description, food, sidesOpen, isNewAccount, signInEmail, tempPassword, rsvpLinks }) {
   // Escape every user-supplied field in the email body — same discipline
   // as buildHtml (per code-review findings #20 and #21 on PR #18).
   // `dateStr`/`timeStr` come from gameNights.json (host-written) and
@@ -645,6 +691,7 @@ function buildInviteHtml({ name, hostName, dateStr, timeStr, location, descripti
   <p>Hi${name ? ` ${escapeHtml(name)}` : ''}!</p>
   <p><strong>${escapeHtml(hostName)}</strong> has invited you to game night${when ? ` ${when}` : ''}${location ? ` at <strong>${escapeHtml(location)}</strong>` : ''}.</p>
   ${description ? `<p style="color:#64748b;font-style:italic;">${escapeHtml(description)}</p>` : ''}
+  ${foodHtml({ food, sidesOpen, rsvpLinks })}
   <p>Let ${escapeHtml(hostName)} know if you can make it:</p>
   ${rsvpLinksHtml(rsvpLinks)}
   <p style="margin-top:18px;">
@@ -670,7 +717,7 @@ function escapeHtml(s) {
     .replace(/'/g, '&#39;');
 }
 
-function buildText({ name, hostName, dateStr, timeStr, location, description, rsvpLinks }) {
+function buildText({ name, hostName, dateStr, timeStr, location, description, food, sidesOpen, rsvpLinks }) {
   const lines = [
     `Hi${name ? ` ${name}` : ''}!`,
     '',
@@ -680,6 +727,7 @@ function buildText({ name, hostName, dateStr, timeStr, location, description, rs
       (location  ? ` at ${location}`  : '') + '.',
   ];
   if (description) lines.push('', description);
+  lines.push(...foodText({ food, sidesOpen, rsvpLinks }));
   lines.push(...rsvpLinksText(rsvpLinks));
   lines.push(
     '',
@@ -691,7 +739,7 @@ function buildText({ name, hostName, dateStr, timeStr, location, description, rs
   return lines.join('\n');
 }
 
-function buildHtml({ name, hostName, dateStr, timeStr, location, description, rsvpLinks }) {
+function buildHtml({ name, hostName, dateStr, timeStr, location, description, food, sidesOpen, rsvpLinks }) {
   const when = [dateStr && `<strong>${escapeHtml(dateStr)}</strong>`, timeStr && `at <strong>${escapeHtml(timeStr)}</strong>`].filter(Boolean).join(' ');
   return `<!DOCTYPE html>
 <html>
@@ -700,6 +748,7 @@ function buildHtml({ name, hostName, dateStr, timeStr, location, description, rs
   <p>Hi${name ? ` ${escapeHtml(name)}` : ''}!</p>
   <p><strong>${escapeHtml(hostName)}</strong> wanted to remind you about game night${when ? ` ${when}` : ''}${location ? ` at <strong>${escapeHtml(location)}</strong>` : ''}.</p>
   ${description ? `<p style="color:#64748b;font-style:italic;">${escapeHtml(description)}</p>` : ''}
+  ${foodHtml({ food, sidesOpen, rsvpLinks })}
   <p>Haven't replied yet? Let ${escapeHtml(hostName)} know if you can make it:</p>
   ${rsvpLinksHtml(rsvpLinks)}
   <p style="margin-top:18px;">
@@ -748,6 +797,9 @@ function makeNudgeErrorEntry(e) { return { error: e.message }; }
 exports._REQUIRED_GROUP = REQUIRED_GROUP;
 exports._buildHtml = buildHtml;
 exports._buildInviteHtml = buildInviteHtml;
+exports._buildInviteText = buildInviteText;
+exports._buildText = buildText;
+exports._foodCtx = foodCtx;
 exports._escapeHtml = escapeHtml;
 exports._isValidInviteEmail = isValidInviteEmail;
 exports._makeNudgeErrorEntry = makeNudgeErrorEntry;
