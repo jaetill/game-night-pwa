@@ -157,6 +157,16 @@ function formatDate(dateStr) {
   } catch { return dateStr; }
 }
 
+// "19:00" -> "7:00 PM". Anything that isn't HH:MM is passed through.
+function formatTime(t) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(t ?? '').trim());
+  if (!m) return t || '';
+  const h = Number(m[1]);
+  if (h > 23) return t;
+  const h12 = h % 12 || 12;
+  return `${h12}:${m[2]} ${h < 12 ? 'AM' : 'PM'}`;
+}
+
 /**
  * Render the picker page for `night` as seen by `who`. `token` is echoed
  * into every action link. `banner` is an optional {tone, text} flash line.
@@ -175,7 +185,7 @@ function renderPickerPage(night, who, token, banner) {
   }[myRsvp?.type ?? 'playing'] ?? "You've RSVP'd";
   const declined = (night.declined || []).includes(who.userId);
 
-  const when = [formatDate(night.date), night.time].filter(Boolean).join(' · ');
+  const when = [formatDate(night.date), formatTime(night.time)].filter(Boolean).join(' · ');
 
   const bannerHtml = banner ? `
   <div style="border-radius:8px;padding:10px 14px;margin:0 0 18px;font-size:14px;${

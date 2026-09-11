@@ -79,13 +79,43 @@ async function makeRsvpLinks(night, invitee) {
   const mk = (choice) => `${API_BASE_URL}/rsvp?token=${encodeURIComponent(signRsvpToken({ nightId: night.id, invitee, exp }, secret))}&choice=${choice}`;
   // `games` opens the no-login picker page (view + join/interested/side)
   // without changing the recipient's RSVP.
-  return { yes: mk('playing'), ifNeeded: mk('if_needed'), no: mk('declined'), games: mk('games') };
+  // `join(gameId)` is a one-click seat grab for a specific game.
+  return {
+    yes: mk('playing'), ifNeeded: mk('if_needed'), no: mk('declined'), games: mk('games'),
+    join: (gameId) => `${mk('join')}&game=${encodeURIComponent(gameId)}`,
+  };
 }
 
 // Food-plan fields shared by invite + nudge bodies. `sidesOpen` means the
 // host is taking side-dish sign-ups (night.allowSides).
 function foodCtx(night) {
   return { food: night.food || '', sidesOpen: !!(night.food && night.allowSides) };
+}
+
+// Games on the table, for the email body. Titles come from selectedGames
+// (the host's picker stores title + maxPlayers there); seat counts are as
+// of send time — the picker page is the live view.
+function gamesCtx(night) {
+  return {
+    games: Object.entries(night.selectedGames || {})
+      .filter(([, g]) => g && g.title)
+      .map(([id, g]) => ({
+        id,
+        title:  g.title,
+        taken:  Array.isArray(g.signedUpPlayers) ? g.signedUpPlayers.length : 0,
+        max:    Number(g.maxPlayers) || 4,
+      })),
+  };
+}
+
+// "19:00" -> "7:00 PM". Anything that isn't HH:MM is passed through.
+function formatTime(t) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(t ?? '').trim());
+  if (!m) return t || '';
+  const h = Number(m[1]);
+  if (h > 23) return t;
+  const h12 = h % 12 || 12;
+  return `${h12}:${m[2]} ${h < 12 ? 'AM' : 'PM'}`;
 }
 
 // Postmark attachment array for the night's calendar file, or null when the
@@ -302,10 +332,11 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
     const dateStr = formatDate(night.date);
     const ctx = {
       hostName, dateStr,
-      timeStr:      night.time     || '',
+      timeStr:      formatTime(night.time),
       location:     night.location || '',
       description:  night.description || '',
       ...foodCtx(night),
+      ...gamesCtx(night),
       // 'reset' (re-issued temp password) shows the credentials block too —
       // the recipient has never signed in and needs working credentials.
       isNewAccount: provisioned.result === 'created' || provisioned.result === 'reset',
@@ -385,7 +416,7 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
 
   // ── Build email content ──
   const dateStr = formatDate(night.date);
-  const ctx     = { hostName, dateStr, timeStr: night.time || '', location: night.location || '', description: night.description || '', ...foodCtx(night) };
+  const ctx     = { hostName, dateStr, timeStr: formatTime(night.time), location: night.location || '', description: night.description || '', ...foodCtx(night), ...gamesCtx(night) };
 
   // ── Send via Postmark ──
   const nudgeAttachments = icsAttachment(night, hostName);
@@ -631,13 +662,51 @@ function foodHtml({ food, sidesOpen, rsvpLinks }) {
     : '';
   return `
   <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;margin:16px 0 4px;">
-    <p style="margin:0;font-size:14px;"><strong>🍽️ Food:</strong> ${escapeHtml(food)}</p>
+    <p style="margin:0;font-size:14px;"><strong>Food:</strong> ${escapeHtml(food)}</p>
     <p style="margin:4px 0 0;font-size:12px;color:#94a3b8;">Feel free to bring your own meal if you prefer — no obligation to eat with the group.</p>
     ${sideLine}
   </div>`;
 }
 
-function buildInviteText({ name, hostName, dateStr, timeStr, location, description, food, sidesOpen, isNewAccount, signInEmail, tempPassword, rsvpLinks }) {
+// Plain-text games block (shared by invite + nudge text bodies).
+function gamesText({ games, rsvpLinks }) {
+  if (!games || games.length === 0) return [];
+  const lines = ['', 'Games on the table:'];
+  for (const g of games) {
+    const full  = g.taken >= g.max;
+    const seats = `${g.taken}/${g.max} seats taken${full ? ' — full' : ''}`;
+    lines.push(rsvpLinks?.join && !full
+      ? `  ${g.title} (${seats}) — join: ${rsvpLinks.join(g.id)}`
+      : `  ${g.title} (${seats})`);
+  }
+  return lines;
+}
+
+// HTML games block (shared by invite + nudge HTML bodies). Titles are
+// host-written (from BGG via the picker) — escaped like everything else.
+function gamesHtml({ games, rsvpLinks }) {
+  if (!games || games.length === 0) return '';
+  const rows = games.map(g => {
+    const full  = g.taken >= g.max;
+    const seats = `${g.taken}/${g.max}`;
+    const btn   = !rsvpLinks?.join ? ''
+      : full
+        ? `<td style="padding:6px 0 6px 12px;white-space:nowrap;"><span style="display:inline-block;background:#f1f5f9;color:#94a3b8;padding:6px 12px;border-radius:6px;font-weight:600;font-size:13px;">Full</span></td>`
+        : `<td style="padding:6px 0 6px 12px;white-space:nowrap;"><a href="${escapeHtml(rsvpLinks.join(g.id))}" style="display:inline-block;background:#4f46e5;color:#fff;padding:6px 12px;border-radius:6px;text-decoration:none;font-weight:600;font-size:13px;">Join</a></td>`;
+    return `<tr>
+      <td style="padding:6px 0;font-size:14px;">${escapeHtml(g.title)} <span style="color:${full ? '#dc2626' : '#94a3b8'};font-size:12px;">${seats}</span></td>
+      ${btn}
+    </tr>`;
+  }).join('');
+  return `
+  <p style="margin:18px 0 4px;font-weight:600;">Games on the table</p>
+  <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">${rows}</table>
+  <p style="font-size:12px;color:#94a3b8;margin:4px 0 0;">Seat counts as of this email — ${
+    rsvpLinks?.games ? `<a href="${escapeHtml(rsvpLinks.games)}" style="color:#4f46e5;">see the live list</a>` : 'the app has the live list'
+  }.</p>`;
+}
+
+function buildInviteText({ name, hostName, dateStr, timeStr, location, description, food, sidesOpen, games, isNewAccount, signInEmail, tempPassword, rsvpLinks }) {
   const lines = [
     `Hi${name ? ` ${name}` : ''}!`,
     '',
@@ -647,6 +716,7 @@ function buildInviteText({ name, hostName, dateStr, timeStr, location, descripti
       (location ? ` at ${location}` : '') + '.',
   ];
   if (description) lines.push('', description);
+  lines.push(...gamesText({ games, rsvpLinks }));
   lines.push(...foodText({ food, sidesOpen, rsvpLinks }));
   lines.push(...rsvpLinksText(rsvpLinks));
   lines.push('', `Or RSVP and pick games in the app: ${APP_URL}`);
@@ -665,7 +735,7 @@ function buildInviteText({ name, hostName, dateStr, timeStr, location, descripti
   return lines.join('\n');
 }
 
-function buildInviteHtml({ name, hostName, dateStr, timeStr, location, description, food, sidesOpen, isNewAccount, signInEmail, tempPassword, rsvpLinks }) {
+function buildInviteHtml({ name, hostName, dateStr, timeStr, location, description, food, sidesOpen, games, isNewAccount, signInEmail, tempPassword, rsvpLinks }) {
   // Escape every user-supplied field in the email body — same discipline
   // as buildHtml (per code-review findings #20 and #21 on PR #18).
   // `dateStr`/`timeStr` come from gameNights.json (host-written) and
@@ -691,6 +761,7 @@ function buildInviteHtml({ name, hostName, dateStr, timeStr, location, descripti
   <p>Hi${name ? ` ${escapeHtml(name)}` : ''}!</p>
   <p><strong>${escapeHtml(hostName)}</strong> has invited you to game night${when ? ` ${when}` : ''}${location ? ` at <strong>${escapeHtml(location)}</strong>` : ''}.</p>
   ${description ? `<p style="color:#64748b;font-style:italic;">${escapeHtml(description)}</p>` : ''}
+  ${gamesHtml({ games, rsvpLinks })}
   ${foodHtml({ food, sidesOpen, rsvpLinks })}
   <p>Let ${escapeHtml(hostName)} know if you can make it:</p>
   ${rsvpLinksHtml(rsvpLinks)}
@@ -717,7 +788,7 @@ function escapeHtml(s) {
     .replace(/'/g, '&#39;');
 }
 
-function buildText({ name, hostName, dateStr, timeStr, location, description, food, sidesOpen, rsvpLinks }) {
+function buildText({ name, hostName, dateStr, timeStr, location, description, food, sidesOpen, games, rsvpLinks }) {
   const lines = [
     `Hi${name ? ` ${name}` : ''}!`,
     '',
@@ -727,6 +798,7 @@ function buildText({ name, hostName, dateStr, timeStr, location, description, fo
       (location  ? ` at ${location}`  : '') + '.',
   ];
   if (description) lines.push('', description);
+  lines.push(...gamesText({ games, rsvpLinks }));
   lines.push(...foodText({ food, sidesOpen, rsvpLinks }));
   lines.push(...rsvpLinksText(rsvpLinks));
   lines.push(
@@ -739,7 +811,7 @@ function buildText({ name, hostName, dateStr, timeStr, location, description, fo
   return lines.join('\n');
 }
 
-function buildHtml({ name, hostName, dateStr, timeStr, location, description, food, sidesOpen, rsvpLinks }) {
+function buildHtml({ name, hostName, dateStr, timeStr, location, description, food, sidesOpen, games, rsvpLinks }) {
   const when = [dateStr && `<strong>${escapeHtml(dateStr)}</strong>`, timeStr && `at <strong>${escapeHtml(timeStr)}</strong>`].filter(Boolean).join(' ');
   return `<!DOCTYPE html>
 <html>
@@ -748,6 +820,7 @@ function buildHtml({ name, hostName, dateStr, timeStr, location, description, fo
   <p>Hi${name ? ` ${escapeHtml(name)}` : ''}!</p>
   <p><strong>${escapeHtml(hostName)}</strong> wanted to remind you about game night${when ? ` ${when}` : ''}${location ? ` at <strong>${escapeHtml(location)}</strong>` : ''}.</p>
   ${description ? `<p style="color:#64748b;font-style:italic;">${escapeHtml(description)}</p>` : ''}
+  ${gamesHtml({ games, rsvpLinks })}
   ${foodHtml({ food, sidesOpen, rsvpLinks })}
   <p>Haven't replied yet? Let ${escapeHtml(hostName)} know if you can make it:</p>
   ${rsvpLinksHtml(rsvpLinks)}
@@ -800,6 +873,8 @@ exports._buildInviteHtml = buildInviteHtml;
 exports._buildInviteText = buildInviteText;
 exports._buildText = buildText;
 exports._foodCtx = foodCtx;
+exports._gamesCtx = gamesCtx;
+exports._formatTime = formatTime;
 exports._escapeHtml = escapeHtml;
 exports._isValidInviteEmail = isValidInviteEmail;
 exports._makeNudgeErrorEntry = makeNudgeErrorEntry;

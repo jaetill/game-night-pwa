@@ -291,6 +291,12 @@ describe('renderPickerPage', () => {
     expect(html).toContain('choice=playing');
   });
 
+  it('renders a stored 24h time as 12h', () => {
+    const html = renderPickerPage(makeNight({ time: '19:00' }), ME, TOKEN, null);
+    expect(html).toContain('7:00 PM');
+    expect(html).not.toContain('19:00');
+  });
+
   it('copes with an empty game list', () => {
     const html = renderPickerPage(makeNight({ selectedGames: {} }), ME, TOKEN, null);
     expect(html).toContain('No games on the table yet');
