@@ -81,8 +81,13 @@ async function makeRsvpLinks(night, invitee) {
   // without changing the recipient's RSVP.
   // `join(gameId)` is a one-click seat grab for a specific game.
   return {
-    yes: mk('playing'), ifNeeded: mk('if_needed'), no: mk('declined'), games: mk('games'),
-    join: (gameId) => `${mk('join')}&game=${encodeURIComponent(gameId)}`,
+    yes:       mk('playing'),
+    anyGame:   mk('any_game'),
+    ifNeeded:  mk('if_needed'),
+    hangOut:   mk('spectating'),
+    no:        mk('declined'),
+    games:     mk('games'),
+    join:      (gameId) => `${mk('join')}&game=${encodeURIComponent(gameId)}`,
   };
 }
 
@@ -605,18 +610,69 @@ function formatDate(dateStr) {
   } catch { return dateStr; }
 }
 
-// Plain-text one-click RSVP block (shared by invite + nudge text bodies).
-function rsvpLinksText(rsvpLinks) {
-  if (!rsvpLinks) return [];
-  const lines = [
-    '',
-    'One-click RSVP (no sign-in needed):',
-    `  I'm in:              ${rsvpLinks.yes}`,
-    `  I'll play if needed: ${rsvpLinks.ifNeeded}`,
-    `  Can't make it:       ${rsvpLinks.no}`,
-  ];
-  if (rsvpLinks.games) lines.push(`  See the games / pick one: ${rsvpLinks.games}`);
+// ── Choices block ──────────────────────────────────────────────────────
+// One list, one tap each, no sign-in: every game on the night (Join), then
+// the non-specific answers (any game / if needed / just hanging out / not
+// coming). Shared by invite + nudge, text + HTML.
+
+const GENERIC_CHOICES = [
+  { key: 'anyGame',  label: 'Any game',           hint: "put me wherever there's a seat", bg: '#16a34a' },
+  { key: 'ifNeeded', label: 'Play if needed',     hint: "I'll fill in if a game needs one more", bg: '#d97706' },
+  { key: 'hangOut',  label: 'Just there to hang', hint: 'coming, not playing', bg: '#0ea5e9' },
+  { key: 'no',       label: 'Not coming',         hint: '', bg: '#64748b' },
+];
+
+function choicesText({ games, rsvpLinks }) {
+  const lines = ['', 'How are you in? One tap, no sign-in needed:'];
+  for (const g of games || []) {
+    const full  = g.taken >= g.max;
+    const seats = `${g.taken}/${g.max} seats taken${full ? ' — full' : ''}`;
+    lines.push(rsvpLinks?.join && !full
+      ? `  ${g.title} (${seats}): ${rsvpLinks.join(g.id)}`
+      : `  ${g.title} (${seats})`);
+  }
+  for (const c of GENERIC_CHOICES) {
+    lines.push(rsvpLinks?.[c.key] ? `  ${c.label}: ${rsvpLinks[c.key]}` : `  ${c.label}`);
+  }
+  if (rsvpLinks?.games) lines.push('', `Seat counts as of this email — live list: ${rsvpLinks.games}`);
   return lines;
+}
+
+// Table layout — email clients ignore flexbox. Titles are host-written
+// (from BGG via the picker) — escaped like everything else.
+function choicesHtml({ games, rsvpLinks }) {
+  const btn = (href, bg, label) =>
+    `<a href="${escapeHtml(href)}" style="display:inline-block;background:${bg};color:#fff;padding:7px 14px;border-radius:6px;text-decoration:none;font-weight:600;font-size:13px;white-space:nowrap;">${label}</a>`;
+  const pill = (label) =>
+    `<span style="display:inline-block;background:#f1f5f9;color:#94a3b8;padding:7px 14px;border-radius:6px;font-weight:600;font-size:13px;">${label}</span>`;
+  const row = (left, right) => `<tr>
+      <td style="padding:5px 0;font-size:14px;vertical-align:middle;">${left}</td>
+      <td style="padding:5px 0 5px 14px;vertical-align:middle;">${right}</td>
+    </tr>`;
+
+  const gameRows = (games || []).map(g => {
+    const full = g.taken >= g.max;
+    const left = `${escapeHtml(g.title)} <span style="color:${full ? '#dc2626' : '#94a3b8'};font-size:12px;">${g.taken}/${g.max}</span>`;
+    const right = !rsvpLinks?.join ? '' : full ? pill('Full') : btn(rsvpLinks.join(g.id), '#4f46e5', 'Join');
+    return row(left, right);
+  }).join('');
+
+  const genericRows = GENERIC_CHOICES.map(c => {
+    const left  = `${c.label}${c.hint ? ` <span style="color:#94a3b8;font-size:12px;">— ${c.hint}</span>` : ''}`;
+    const right = rsvpLinks?.[c.key] ? btn(rsvpLinks[c.key], c.bg, c.label) : '';
+    return row(left, right);
+  }).join('');
+
+  const divider = gameRows ? `<tr><td colspan="2" style="padding:6px 0 2px;font-size:12px;color:#94a3b8;">Or, without picking a game:</td></tr>` : '';
+
+  return `
+  <p style="margin:18px 0 6px;font-weight:600;">How are you in? <span style="font-weight:400;color:#94a3b8;font-size:12px;">One tap — no sign-in needed.</span></p>
+  <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">${gameRows}${divider}${genericRows}</table>
+  <p style="font-size:12px;color:#94a3b8;margin:6px 0 0;">${
+    rsvpLinks?.games
+      ? `Seat counts as of this email — <a href="${escapeHtml(rsvpLinks.games)}" style="color:#4f46e5;">see the live list</a> or change your answer any time.`
+      : 'The app has the live list.'
+  }</p>`;
 }
 
 // Plain-text food block (shared by invite + nudge text bodies).
@@ -629,24 +685,6 @@ function foodText({ food, sidesOpen, rsvpLinks }) {
       : `  Bringing a side? Sign up in the app.`);
   }
   return lines;
-}
-
-// HTML one-click RSVP button row (shared by invite + nudge HTML bodies).
-// Table layout — email clients ignore flexbox.
-function rsvpLinksHtml(rsvpLinks) {
-  if (!rsvpLinks) return '';
-  const btn = (href, bg, label) =>
-    `<td style="padding-right:8px;"><a href="${href}" style="display:inline-block;background:${bg};color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:600;font-size:14px;">${label}</a></td>`;
-  const gamesLink = rsvpLinks.games
-    ? ` <a href="${escapeHtml(rsvpLinks.games)}" style="color:#4f46e5;font-weight:600;">See the games &amp; pick one →</a>`
-    : '';
-  return `
-  <table role="presentation" cellpadding="0" cellspacing="0" style="margin:14px 0 2px;"><tr>
-    ${btn(rsvpLinks.yes, '#16a34a', "I'm in 🎲")}
-    ${btn(rsvpLinks.ifNeeded, '#d97706', 'If needed')}
-    ${btn(rsvpLinks.no, '#64748b', "Can't make it")}
-  </tr></table>
-  <p style="font-size:12px;color:#94a3b8;margin:4px 0 0;">One tap — no sign-in needed.${gamesLink}</p>`;
 }
 
 // HTML food block (shared by invite + nudge HTML bodies). `food` is
@@ -668,44 +706,6 @@ function foodHtml({ food, sidesOpen, rsvpLinks }) {
   </div>`;
 }
 
-// Plain-text games block (shared by invite + nudge text bodies).
-function gamesText({ games, rsvpLinks }) {
-  if (!games || games.length === 0) return [];
-  const lines = ['', 'Games on the table:'];
-  for (const g of games) {
-    const full  = g.taken >= g.max;
-    const seats = `${g.taken}/${g.max} seats taken${full ? ' — full' : ''}`;
-    lines.push(rsvpLinks?.join && !full
-      ? `  ${g.title} (${seats}) — join: ${rsvpLinks.join(g.id)}`
-      : `  ${g.title} (${seats})`);
-  }
-  return lines;
-}
-
-// HTML games block (shared by invite + nudge HTML bodies). Titles are
-// host-written (from BGG via the picker) — escaped like everything else.
-function gamesHtml({ games, rsvpLinks }) {
-  if (!games || games.length === 0) return '';
-  const rows = games.map(g => {
-    const full  = g.taken >= g.max;
-    const seats = `${g.taken}/${g.max}`;
-    const btn   = !rsvpLinks?.join ? ''
-      : full
-        ? `<td style="padding:6px 0 6px 12px;white-space:nowrap;"><span style="display:inline-block;background:#f1f5f9;color:#94a3b8;padding:6px 12px;border-radius:6px;font-weight:600;font-size:13px;">Full</span></td>`
-        : `<td style="padding:6px 0 6px 12px;white-space:nowrap;"><a href="${escapeHtml(rsvpLinks.join(g.id))}" style="display:inline-block;background:#4f46e5;color:#fff;padding:6px 12px;border-radius:6px;text-decoration:none;font-weight:600;font-size:13px;">Join</a></td>`;
-    return `<tr>
-      <td style="padding:6px 0;font-size:14px;">${escapeHtml(g.title)} <span style="color:${full ? '#dc2626' : '#94a3b8'};font-size:12px;">${seats}</span></td>
-      ${btn}
-    </tr>`;
-  }).join('');
-  return `
-  <p style="margin:18px 0 4px;font-weight:600;">Games on the table</p>
-  <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">${rows}</table>
-  <p style="font-size:12px;color:#94a3b8;margin:4px 0 0;">Seat counts as of this email — ${
-    rsvpLinks?.games ? `<a href="${escapeHtml(rsvpLinks.games)}" style="color:#4f46e5;">see the live list</a>` : 'the app has the live list'
-  }.</p>`;
-}
-
 function buildInviteText({ name, hostName, dateStr, timeStr, location, description, food, sidesOpen, games, isNewAccount, signInEmail, tempPassword, rsvpLinks }) {
   const lines = [
     `Hi${name ? ` ${name}` : ''}!`,
@@ -716,9 +716,8 @@ function buildInviteText({ name, hostName, dateStr, timeStr, location, descripti
       (location ? ` at ${location}` : '') + '.',
   ];
   if (description) lines.push('', description);
-  lines.push(...gamesText({ games, rsvpLinks }));
+  lines.push(...choicesText({ games, rsvpLinks }));
   lines.push(...foodText({ food, sidesOpen, rsvpLinks }));
-  lines.push(...rsvpLinksText(rsvpLinks));
   lines.push('', `Or RSVP and pick games in the app: ${APP_URL}`);
   if (isNewAccount && tempPassword) {
     lines.push(
@@ -761,10 +760,8 @@ function buildInviteHtml({ name, hostName, dateStr, timeStr, location, descripti
   <p>Hi${name ? ` ${escapeHtml(name)}` : ''}!</p>
   <p><strong>${escapeHtml(hostName)}</strong> has invited you to game night${when ? ` ${when}` : ''}${location ? ` at <strong>${escapeHtml(location)}</strong>` : ''}.</p>
   ${description ? `<p style="color:#64748b;font-style:italic;">${escapeHtml(description)}</p>` : ''}
-  ${gamesHtml({ games, rsvpLinks })}
+  ${choicesHtml({ games, rsvpLinks })}
   ${foodHtml({ food, sidesOpen, rsvpLinks })}
-  <p>Let ${escapeHtml(hostName)} know if you can make it:</p>
-  ${rsvpLinksHtml(rsvpLinks)}
   <p style="margin-top:18px;">
     <a href="${APP_URL}"
        style="display:inline-block;background:#4f46e5;color:#fff;padding:10px 22px;border-radius:6px;text-decoration:none;font-weight:600;">
@@ -798,9 +795,8 @@ function buildText({ name, hostName, dateStr, timeStr, location, description, fo
       (location  ? ` at ${location}`  : '') + '.',
   ];
   if (description) lines.push('', description);
-  lines.push(...gamesText({ games, rsvpLinks }));
+  lines.push(...choicesText({ games, rsvpLinks }));
   lines.push(...foodText({ food, sidesOpen, rsvpLinks }));
-  lines.push(...rsvpLinksText(rsvpLinks));
   lines.push(
     '',
     `Haven't responded yet? Head over to the app to let them know if you can make it:`,
@@ -820,10 +816,9 @@ function buildHtml({ name, hostName, dateStr, timeStr, location, description, fo
   <p>Hi${name ? ` ${escapeHtml(name)}` : ''}!</p>
   <p><strong>${escapeHtml(hostName)}</strong> wanted to remind you about game night${when ? ` ${when}` : ''}${location ? ` at <strong>${escapeHtml(location)}</strong>` : ''}.</p>
   ${description ? `<p style="color:#64748b;font-style:italic;">${escapeHtml(description)}</p>` : ''}
-  ${gamesHtml({ games, rsvpLinks })}
+  <p>Haven't replied yet? Let ${escapeHtml(hostName)} know:</p>
+  ${choicesHtml({ games, rsvpLinks })}
   ${foodHtml({ food, sidesOpen, rsvpLinks })}
-  <p>Haven't replied yet? Let ${escapeHtml(hostName)} know if you can make it:</p>
-  ${rsvpLinksHtml(rsvpLinks)}
   <p style="margin-top:18px;">
     <a href="${APP_URL}"
        style="display:inline-block;background:#4f46e5;color:#fff;padding:10px 22px;border-radius:6px;text-decoration:none;font-weight:600;">

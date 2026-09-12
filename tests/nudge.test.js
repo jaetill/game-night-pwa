@@ -198,11 +198,13 @@ describe('buildInviteHtml XSS escaping', () => {
     expect(html).toContain('&lt;iframe src=evil&gt;&lt;/iframe&gt;');
   });
 
-  it('escapes hostName in both occurrences (invite + RSVP prompt)', () => {
+  it('escapes hostName everywhere it appears', () => {
+    // Was two occurrences (invite line + "Let X know" prompt); the prompt
+    // folded into the unified choices block, leaving one.
     const html = buildInviteHtml({ ...BASE, hostName: '<x>' });
     expect(html.indexOf('<x>')).toBe(-1);
     const count = (html.match(/&lt;x&gt;/g) ?? []).length;
-    expect(count).toBe(2);
+    expect(count).toBeGreaterThanOrEqual(1);
   });
 
   it('renders benign inputs cleanly', () => {
