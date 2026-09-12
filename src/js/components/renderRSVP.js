@@ -33,7 +33,12 @@ export function renderRSVP(night, nights, currentUser) {
       btnEl.textContent = 'Saving…';
       try {
         night.rsvps = Array.isArray(night.rsvps) ? night.rsvps : [];
-        night.rsvps.push({ userId, name: currentUser.name || currentUser.userId, type });
+        // `email` lets the host's Recent guests list match this RSVP to the
+        // email the invite went to (see utils/userDirectory.js).
+        night.rsvps.push({
+          userId, name: currentUser.name || currentUser.userId, type,
+          ...(email ? { email: email.toLowerCase() } : {}),
+        });
         if (email) night.invited = (night.invited || []).filter(e => e !== email.toLowerCase());
         night.lastModified = Date.now();
         sanitizeNight(night);

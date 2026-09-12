@@ -397,7 +397,9 @@ function applyChoice(night, { userId, name, email, invitee }, choice) {
     // "Just hanging out" means not playing — give any held seats back
     // (interest flags survive; they're a wish, not a seat).
     if (choice === 'spectating') withdrawFromAllGames(night, userId, { keepInterest: true });
-    night.rsvps.push({ userId, name, type: choice });
+    // `email` lets the app's Recent guests list match this RSVP to the
+    // email the invite went to (one entry per person, not email + userId).
+    night.rsvps.push({ userId, name, type: choice, ...(email ? { email: email.toLowerCase() } : {}) });
   }
 
   night.lastModified = Date.now();
@@ -460,7 +462,7 @@ function applyGameAction(night, who, choice, { gameId, desc } = {}) {
       night.rsvps = Array.isArray(night.rsvps) ? night.rsvps : [];
       const mine = night.rsvps.find(r => r.userId === userId);
       if (mine) mine.type = 'playing';
-      else night.rsvps.push({ userId, name, type: 'playing' });
+      else night.rsvps.push({ userId, name, type: 'playing', ...(who.email ? { email: who.email.toLowerCase() } : {}) });
       game.signedUpPlayers.push({ userId, name });
       game.interestedPlayers = game.interestedPlayers.filter(p => p.userId !== userId);
       night.lastModified = Date.now();
