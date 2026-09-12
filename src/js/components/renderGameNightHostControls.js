@@ -113,23 +113,28 @@ export function renderHostGameControls(night, nights) {
     const guestList = document.createElement('div');
     guestList.className = 'flex flex-wrap gap-2';
 
-    removableGuests.forEach(email => {
+    removableGuests.forEach(inviteKey => {
+      // inviteKey is an email (invited by address) or a Cognito userId
+      // (invited from Recent guests). Show a name for the latter — a raw
+      // UUID chip means nothing to the host.
+      const display = getDisplayName(inviteKey);
       const tag = document.createElement('span');
       tag.className = 'flex items-center gap-1 text-xs bg-gray-100 text-gray-700 rounded-full px-2 py-1';
 
       const label = document.createElement('span');
-      label.textContent = email;
+      label.textContent = display;
+      if (display !== inviteKey) label.title = inviteKey;
 
       const removeBtn = document.createElement('button');
       removeBtn.type = 'button';
       removeBtn.textContent = '×';
       removeBtn.className = 'text-gray-400 hover:text-red-500 font-bold leading-none';
-      removeBtn.title = `Remove ${email}`;
+      removeBtn.title = `Remove ${display}`;
       removeBtn.onclick = () => {
-        night.invited = night.invited.filter(id => id !== email);
+        night.invited = night.invited.filter(id => id !== inviteKey);
         night.lastModified = Date.now();
         syncAndRender(nights);
-        toastInfo(`${email} removed.`);
+        toastInfo(`${display} removed.`);
       };
 
       tag.appendChild(label);
