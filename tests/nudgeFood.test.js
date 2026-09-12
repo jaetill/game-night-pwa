@@ -21,7 +21,7 @@ const {
   _foodCtx: foodCtx,
 } = nudge;
 
-const LINKS = { yes: 'https://x/y', ifNeeded: 'https://x/i', no: 'https://x/n', games: 'https://x/g' };
+const LINKS = { yes: 'https://x/y', anyGame: 'https://x/a', ifNeeded: 'https://x/i', hangOut: 'https://x/h', no: 'https://x/n', games: 'https://x/g' };
 const BASE  = { name: 'Alice', hostName: 'Bob', dateStr: 'Saturday, September 26', timeStr: '6:30 PM', location: "Bob's", description: '' };
 
 describe('foodCtx', () => {
@@ -59,7 +59,7 @@ describe.each([
     expect(out).not.toContain('bring your own meal');
   });
 
-  it('links to the game picker from the RSVP block', () => {
+  it('links to the live game list from the choices block', () => {
     const out = build({ ...BASE, rsvpLinks: LINKS });
     expect(out).toContain(LINKS.games);
   });

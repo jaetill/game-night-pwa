@@ -8,7 +8,7 @@
 // (verifyRsvpToken in lib/rsvpToken.js, constant-time HMAC check).
 //
 // choice ∈
-//   playing | if_needed | declined      — RSVP (original one-click buttons)
+//   playing | any_game | if_needed | spectating | declined — RSVP one-clicks
 //   games                                — view the picker page, no write
 //   join | leave | interested | uninterested  (+ &game=<gameId>)
 //   side | unside                        (+ &desc=<text> for side)
@@ -77,8 +77,10 @@ async function getLinkSecret() {
 
 // RSVP choices — the three one-click buttons in the email.
 const RSVP_CHOICES = {
-  playing:   { verb: 'is in',               emoji: '🎉', headline: "You're in!",                          detail: 'A seat is reserved for you. Pick a game below if you like.' },
-  if_needed: { verb: 'will play if needed', emoji: '👍', headline: "Got it — you're on the maybe list.", detail: "The host knows you'll play if a game needs one more. You can still flag games you're interested in." },
+  playing:    { verb: 'is in',               emoji: '🎉', headline: "You're in!",                          detail: 'A seat is reserved for you. Pick a game below if you like.' },
+  any_game:   { verb: 'is in (any game)',    emoji: '🎉', headline: "You're in!",                          detail: "The host will seat you wherever there's room. You can still grab a specific game below." },
+  if_needed:  { verb: 'will play if needed', emoji: '👍', headline: "Got it — you're on the maybe list.", detail: "The host knows you'll play if a game needs one more. You can still flag games you're interested in." },
+  spectating: { verb: 'is coming to hang out', emoji: '🙌', headline: "See you there!",                  detail: "You're down as coming but not playing. Change your mind below any time." },
   declined:  { verb: "can't make it",       emoji: '😢', headline: "Sorry you can't make it.",           detail: 'The host has been let know. Maybe next time!' },
 };
 
@@ -199,11 +201,16 @@ function renderPickerPage(night, who, token, banner) {
        <a href="${url('playing')}" style="color:#d97706;font-weight:600;">Changed your mind?</a></p>`
     : myRsvp
       ? `<p style="color:#64748b;font-size:14px;margin:0 0 18px;">${escapeHtml(rsvpLabel)}.
-         <a href="${url('declined')}" style="color:#94a3b8;">Can't make it after all?</a></p>`
+         <span style="color:#94a3b8;">Change to:</span>
+         ${[['any_game', 'any game'], ['if_needed', 'play if needed'], ['spectating', 'just hanging out'], ['declined', 'not coming']]
+           .filter(([k]) => k !== myRsvp.type)
+           .map(([k, label]) => `<a href="${url(k)}" style="color:#d97706;">${label}</a>`)
+           .join(' · ')}</p>`
       : `<p style="font-size:14px;margin:0 0 18px;">
-           <a href="${url('playing')}" style="${BTN}background:#16a34a;color:#fff;margin-right:6px;">I'm in 🎲</a>
-           <a href="${url('if_needed')}" style="${BTN}background:#d97706;color:#fff;margin-right:6px;">If needed</a>
-           <a href="${url('declined')}" style="${BTN}background:#64748b;color:#fff;">Can't make it</a>
+           <a href="${url('any_game')}" style="${BTN}background:#16a34a;color:#fff;margin:0 6px 6px 0;">Any game</a>
+           <a href="${url('if_needed')}" style="${BTN}background:#d97706;color:#fff;margin:0 6px 6px 0;">Play if needed</a>
+           <a href="${url('spectating')}" style="${BTN}background:#0ea5e9;color:#fff;margin:0 6px 6px 0;">Just there to hang</a>
+           <a href="${url('declined')}" style="${BTN}background:#64748b;color:#fff;margin:0 6px 6px 0;">Not coming</a>
          </p>`;
 
   // Games ────────────────────────────────────────────────────────────────
@@ -387,17 +394,22 @@ function applyChoice(night, { userId, name, email, invitee }, choice) {
     withdrawFromAllGames(night, userId);
     night.sides = (Array.isArray(night.sides) ? night.sides : []).filter(s => s.userId !== userId);
   } else {
+    // "Just hanging out" means not playing — give any held seats back
+    // (interest flags survive; they're a wish, not a seat).
+    if (choice === 'spectating') withdrawFromAllGames(night, userId, { keepInterest: true });
     night.rsvps.push({ userId, name, type: choice });
   }
 
   night.lastModified = Date.now();
 }
 
-function withdrawFromAllGames(night, userId) {
+function withdrawFromAllGames(night, userId, { keepInterest = false } = {}) {
   for (const g of Object.values(night.selectedGames || {})) {
     if (!g) continue;
-    g.signedUpPlayers   = (Array.isArray(g.signedUpPlayers)   ? g.signedUpPlayers   : []).filter(p => p.userId !== userId);
-    g.interestedPlayers = (Array.isArray(g.interestedPlayers) ? g.interestedPlayers : []).filter(p => p.userId !== userId);
+    g.signedUpPlayers = (Array.isArray(g.signedUpPlayers) ? g.signedUpPlayers : []).filter(p => p.userId !== userId);
+    if (!keepInterest) {
+      g.interestedPlayers = (Array.isArray(g.interestedPlayers) ? g.interestedPlayers : []).filter(p => p.userId !== userId);
+    }
   }
 }
 

@@ -20,7 +20,7 @@ const {
 } = nudge;
 
 const LINKS = {
-  yes: 'https://x/y', ifNeeded: 'https://x/i', no: 'https://x/n', games: 'https://x/g',
+  yes: 'https://x/y', anyGame: 'https://x/a', ifNeeded: 'https://x/i', hangOut: 'https://x/h', no: 'https://x/n', games: 'https://x/g',
   join: (id) => `https://x/j?game=${encodeURIComponent(id)}`,
 };
 const BASE  = { name: 'Alice', hostName: 'Bob', dateStr: 'Saturday, September 26', timeStr: '7:00 PM', location: "Bob's", description: '', food: '', sidesOpen: false };
@@ -69,9 +69,9 @@ describe.each([
   ['buildInviteText', buildInviteText, 'text'],
   ['buildText',       buildText,       'text'],
 ])('%s', (_name, build, kind) => {
-  it('lists every game with its seat count', () => {
+  it('lists every game with its seat count in one "How are you in?" block', () => {
     const out = build({ ...BASE, games: GAMES, rsvpLinks: LINKS });
-    expect(out).toContain('Games on the table');
+    expect(out).toContain('How are you in?');
     expect(out).toContain('Splendor: Marvel');
     expect(out).toContain('Vienna');
     expect(out).toContain('0/4');
@@ -85,9 +85,26 @@ describe.each([
     if (kind === 'html') expect(out).toContain('>Full<');
   });
 
-  it('omits the block when there are no games', () => {
-    expect(build({ ...BASE, games: [], rsvpLinks: LINKS })).not.toContain('Games on the table');
-    expect(build({ ...BASE, rsvpLinks: LINKS })).not.toContain('Games on the table');
+  it('always offers the generic answers, games or not, in one list after the games', () => {
+    const out = build({ ...BASE, games: GAMES, rsvpLinks: LINKS });
+    for (const [label, href] of [['Any game', LINKS.anyGame], ['Play if needed', LINKS.ifNeeded], ['Just there to hang', LINKS.hangOut], ['Not coming', LINKS.no]]) {
+      expect(out).toContain(label);
+      expect(out).toContain(href);
+    }
+    // Order: games first, then generic answers, then food.
+    const withFood = build({ ...BASE, games: GAMES, food: 'Gumbo', rsvpLinks: LINKS });
+    expect(withFood.indexOf('Vienna')).toBeLessThan(withFood.indexOf('Any game'));
+    expect(withFood.indexOf('Not coming')).toBeLessThan(withFood.indexOf('Gumbo'));
+
+    const noGames = build({ ...BASE, games: [], rsvpLinks: LINKS });
+    expect(noGames).toContain('Any game');
+    expect(noGames).not.toContain('Vienna');
+  });
+
+  it('no longer renders the old separate RSVP button row', () => {
+    const out = build({ ...BASE, games: GAMES, rsvpLinks: LINKS });
+    expect(out).not.toContain("I'm in");
+    expect(out).not.toContain("Can't make it");
   });
 
   it('still lists games when links could not be minted', () => {

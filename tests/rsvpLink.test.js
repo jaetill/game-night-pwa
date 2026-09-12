@@ -206,6 +206,26 @@ describe('applyChoice', () => {
     expect(night.invited).toEqual([]);
   });
 
+  it('switching to "just hanging out" gives seats back but keeps interest flags', () => {
+    const night = makeNight({ rsvps: [{ userId: 'me-uuid', name: 'Deb', type: 'playing' }] });
+    night.selectedGames.g1.signedUpPlayers.push({ userId: 'me-uuid', name: 'Deb' });
+    night.selectedGames.g2.interestedPlayers.push({ userId: 'me-uuid', name: 'Deb' });
+    applyChoice(night, { ...ME, invitee: 'me-uuid' }, 'spectating');
+    expect(night.rsvps).toEqual([{ userId: 'me-uuid', name: 'Deb', type: 'spectating' }]);
+    expect(night.selectedGames.g1.signedUpPlayers).toEqual([]);
+    expect(night.selectedGames.g2.interestedPlayers).toHaveLength(1);
+  });
+
+  it('any_game and if_needed keep any seats already held', () => {
+    for (const type of ['any_game', 'if_needed']) {
+      const night = makeNight({ rsvps: [{ userId: 'me-uuid', name: 'Deb', type: 'playing' }] });
+      night.selectedGames.g1.signedUpPlayers.push({ userId: 'me-uuid', name: 'Deb' });
+      applyChoice(night, { ...ME, invitee: 'me-uuid' }, type);
+      expect(night.rsvps[0].type).toBe(type);
+      expect(night.selectedGames.g1.signedUpPlayers).toHaveLength(1);
+    }
+  });
+
   it('re-RSVPing after a decline clears the decline (idempotent swap)', () => {
     const night = makeNight({ declined: ['me-uuid'] });
     applyChoice(night, { ...ME, invitee: 'me-uuid' }, 'playing');
@@ -255,13 +275,15 @@ describe('renderPickerPage', () => {
 
   it('shows the RSVP buttons when the guest has not responded, and the status line when they have', () => {
     const fresh = renderPickerPage(makeNight(), ME, TOKEN, null);
-    expect(fresh).toContain('choice=playing');
+    expect(fresh).toContain('choice=any_game');
     expect(fresh).toContain('choice=if_needed');
+    expect(fresh).toContain('choice=spectating');
     expect(fresh).toContain('choice=declined');
 
     const rsvpd = renderPickerPage(makeNight({ rsvps: [{ userId: 'me-uuid', name: 'Deb', type: 'if_needed' }] }), ME, TOKEN, null);
     expect(rsvpd).toContain("You&#39;ll play if needed");
-    expect(rsvpd).not.toContain('choice=if_needed');
+    expect(rsvpd).not.toContain('choice=if_needed');   // current answer isn't offered as a change
+    expect(rsvpd).toContain('choice=spectating');       // the others are
 
     // An RSVP type this page doesn't know about still gets a label.
     const odd = renderPickerPage(makeNight({ rsvps: [{ userId: 'me-uuid', name: 'Deb', type: 'future_type' }] }), ME, TOKEN, null);
@@ -393,6 +415,12 @@ describe('handler', () => {
     const yes = await rsvpLink.handler(evt({ token: tok(), choice: 'playing' }), ctx);
     expect(yes.body).toContain('Catan');
     expect(yes.body).toContain("You&#39;re in!");
+
+    for (const choice of ['any_game', 'spectating']) {
+      const r = await rsvpLink.handler(evt({ token: tok(), choice }), ctx);
+      expect(r.statusCode).toBe(200);
+      expect(JSON.parse(stored)[0].rsvps[0].type).toBe(choice);
+    }
 
     const no = await rsvpLink.handler(evt({ token: tok(), choice: 'declined' }), ctx);
     expect(no.body).toContain("Sorry you can&#39;t make it.");
