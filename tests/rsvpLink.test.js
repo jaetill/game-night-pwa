@@ -64,7 +64,7 @@ describe('applyGameAction', () => {
     const r = applyGameAction(night, ME, 'join', { gameId: 'g1' });
     expect(r.changed).toBe(true);
     expect(night.selectedGames.g1.signedUpPlayers).toEqual([{ userId: 'me-uuid', name: 'Deb' }]);
-    expect(night.rsvps).toEqual([{ userId: 'me-uuid', name: 'Deb', type: 'playing' }]);
+    expect(night.rsvps).toEqual([{ userId: 'me-uuid', name: 'Deb', type: 'playing', email: 'deb@example.com' }]);
   });
 
   it('join upgrades an if_needed RSVP to playing (app rule: only playing can join)', () => {
@@ -211,7 +211,7 @@ describe('applyChoice', () => {
     night.selectedGames.g1.signedUpPlayers.push({ userId: 'me-uuid', name: 'Deb' });
     night.selectedGames.g2.interestedPlayers.push({ userId: 'me-uuid', name: 'Deb' });
     applyChoice(night, { ...ME, invitee: 'me-uuid' }, 'spectating');
-    expect(night.rsvps).toEqual([{ userId: 'me-uuid', name: 'Deb', type: 'spectating' }]);
+    expect(night.rsvps).toEqual([{ userId: 'me-uuid', name: 'Deb', type: 'spectating', email: 'deb@example.com' }]);
     expect(night.selectedGames.g1.signedUpPlayers).toEqual([]);
     expect(night.selectedGames.g2.interestedPlayers).toHaveLength(1);
   });
@@ -226,11 +226,20 @@ describe('applyChoice', () => {
     }
   });
 
+  it('stamps the resolved email onto the RSVP entry, and omits it when unknown', () => {
+    const a = makeNight();
+    applyChoice(a, { ...ME, invitee: 'me-uuid' }, 'playing');
+    expect(a.rsvps[0].email).toBe('deb@example.com');
+    const b = makeNight();
+    applyChoice(b, { userId: 'x', name: 'X', invitee: 'x' }, 'playing');
+    expect(b.rsvps[0]).not.toHaveProperty('email');
+  });
+
   it('re-RSVPing after a decline clears the decline (idempotent swap)', () => {
     const night = makeNight({ declined: ['me-uuid'] });
     applyChoice(night, { ...ME, invitee: 'me-uuid' }, 'playing');
     expect(night.declined).toEqual([]);
-    expect(night.rsvps).toEqual([{ userId: 'me-uuid', name: 'Deb', type: 'playing' }]);
+    expect(night.rsvps).toEqual([{ userId: 'me-uuid', name: 'Deb', type: 'playing', email: 'deb@example.com' }]);
   });
 });
 

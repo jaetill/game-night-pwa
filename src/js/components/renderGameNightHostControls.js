@@ -6,7 +6,7 @@ import { btn, input } from '../ui/elements.js';
 import { toastSuccess, toastError, toastInfo } from '../ui/toast.js';
 import { DEBUG_MODE, API_BASE } from '../config.js';
 import { injectPreviewData, clearPreviewData, hasPreviewData } from '../utils/previewData.js';
-import { getDisplayName } from '../utils/userDirectory.js';
+import { getDisplayName, resolveGuestKey } from '../utils/userDirectory.js';
 import { authFetch } from '../utils/authFetch.js';
 import { getGroups, saveGroup } from '../auth/groups.js';
 
@@ -142,8 +142,10 @@ export function renderHostGameControls(night, nights) {
 
   // ── Shared state used by both Saved groups and Recent guests ──
   const currentUser = getCurrentUser();
+  // Keys are collapsed through resolveGuestKey so an email invite and the
+  // same person's signed-in userId count as one guest.
   const alreadyOnNight = new Set([
-    ...(night.invited || []),
+    ...(night.invited || []).map(resolveGuestKey),
     ...(night.rsvps   || []).map(r => r.userId),
   ]);
 
@@ -224,9 +226,14 @@ export function renderHostGameControls(night, nights) {
   for (const n of nights) {
     if (n.id === night.id || n.hostUserId !== currentUser?.userId) continue;
     for (const email of (n.invited || [])) {
-      if (email.includes('@') && !alreadyOnNight.has(email) && !guestMap.has(email)) {
-        guestMap.set(email, { value: email, label: email });
-      }
+      if (!email.includes('@')) continue;
+      // An email that belongs to a known signed-in user is listed under that
+      // userId (with their name) instead of as a second, email-shaped entry.
+      const key = resolveGuestKey(email);
+      if (alreadyOnNight.has(key) || guestMap.has(key)) continue;
+      guestMap.set(key, key === email
+        ? { value: email, label: email }
+        : { value: key,   label: getDisplayName(key) });
     }
     for (const rsvp of (n.rsvps || [])) {
       if (rsvp.userId === currentUser?.userId) continue;
