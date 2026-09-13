@@ -100,7 +100,8 @@ export function renderAttendeeGroups(night, nights, currentUser) {
   const wrapper = document.createElement('div');
   wrapper.className = 'space-y-3';
 
-  if (!Array.isArray(night.rsvps) || night.rsvps.length === 0) return wrapper;
+  // Pending + declined sections below must render even with zero RSVPs.
+  night.rsvps = Array.isArray(night.rsvps) ? night.rsvps : [];
 
   // Migrate legacy 'flexible' type to 'if_needed'
   night.rsvps.forEach(r => { if (r.type === 'flexible') r.type = 'if_needed'; });
@@ -282,6 +283,29 @@ export function renderAttendeeGroups(night, nights, currentUser) {
       }
     });
     wrapper.appendChild(pendingDiv);
+  }
+
+  // ── Declined ──────────────────────────────────────────────
+  // Without this, a decline is invisible to the host: the person just
+  // vanishes from "Awaiting reply", which reads the same as "never got the
+  // invite" — and the host can't trust the pending count for headcount.
+  const declined = (night.declined || []).filter(id => !night.rsvps?.some(r => r.userId === id));
+  if (declined.length > 0) {
+    const label = document.createElement('span');
+    label.className = 'section-label';
+    label.textContent = "Can't make it";
+    wrapper.appendChild(label);
+
+    const declinedDiv = document.createElement('div');
+    declinedDiv.className = 'flex flex-wrap gap-1';
+    declined.forEach(id => {
+      const chip = document.createElement('span');
+      chip.className = 'text-xs bg-red-50 text-red-400 px-2 py-0.5 rounded-full line-through';
+      chip.textContent = getDisplayName(id);
+      chip.title = 'Declined';
+      declinedDiv.appendChild(chip);
+    });
+    wrapper.appendChild(declinedDiv);
   }
 
   return wrapper;

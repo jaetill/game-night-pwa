@@ -21,6 +21,7 @@ export function renderGameNightSummary(night, currentUser) {
   const pendingCount   = invited.filter(
     uid => !rsvps.some(r => r.userId === uid) && !declined.includes(uid)
   ).length;
+  const declinedCount  = declined.filter(uid => !rsvps.some(r => r.userId === uid)).length;
 
   const summary = document.createElement('div');
 
@@ -70,6 +71,7 @@ export function renderGameNightSummary(night, currentUser) {
     <span>·</span>
     <span>🎟 ${attendingCount} going</span>
     ${pendingCount > 0 ? `<span>· ${pendingCount} pending</span>` : ''}
+    ${declinedCount > 0 ? `<span>· ${declinedCount} can't make it</span>` : ''}
   `;
   summary.appendChild(stats);
 
