@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.3.0](https://github.com/jaetill/game-night-pwa/compare/v1.2.1...v1.3.0) (2026-09-13)
+
+
+### Features
+
+* list games with Join links in invite emails; 12h times; drop emoji ([#365](https://github.com/jaetill/game-night-pwa/issues/365)) ([16a9485](https://github.com/jaetill/game-night-pwa/commit/16a948506ce1b048613282d27079e23b3c54d574))
+* no-login game picker + food plan in invite emails ([#364](https://github.com/jaetill/game-night-pwa/issues/364)) ([b31d981](https://github.com/jaetill/game-night-pwa/commit/b31d981d8de0c596fe944a220bb0511ce26d96f2))
+* **observability:** attribute every mutation to a caller ([#346](https://github.com/jaetill/game-night-pwa/issues/346)) ([9de78c3](https://github.com/jaetill/game-night-pwa/commit/9de78c3d8ec250de655d6177eed0a048683190fb))
+* one unified "How are you in?" list in invite emails; any_game + spectating one-clicks ([#366](https://github.com/jaetill/game-night-pwa/issues/366)) ([0f9169b](https://github.com/jaetill/game-night-pwa/commit/0f9169b7ee1c1cf3a5bc16040eda295817bc2fbd))
+
+
+### Bug Fixes
+
+* /invite writes invited[] with an ETag-conditional PutObject + retry ([#369](https://github.com/jaetill/game-night-pwa/issues/369)) ([a0c9981](https://github.com/jaetill/game-night-pwa/commit/a0c998147125bb46a5bb75d073e2cae349a50759))
+* one Recent-guests entry per person (email invite + signed-in userId) ([#367](https://github.com/jaetill/game-night-pwa/issues/367)) ([2e6455e](https://github.com/jaetill/game-night-pwa/commit/2e6455e671980c349e28b959b6b9481779459227))
+* show names, not UUIDs, on the host's invited-guest chips ([#368](https://github.com/jaetill/game-night-pwa/issues/368)) ([9c81809](https://github.com/jaetill/game-night-pwa/commit/9c81809e9ef66c93650baa50e4759cf562790446))
+
 ## [1.2.1](https://github.com/jaetill/game-night-pwa/compare/v1.2.0...v1.2.1) (2026-08-11)
 
 
