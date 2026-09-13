@@ -229,6 +229,7 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
   if (action === 'invite') {
     const byUserId = typeof inviteUserId === 'string' && inviteUserId.length > 0 && !inviteUserId.includes('@');
 
+    let nightForEmail = night; // freshest copy after ensureInvited
     let targetEmail;      // where the Postmark invite goes
     let inviteKey;        // what goes in night.invited[] (email or userId)
     let inviteeName;      // greeting name
@@ -295,25 +296,18 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
     // host-controls flow already updates invited[] client-side, but MCP's
     // invite_to_event tool doesn't, and /invite is the canonical "this person
     // is invited" event regardless of caller.
-    const inviteKeyLc = inviteKey.toLowerCase();
+    // Read-check-write under an ETag so parallel /invite calls (the app
+    // fires one per guest) and the app's own upload can't clobber each
+    // other. Before this, a plain PutObject here could load the file a
+    // moment before the host's save landed and overwrite an 8-guest invite
+    // list with a 1-guest one (2026-09-12, Sept 26 night).
     let inviteListChanged = false;
-    if (!night.invited?.some(e => typeof e === 'string' && e.toLowerCase() === inviteKeyLc)) {
-      night.invited = Array.isArray(night.invited) ? night.invited : [];
-      night.invited.push(inviteKey);
-      night.lastModified = Date.now();
-      inviteListChanged = true;
-      try {
-        await s3.send(new PutObjectCommand({
-          Bucket:      BUCKET,
-          Key:         'gameNights.json',
-          Body:        JSON.stringify(nights),
-          ContentType: 'application/json',
-        }));
-      } catch (e) {
-        logger.error('s3.put_failed', { request_id: context?.awsRequestId, key: 'gameNights.json', error: e.message });
-        Sentry.captureException(e);
-        return respond(500, { error: 'Could not update invited list' }, CORS);
-      }
+    try {
+      ({ changed: inviteListChanged, night: nightForEmail } = await ensureInvited(nightId, inviteKey));
+    } catch (e) {
+      logger.error('s3.put_failed', { request_id: context?.awsRequestId, key: 'gameNights.json', error: e.message });
+      Sentry.captureException(e);
+      return respond(500, { error: 'Could not update invited list' }, CORS);
     }
 
     // Provision Cognito account + group membership (email path only —
@@ -334,14 +328,14 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
       }
     }
 
-    const dateStr = formatDate(night.date);
+    const dateStr = formatDate(nightForEmail.date);
     const ctx = {
       hostName, dateStr,
-      timeStr:      formatTime(night.time),
-      location:     night.location || '',
-      description:  night.description || '',
-      ...foodCtx(night),
-      ...gamesCtx(night),
+      timeStr:      formatTime(nightForEmail.time),
+      location:     nightForEmail.location || '',
+      description:  nightForEmail.description || '',
+      ...foodCtx(nightForEmail),
+      ...gamesCtx(nightForEmail),
       // 'reset' (re-issued temp password) shows the credentials block too —
       // the recipient has never signed in and needs working credentials.
       isNewAccount: provisioned.result === 'created' || provisioned.result === 'reset',
@@ -353,9 +347,9 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
     // One-click RSVP links + calendar attachment — both best-effort: a
     // failure building either never blocks the invite itself.
     let rsvpLinks = null;
-    try { rsvpLinks = await makeRsvpLinks(night, inviteKey); }
+    try { rsvpLinks = await makeRsvpLinks(nightForEmail, inviteKey); }
     catch (e) { logger.warn('rsvp_links.build_failed', { request_id: context?.awsRequestId, error: e.message }); }
-    const attachments = icsAttachment(night, hostName);
+    const attachments = icsAttachment(nightForEmail, hostName);
 
     try {
       await (_postmarkFn ?? postmark)(POSTMARK_KEY, {
@@ -473,6 +467,49 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
   });
   return respond(200, { sent, total: targets.length, errorCount: errors.length }, CORS);
 });
+
+/**
+ * Add `inviteKey` to the night's invited[] in S3 with an ETag-conditional
+ * write, retrying on a lost race. Returns { changed, night } where `night`
+ * is the freshest copy (post-write when changed). Throws only when the
+ * write keeps losing or S3 fails outright.
+ */
+async function ensureInvited(nightId, inviteKey, maxAttempts = 3) {
+  const inviteKeyLc = inviteKey.toLowerCase();
+  let lastErr;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const obj    = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: 'gameNights.json' }));
+    const etag   = obj.ETag;
+    const nights = JSON.parse(await obj.Body.transformToString());
+    const night  = nights.find(n => n.id === nightId);
+    if (!night) throw new Error('night vanished during invite');
+
+    if (night.invited?.some(e => typeof e === 'string' && e.toLowerCase() === inviteKeyLc)) {
+      return { changed: false, night };
+    }
+    night.invited = Array.isArray(night.invited) ? night.invited : [];
+    night.invited.push(inviteKey);
+    night.lastModified = Date.now();
+    try {
+      await s3.send(new PutObjectCommand({
+        Bucket:      BUCKET,
+        Key:         'gameNights.json',
+        Body:        JSON.stringify(nights),
+        ContentType: 'application/json',
+        ...(etag ? { IfMatch: etag } : { IfNoneMatch: '*' }),
+      }));
+      return { changed: true, night };
+    } catch (e) {
+      const isRace = e?.name === 'PreconditionFailed'
+        || e?.$metadata?.httpStatusCode === 412
+        || e?.name === 'ConditionalRequestConflict';
+      if (!isRace) throw e;
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error('invite write lost the race');
+}
+exports._ensureInvited = ensureInvited;
 
 // ── Helpers ───────────────────────────────────────────────
 
