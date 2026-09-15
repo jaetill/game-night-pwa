@@ -119,7 +119,9 @@ export const handler = Sentry.wrapHandler(async (event, context) => {
       // forgets to escape. Email format is validated separately at the
       // input level so it never contains angle brackets.
       const clean = (v) => typeof v === 'string' ? v.replace(/[<>]/g, '') : v;
-      const { displayName, bggUsername, contactEmail, phone, address } = profile;
+      const { displayName, bggUsername, contactEmail, phone, address, defaultTime } = profile;
+      // defaultTime is an <input type="time"> value (HH:MM, 24h); anything else is dropped.
+      const cleanTime = typeof defaultTime === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(defaultTime) ? defaultTime : '';
       try {
         // Read-merge-write: profiles/{userId}.json is shared with the groups
         // Lambda (which stores the `groups` key in the same object). Writing
@@ -138,6 +140,7 @@ export const handler = Sentry.wrapHandler(async (event, context) => {
           contactEmail: clean(contactEmail),
           phone:        clean(phone),
           address:      clean(address),
+          defaultTime:  cleanTime,
         });
         return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true }) };
       } catch (err) {

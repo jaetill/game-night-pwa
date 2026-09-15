@@ -53,6 +53,7 @@ export async function loadProfile() {
     contactEmail: claims.email                 || existing.contactEmail || '',
     phone:        claims.phone_number          || existing.phone        || '',
     address:      existing.address             || '',
+    defaultTime:  existing.defaultTime         || '',
   };
   persistLocally(profile);
   return profile;
