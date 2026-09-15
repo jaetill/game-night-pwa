@@ -48,7 +48,9 @@ export function renderGameNightForm({ night = null, onSave }) {
   const timeInput = document.createElement('input');
   timeInput.type = 'time';
   timeInput.required = true;
-  timeInput.value = night?.time || '19:00';
+  // New nights start at the host's profile default; edits keep the night's own time.
+  const profileTime = /^\d{2}:\d{2}$/.test(getProfile().defaultTime || '') ? getProfile().defaultTime : '';
+  timeInput.value = night?.time || (!night ? profileTime : '') || '19:00';
   timeInput.className = 'field';
 
   const locationInput = document.createElement('input');
