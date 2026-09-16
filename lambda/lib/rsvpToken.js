@@ -2,7 +2,8 @@
 //
 // Token format: base64url(JSON payload) + "." + base64url(HMAC-SHA256(body)).
 // Payload: { nightId, invitee, exp } where `invitee` is the invite key as it
-// appears in night.invited[] (email address or Cognito userId) and `exp` is
+// identifies a guest entry on the night (Cognito userId, or email when the
+// account is not yet resolved — ADR-0021) and `exp` is
 // epoch millis after which the token is rejected.
 //
 // The secret lives in Secrets Manager (game-night/prod/rsvp-link). Signing

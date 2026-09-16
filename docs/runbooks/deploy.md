@@ -12,14 +12,20 @@ Per `CLAUDE.md`, Lambdas are NOT in the deploy.yml workflow — they're deployed
 
 ## Steps
 
-1. **For most handlers (single-file zip):**
+1. **For every handler (handler + `lib/` + `node_modules/`):**
    ```bash
-   python build/zip.py /tmp/<fn>.zip lambda/<fn>.js
+   python build/make_deploy_zips.py <fn>            # writes build/<fn>-deploy.zip (~17 MB)
    aws lambda update-function-code \
      --function-name <fn> \
-     --zip-file fileb:///tmp/<fn>.zip \
+     --zip-file fileb://build/<fn>-deploy.zip \
      --region us-east-2
    ```
+   Every handler requires `lib/sentry.js`, `lib/logger.js`, and (since ADR-0021) most also
+   require `lib/guests.js`, so a single-file zip (`build/zip.py`) will fail at module load
+   with `Cannot find module './lib/...'`. `make_deploy_zips.py` rebuilds the shared base
+   zip each run and takes >60 s — from a shell with a short timeout, run it in the
+   background and poll for the output file. Verify with `unzip -l build/<fn>-deploy.zip | grep lib/`
+   before uploading.
 
 2. **For `apiKeyAuthorizer` (bundles `aws-jwt-verify`):**
    ```bash

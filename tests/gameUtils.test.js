@@ -12,11 +12,12 @@ import {
   expressInterest,
   withdrawInterest
 } from '../src/js/utils/utils.js';
+import { normalizeGuests } from '../src/js/data/guests.js';
 
 // selectedGames is an OBJECT MAP keyed by gameId — matches the live data shape
 // (the legacy array-shaped helpers were removed as dead code).
 function makeNight(overrides = {}) {
-  return {
+  const n = {
     id: 'n1',
     hostUserId: 'u-host',
     rsvps: [{ userId: 'u-me', name: 'Me', type: 'playing' }],
@@ -26,6 +27,9 @@ function makeNight(overrides = {}) {
     lastModified: 1000,
     ...overrides
   };
+  // ADR-0021: attendance is guests[]; the fixture is legacy-shaped so fold it.
+  n.guests = normalizeGuests(n);
+  return n;
 }
 
 describe('joinGame', () => {

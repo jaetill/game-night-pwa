@@ -14,16 +14,19 @@ vi.mock('../src/js/auth/userStore.js', () => ({ getCurrentUser: () => ({ userId:
 
 const { renderAttendeeGroups } = await import('../src/js/components/renderRSVP.js');
 const { renderGameNightSummary } = await import('../src/js/components/renderGameNightSummary.js');
+const { sanitizeNight } = await import('../src/js/data/storage.js');
 
+// Fixtures are written in the legacy shape and pushed through sanitizeNight,
+// exactly as loaded data is — ADR-0021 folds them into guests[].
 function night(over = {}) {
-  return {
+  return sanitizeNight({
     id: 'n1', hostUserId: 'host', date: '2026-09-26', time: '19:00', location: 'X',
     invited: ['pend-1', 'pend-2'],
     rsvps: [{ userId: 'host', name: 'Host', type: 'playing' }, { userId: 'deb', name: 'Deb', type: 'any_game' }],
     declined: ['phil'],
     selectedGames: {},
     ...over,
-  };
+  });
 }
 
 describe('renderAttendeeGroups — declined section', () => {

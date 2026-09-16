@@ -5,42 +5,21 @@ import { getCurrentUser } from '../auth/userStore.js';
 import { btn, input } from '../ui/elements.js';
 import { toastSuccess, toastError, toastInfo } from '../ui/toast.js';
 import { DEBUG_MODE, API_BASE } from '../config.js';
-import { injectPreviewData, clearPreviewData, hasPreviewData } from '../utils/previewData.js';
-import { getDisplayName, resolveGuestKey } from '../utils/userDirectory.js';
 import { authFetch } from '../utils/authFetch.js';
+import { injectPreviewData, clearPreviewData, hasPreviewData } from '../utils/previewData.js';
+import { resolveGuestKey, guestLabel } from '../utils/userDirectory.js';
 import { getGroups, saveGroup } from '../auth/groups.js';
+import { pendingGuests, removeGuests } from '../data/guests.js';
+import { sendInviteEmail, addPlaceholder } from '../utils/invite.js';
 
 import { renderGameNights } from './renderGameNights.js';
 import { renderGameNightForm } from './renderGameNightForm.js';
 import { openGameSelectionModal } from './gameSelectionModal.js';
 
-/**
- * Fire-and-forget invite email via POST /invite (nudgeNonResponders Lambda).
- * `value` is either an email address (Invite box, Saved groups) or a Cognito
- * userId (Recent guests checkboxes — the Lambda resolves the email itself).
- * Failures are logged, not surfaced — the person is already on the invited
- * list; the email is best-effort.
- */
-function sendInviteEmail(nightId, value) {
-  const payload = value.includes('@')
-    ? { nightId, action: 'invite', email: value }
-    : { nightId, action: 'invite', userId: value };
-  return authFetch(`${API_BASE}/invite`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  }).then(async res => {
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      console.warn('Invite email failed:', value, err.error || res.status);
-    }
-    return null;
-  }).catch(e => console.warn('Invite email error:', value, e.message));
-}
-
 export function renderHostGameControls(night, nights) {
   const container = document.createElement('div');
   container.className = 'space-y-3';
+  const currentUser = getCurrentUser();
 
   // ── Add game ─────────────────────────────────────────────
   const addGameBtn = btn('＋ Add game', 'secondary');
@@ -73,8 +52,30 @@ export function renderHostGameControls(night, nights) {
   inviteInput.type = 'email';
   inviteInput.className = 'field flex-1 text-sm';
 
+  // Save BEFORE calling /invite: the Lambda then finds our placeholder in
+  // S3 (matched by email) and resolves it in place, so client and server
+  // agree on the entry's id. Firing /invite first let the Lambda create
+  // a second id that our own upload then overwrote.
+  // Returns 'added' | 'none' | 'failed'. On failure the placeholders are
+  // withdrawn so they are not silently uploaded (without an email) later.
+  async function inviteAll(values, successMsg) {
+    const added = values.filter(v => addPlaceholder(night, v, currentUser?.userId));
+    if (added.length === 0) return 'none';
+    night.lastModified = Date.now();
+    try {
+      await syncAndRender(nights);
+    } catch {
+      removeGuests(night, g => !g.response && added.includes(g.email || g.userId));
+      toastError('Could not save the guest list. Try again.');
+      return 'failed';
+    }
+    toastSuccess(successMsg(added));
+    added.forEach(v => sendInviteEmail(night, v));
+    return 'added';
+  }
+
   const inviteBtn = btn('Invite', 'secondary');
-  inviteBtn.onclick = () => {
+  inviteBtn.onclick = async () => {
     const email = inviteInput.value.trim().toLowerCase();
     if (!email) return;
     if (!email.includes('@')) {
@@ -82,18 +83,10 @@ export function renderHostGameControls(night, nights) {
       return;
     }
 
-    night.invited = night.invited || [];
-    const already = night.rsvps?.some(r => r.userId === email) ||
-                    night.invited.includes(email);
-    if (!already) {
-      night.invited.push(email);
-      night.lastModified = Date.now();
+    const result = await inviteAll([email], () => `${email} invited!`);
+    if (result === 'added') {
       inviteInput.value = '';
-      syncAndRender(nights);
-      toastSuccess(`${email} invited!`);
-      // Send invite email (fire-and-forget — don't block on failure)
-      sendInviteEmail(night.id, email);
-    } else {
+    } else if (result === 'none') {
       toastInfo(`${email} is already invited.`);
       inviteInput.value = '';
     }
@@ -105,25 +98,23 @@ export function renderHostGameControls(night, nights) {
   inviteRow.appendChild(inviteBtn);
   container.appendChild(inviteRow);
 
-  // ── Invited guests (removable) ────────────────────────────
-  const rsvpdUserIds = new Set((night.rsvps || []).map(r => r.userId));
-  const removableGuests = (night.invited || []).filter(id => !rsvpdUserIds.has(id));
+  // ── Pending guests (removable) ────────────────────────────
+  // Only people who haven't answered are removable here — someone who has
+  // responded is handled through their own RSVP.
+  const removableGuests = pendingGuests(night.guests);
 
   if (removableGuests.length > 0) {
     const guestList = document.createElement('div');
     guestList.className = 'flex flex-wrap gap-2';
 
-    removableGuests.forEach(inviteKey => {
-      // inviteKey is an email (invited by address) or a Cognito userId
-      // (invited from Recent guests). Show a name for the latter — a raw
-      // UUID chip means nothing to the host.
-      const display = getDisplayName(inviteKey);
+    removableGuests.forEach(g => {
+      const display = guestLabel(g);
       const tag = document.createElement('span');
       tag.className = 'flex items-center gap-1 text-xs bg-gray-100 text-gray-700 rounded-full px-2 py-1';
 
       const label = document.createElement('span');
       label.textContent = display;
-      if (display !== inviteKey) label.title = inviteKey;
+      if (g.email && display !== g.email) label.title = g.email;
 
       const removeBtn = document.createElement('button');
       removeBtn.type = 'button';
@@ -131,7 +122,7 @@ export function renderHostGameControls(night, nights) {
       removeBtn.className = 'text-gray-400 hover:text-red-500 font-bold leading-none';
       removeBtn.title = `Remove ${display}`;
       removeBtn.onclick = () => {
-        night.invited = night.invited.filter(id => id !== inviteKey);
+        removeGuests(night, x => x.id === g.id);
         night.lastModified = Date.now();
         syncAndRender(nights);
         toastInfo(`${display} removed.`);
@@ -146,13 +137,12 @@ export function renderHostGameControls(night, nights) {
   }
 
   // ── Shared state used by both Saved groups and Recent guests ──
-  const currentUser = getCurrentUser();
-  // Keys are collapsed through resolveGuestKey so an email invite and the
-  // same person's signed-in userId count as one guest.
-  const alreadyOnNight = new Set([
-    ...(night.invited || []).map(resolveGuestKey),
-    ...(night.rsvps   || []).map(r => r.userId),
-  ]);
+  // Every key a guest entry is known by (userId and email), plus emails
+  // collapsed through resolveGuestKey so a group email and the same
+  // person's signed-in userId count as one guest.
+  const alreadyOnNight = new Set(
+    (night.guests || []).flatMap(g => [g.userId, g.email, g.email && resolveGuestKey(g.email)].filter(Boolean))
+  );
 
   // ── Saved groups ──────────────────────────────────────────
   const groups = getGroups().filter(g => g.emails.length > 0);
@@ -174,7 +164,7 @@ export function renderHostGameControls(night, nights) {
     };
 
     groups.forEach(group => {
-      const newEmails = group.emails.filter(e => !alreadyOnNight.has(e));
+      const newEmails = group.emails.filter(e => !alreadyOnNight.has(e) && !alreadyOnNight.has(resolveGuestKey(e)));
 
       const row = document.createElement('div');
       row.className = 'flex items-center justify-between gap-2';
@@ -192,24 +182,7 @@ export function renderHostGameControls(night, nights) {
       const addGroupBtn = btn('Add all', 'secondary');
       addGroupBtn.className += ' text-xs';
       addGroupBtn.disabled = newEmails.length === 0;
-      addGroupBtn.onclick = () => {
-        night.invited = night.invited || [];
-        const added = [];
-        for (const email of newEmails) {
-          if (!night.invited.includes(email)) {
-            night.invited.push(email);
-            added.push(email);
-          }
-        }
-        if (added.length > 0) {
-          night.lastModified = Date.now();
-          syncAndRender(nights);
-          toastSuccess(`${added.length} from "${group.name}" invited — sending emails…`);
-          // Previously this only updated the invited list; no emails went
-          // out. Each added member now gets the invite email too.
-          added.forEach(e => sendInviteEmail(night.id, e));
-        }
-      };
+      addGroupBtn.onclick = () => inviteAll(newEmails, added => `${added.length} from "${group.name}" invited — sending emails…`);
 
       const left = document.createElement('div');
       left.className = 'flex items-center gap-2 min-w-0';
@@ -227,27 +200,16 @@ export function renderHostGameControls(night, nights) {
   }
 
   // ── Recent guests ─────────────────────────────────────────
+  // Everyone who has been on one of my other nights, keyed by userId when
+  // known (else email). Anonymous plus-ones are skipped — nothing to invite.
   const guestMap = new Map(); // value → { value, label }
   for (const n of nights) {
     if (n.id === night.id || n.hostUserId !== currentUser?.userId) continue;
-    for (const email of (n.invited || [])) {
-      if (!email.includes('@')) continue;
-      // An email that belongs to a known signed-in user is listed under that
-      // userId (with their name) instead of as a second, email-shaped entry.
-      const key = resolveGuestKey(email);
+    for (const g of (n.guests || [])) {
+      const key = g.userId || (g.email ? resolveGuestKey(g.email) : null);
+      if (!key || key === currentUser?.userId) continue;
       if (alreadyOnNight.has(key) || guestMap.has(key)) continue;
-      guestMap.set(key, key === email
-        ? { value: email, label: email }
-        : { value: key,   label: getDisplayName(key) });
-    }
-    for (const rsvp of (n.rsvps || [])) {
-      if (rsvp.userId === currentUser?.userId) continue;
-      if (!alreadyOnNight.has(rsvp.userId) && !guestMap.has(rsvp.userId)) {
-        guestMap.set(rsvp.userId, {
-          value: rsvp.userId,
-          label: rsvp.name || getDisplayName(rsvp.userId),
-        });
-      }
+      guestMap.set(key, { value: key, label: key.includes('@') ? key : guestLabel({ ...g, userId: key }) });
     }
   }
 
@@ -312,22 +274,8 @@ export function renderHostGameControls(night, nights) {
       const selected = checkboxes.filter(cb => cb.checked).map(cb => cb.value);
       if (selected.length === 0) return;
 
-      night.invited = night.invited || [];
-      const added = [];
-      for (const val of selected) {
-        if (!night.invited.includes(val)) {
-          night.invited.push(val);
-          added.push(val);
-        }
-      }
-      if (added.length > 0) {
-        night.lastModified = Date.now();
-        syncAndRender(nights);
-        toastSuccess(`${added.length} guest${added.length > 1 ? 's' : ''} invited — sending emails…`);
-        // Previously this only updated the invited list; no emails went out.
-        // Recent guests are stored as userIds — the Lambda resolves the email.
-        added.forEach(v => sendInviteEmail(night.id, v));
-      }
+      // Recent guests are stored as userIds — the Lambda resolves the email.
+      inviteAll(selected, added => `${added.length} guest${added.length > 1 ? 's' : ''} invited — sending emails…`);
     };
 
     body.appendChild(addBtn);
@@ -400,9 +348,8 @@ export function renderHostActions(night, nights) {
   };
 
   // ── Nudge non-responders ─────────────────────────────────
-  const rsvpdIds    = new Set((night.rsvps    || []).map(r => r.userId));
-  const declinedIds = new Set(night.declined  || []);
-  const nonResponders = (night.invited || []).filter(id => !rsvpdIds.has(id) && !declinedIds.has(id));
+  // Anonymous plus-ones have nowhere to send a nudge; count only reachable people.
+  const nonResponders = pendingGuests(night.guests).filter(g => g.userId || g.email);
 
   const nudgeBtn = btn(`Nudge non-responders (${nonResponders.length})`, 'secondary');
   nudgeBtn.disabled = nonResponders.length === 0;

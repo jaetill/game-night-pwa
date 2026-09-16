@@ -2,11 +2,12 @@ import { ownedGames } from '../data/state.js';
 import { syncAndRender } from '../utils/index.js';
 import { getCurrentUser } from '../auth/userStore.js';
 import { isHost } from '../auth/permissions.js';
+import { isAttending } from '../data/guests.js';
 import { btn, input } from '../ui/elements.js';
 
 export function renderSuggestions(night, nights) {
   const currentUser = getCurrentUser();
-  const hasRSVP = night.rsvps?.some(r => r.userId === currentUser?.userId);
+  const hasRSVP = isAttending(night.guests, currentUser?.userId);
   const hostView = isHost(currentUser, night);
 
   const wrapper = document.createElement('div');

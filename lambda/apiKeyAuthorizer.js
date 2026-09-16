@@ -8,7 +8,8 @@
 //      → must be issued for the game-night App Client
 //      → must include `cognito:groups` containing `game-night-users`
 //
-// On success returns an Allow policy with `userId` in the authorizer context,
+// On success returns an Allow policy with `userId` (and, for JWT auth, the
+// token's verified `email`) in the authorizer context,
 // which downstream Lambdas read from event.requestContext.authorizer.userId.
 //
 // IDENTITY SOURCE NOTE
@@ -210,7 +211,10 @@ function allow(userId, methodArn, context, authMode, email) {
     route:      routeFromMethodArn(methodArn),
     ...identityFields({ userId, email }),
   });
-  return buildPolicy('Allow', userId, methodArn, { userId });
+  // `email` is the JWT's verified claim (absent for API-key auth). Downstream
+  // handlers use it to prove the caller owns an email-keyed guest entry
+  // before letting them claim it (ADR-0021 merge rules).
+  return buildPolicy('Allow', userId, methodArn, { userId, ...(email ? { email: String(email).toLowerCase() } : {}) });
 }
 
 function deny(methodArn) {

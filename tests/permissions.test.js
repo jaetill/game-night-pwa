@@ -37,9 +37,14 @@ describe('getUserNightRole', () => {
     expect(getUserNightRole(makeNight(), alice)).toBe('Host');
   });
 
-  it('returns Invited when user is in invited list', () => {
-    const night = makeNight({ invited: [bob.userId] });
+  it('returns Invited when user is on the guest list without a response', () => {
+    const night = makeNight({ guests: [{ id: 'g', userId: bob.userId, response: null }] });
     expect(getUserNightRole(night, bob)).toBe('Invited');
+  });
+
+  it('returns RSVP’d for a yes-type response and null for a decline', () => {
+    expect(getUserNightRole(makeNight({ guests: [{ id: 'g', userId: bob.userId, response: { type: 'if_needed', at: 1 } }] }), bob)).toBe('RSVP’d');
+    expect(getUserNightRole(makeNight({ guests: [{ id: 'g', userId: bob.userId, response: { type: 'declined', at: 1 } }] }), bob)).toBeNull();
   });
 
   it('returns null when user has no connection to the night', () => {

@@ -7,13 +7,13 @@
 // and renderSelectedGames.js, which operate on the map directly.)
 
 import { getCurrentUser } from '../auth/userStore.js';
+import { isAttending } from '../data/guests.js';
 
 export function joinGame(night, gameId) {
   const user = getCurrentUser();
   if (!user) return false;
 
-  const isRSVPd = night.rsvps?.some(r => r.userId === user.userId);
-  if (!isRSVPd) return false;
+  if (!isAttending(night.guests, user.userId)) return false;
 
   const game = night.selectedGames[gameId];
   if (!game) return false;

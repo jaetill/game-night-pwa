@@ -33,3 +33,4 @@ Per platform [ADR-0008](https://github.com/jaetill/agentic-dev-environment/blob/
 - [ADR-0018 — Sync model, auth, and security hardening](0018-sync-auth-security-hardening.md) (Proposed)
 - [ADR-0019 — Web Push notifications, one-click email RSVP links, and calendar invites](0019-web-push-rsvp-links-calendar-invites.md) (Proposed)
 - [ADR-0020 — Caller-attribution logging with PII-safe identity fields](0020-caller-attribution-logging.md) (Proposed)
+- [ADR-0021 — Unified `guests[]` list replaces `invited[]` / `rsvps[]` / `declined[]`](0021-unified-guest-list.md) (Accepted)

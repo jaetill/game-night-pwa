@@ -6,6 +6,7 @@ Shared modules for the 8 Lambda functions per platform ADR-0009.
 
 - `sentry.js` — Sentry AWS Serverless SDK init. Wrap handlers with `Sentry.wrapHandler(...)` to capture errors.
 - `logger.js` — structured JSON logger. Outputs OTEL-compatible fields to CloudWatch Logs.
+- `guests.js` — the unified `night.guests[]` model (ADR-0021): normalization of legacy `invited[]/rsvps[]/declined[]`, derived sets (pending / attending / declined), person matching, and the per-entry permission rules used by `GeneratePresignedPost`. **Byte-identical twin at `src/js/data/guests.js`** (ESM for Vite) — `tests/guestsParity.test.js` fails if they drift; edit one and copy the body to the other.
 
 ## Per-Lambda integration
 

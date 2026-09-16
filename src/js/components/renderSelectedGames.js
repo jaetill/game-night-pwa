@@ -1,7 +1,8 @@
 import { ownedGames, saveGameNights } from '../data/index.js';
 import { joinGame, withdrawFromGame, isGameFull, expressInterest, withdrawInterest } from '../utils/index.js';
 import { isHost } from '../auth/permissions.js';
-import { getDisplayName } from '../utils/userDirectory.js';
+import { getDisplayName, guestLabel } from '../utils/userDirectory.js';
+import { findGuest, attendingGuests, playerKey } from '../data/guests.js';
 import { btn } from '../ui/elements.js';
 import { toastSuccess, toastError, toastInfo } from '../ui/toast.js';
 
@@ -139,7 +140,8 @@ export function renderSelectedGames(night, currentUser, nights) {
     }
 
     // ── Guest join/leave (playing type only) ─────────────────
-    const currentRSVP = night.rsvps?.find(r => r.userId === currentUser?.userId);
+    const me = currentUser ? findGuest(night.guests, { userId: currentUser.userId }) : null;
+    const currentRSVP = me?.response && me.response.type !== 'declined' ? me : null;
     if (currentRSVP && currentUser) {
       const isSignedUp = signedUpPlayers.some(p => p.userId === currentUser.userId);
       const isFull     = isGameFull(night, gameId);
@@ -211,23 +213,13 @@ export function renderSelectedGames(night, currentUser, nights) {
 
     // ── Host assignment (any_game / if_needed people) ─────────
     if (isHost(currentUser, night)) {
-      // Build assignable list: any_game/if_needed RSVPs + their guests
-      const assignableRsvps = (night.rsvps || []).filter(r =>
-        (r.type === 'any_game' || r.type === 'if_needed') &&
-        !signedUpPlayers.some(p => p.userId === r.userId) &&
-        !isGameFull(night, gameId)
-      );
-
-      const assignableGuests = (night.rsvps || []).flatMap(r => {
-        const sponsorName = r.name || getDisplayName(r.userId);
-        return Array.from({ length: r.guests || 0 }, (_, i) => ({
-          userId: `${r.userId}_guest_${i + 1}`,
-          name:   `${sponsorName}'s Guest #${i + 1}`,
-          _guest: true,
-        }));
-      }).filter(g => !signedUpPlayers.some(p => p.userId === g.userId) && !isGameFull(night, gameId));
-
-      const assignable = [...assignableRsvps, ...assignableGuests];
+      // Build assignable list: any_game / if_needed guests, including
+      // anonymous plus-ones (which are if_needed by construction).
+      // Each option is { userId: <player key>, name, type, _guest }.
+      const assignable = isGameFull(night, gameId) ? [] : attendingGuests(night.guests)
+        .filter(g => g.response.type === 'any_game' || g.response.type === 'if_needed')
+        .map(g => ({ userId: playerKey(g), name: guestLabel(g), type: g.response.type, _guest: !g.userId }))
+        .filter(r => !signedUpPlayers.some(p => p.userId === r.userId));
 
       if (assignable.length > 0) {
         const assignRow = document.createElement('div');

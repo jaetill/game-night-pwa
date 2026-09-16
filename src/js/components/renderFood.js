@@ -2,6 +2,7 @@ import { syncAndRender } from '../utils/index.js';
 import { btn } from '../ui/elements.js';
 import { toastError } from '../ui/toast.js';
 import { saveGameNights } from '../data/index.js';
+import { isAttending } from '../data/guests.js';
 
 export function renderFood(night, nights, currentUser) {
   if (!night.food) return null;
@@ -64,7 +65,7 @@ export function renderFood(night, nights, currentUser) {
   }
 
   // ── Bring a side input (for RSVPd guests who haven't yet) ─
-  const isRSVPd   = night.rsvps?.some(r => r.userId === currentUser.userId);
+  const isRSVPd   = isAttending(night.guests, currentUser.userId);
   const alreadyIn = sides.some(s => s.userId === currentUser.userId);
 
   if (isRSVPd && !alreadyIn) {

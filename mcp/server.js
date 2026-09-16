@@ -36,6 +36,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import guestsLib from '../lambda/lib/guests.js';
 
 const API_BASE = (process.env.GAME_NIGHT_API_URL || 'https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod').replace(/\/$/, '');
 const API_KEY  = process.env.GAME_NIGHT_API_KEY;
@@ -551,13 +552,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         const lines = filtered.map(n => {
           const gameCount  = Object.keys(n.selectedGames || {}).length;
-          const guestCount = (n.invited || []).length;
-          const rsvpCount  = (n.rsvps   || []).length;
+          const guests     = guestsLib.normalizeGuests(n);
+          const guestCount = guestsLib.pendingGuests(guests).length;
+          const rsvpCount  = guestsLib.attendingGuests(guests).length;
           const parts = [n.date];
           if (n.time)     parts.push(`at ${n.time}`);
           if (n.location) parts.push(`— ${n.location}`);
           return (
-            `• ${parts.join(' ')} | ${gameCount} game(s), ${guestCount} invited, ${rsvpCount} RSVP'd | ID: ${n.id}`
+            `• ${parts.join(' ')} | ${gameCount} game(s), ${guestCount} pending, ${rsvpCount} attending | ID: ${n.id}`
           );
         });
 
@@ -587,16 +589,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           ? enrichedGames.map(g => `${g.title} (BGG ID ${g.id})`).join(', ')
           : 'none';
 
-        const rsvps   = (night.rsvps    || []).map(r => r.userId || r);
+        const guests  = guestsLib.normalizeGuests(night);
+        const label   = g => g.name || g.email || g.userId || `(plus-one of ${g.invitedBy})`;
+        const withType = g => `${label(g)} [${g.response.type}]`;
         const lines   = [
           `Event ID:  ${night.id}`,
           `Date:      ${night.date}${night.time ? ` at ${night.time}` : ''}`,
           night.location    ? `Location:  ${night.location}`               : null,
           night.description ? `Notes:     ${night.description}`            : null,
           `Games:     ${gamesText}`,
-          `Invited:   ${(night.invited  || []).join(', ') || 'none'}`,
-          `RSVP'd:    ${rsvps.join(', ')                  || 'none'}`,
-          `Declined:  ${(night.declined || []).join(', ') || 'none'}`,
+          `Pending:   ${guestsLib.pendingGuests(guests).map(label).join(', ')     || 'none'}`,
+          `Attending: ${guestsLib.attendingGuests(guests).map(withType).join(', ') || 'none'}`,
+          `Declined:  ${guestsLib.declinedGuests(guests).map(label).join(', ')    || 'none'}`,
         ].filter(Boolean);
 
         return text(lines.join('\n'));
