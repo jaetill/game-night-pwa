@@ -1,5 +1,6 @@
 import { getDisplayName } from '../utils/userDirectory.js';
 import { badge, formatDate } from '../ui/elements.js';
+import { attendingGuests, pendingGuests, declinedGuests, isAttending, hasDeclined, isPending } from '../data/guests.js';
 
 // Safe HTML escape for inline interpolation. Never use innerHTML with raw
 // user-supplied strings (location, host display name, description). Routes
@@ -13,15 +14,11 @@ function escapeHtml(s) {
 export function renderGameNightSummary(night, currentUser) {
   const { day, time } = formatDate(night.date, night.time);
 
-  const rsvps    = Array.isArray(night.rsvps)    ? night.rsvps    : [];
-  const declined = Array.isArray(night.declined) ? night.declined : [];
-  const invited  = Array.isArray(night.invited)  ? night.invited  : [];
+  const guests = Array.isArray(night.guests) ? night.guests : [];
 
-  const attendingCount = rsvps.length;
-  const pendingCount   = invited.filter(
-    uid => !rsvps.some(r => r.userId === uid) && !declined.includes(uid)
-  ).length;
-  const declinedCount  = declined.filter(uid => !rsvps.some(r => r.userId === uid)).length;
+  const attendingCount = attendingGuests(guests).length;
+  const pendingCount   = pendingGuests(guests).length;
+  const declinedCount  = declinedGuests(guests).length;
 
   const summary = document.createElement('div');
 
@@ -31,7 +28,7 @@ export function renderGameNightSummary(night, currentUser) {
 
   const canSeeLocation = currentUser && (
     night.hostUserId === currentUser.userId ||
-    rsvps.some(r => r.userId === currentUser.userId)
+    isAttending(guests, currentUser.userId)
   );
 
   const dateText = document.createElement('div');
@@ -48,11 +45,11 @@ export function renderGameNightSummary(night, currentUser) {
     let statusBadge = null;
     if (night.hostUserId === uid) {
       statusBadge = badge('Host', 'host');
-    } else if (rsvps.some(r => r.userId === uid)) {
+    } else if (isAttending(guests, uid)) {
       statusBadge = badge('Going ✓', 'going');
-    } else if (declined.includes(uid)) {
+    } else if (hasDeclined(guests, uid)) {
       statusBadge = badge('Declined', 'out');
-    } else if (invited.includes(uid)) {
+    } else if (isPending(guests, uid)) {
       statusBadge = badge('Invited', 'maybe');
     }
     if (statusBadge) {

@@ -24,15 +24,18 @@ describe('sanitizeNight', () => {
     const result = sanitizeNight(night);
     expect(result.hostUserId).toBe('u1');
     expect(result.description).toBe('Pizza night');
-    expect(result.rsvps).toEqual([{ userId: 'u2', name: 'Bob' }]);
+    // ADR-0021: legacy arrays fold into guests[] and are dropped.
+    expect(result.rsvps).toBeUndefined();
+    expect(result.invited).toBeUndefined();
+    expect(result.declined).toBeUndefined();
+    expect(result.guests.map(g => [g.userId, g.response?.type ?? null])).toEqual([['u2', 'playing'], ['u3', null]]);
+    expect(result.guests.find(g => g.userId === 'u2').name).toBe('Bob');
     expect(result.lastModified).toBe(1000);
   });
 
   it('fills in missing fields with defaults', () => {
     const result = sanitizeNight({ id: 'n2', hostUserId: 'u1' });
-    expect(result.rsvps).toEqual([]);
-    expect(result.declined).toEqual([]);
-    expect(result.invited).toEqual([]);
+    expect(result.guests).toEqual([]);
     expect(result.suggestions).toEqual([]);
     expect(result.description).toBe('');
     expect(result.location).toBe('');

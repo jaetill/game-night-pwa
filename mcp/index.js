@@ -9,6 +9,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
+import guestsLib from '../lambda/lib/guests.js';
 
 const API_URL = (process.env.GAME_NIGHT_API_URL || 'https://pufsqfvq8g.execute-api.us-east-2.amazonaws.com/prod').replace(/\/$/, '');
 const API_KEY = process.env.GAME_NIGHT_API_KEY || '';
@@ -255,8 +256,8 @@ server.tool(
 
     const lines = filtered.map(n => {
       const gameCount = Object.keys(n.selectedGames || {}).length;
-      const rsvpCount = (n.rsvps || []).length;
-      return `- [${n.id}] ${n.date}${n.time ? ` ${n.time}` : ''}${n.location ? ` @ ${n.location}` : ''} | ${gameCount} game(s) | ${rsvpCount} RSVP(s)`;
+      const rsvpCount = guestsLib.attendingGuests(guestsLib.normalizeGuests(n)).length;
+      return `- [${n.id}] ${n.date}${n.time ? ` ${n.time}` : ''}${n.location ? ` @ ${n.location}` : ''} | ${gameCount} game(s) | ${rsvpCount} attending`;
     });
     return { content: [{ type: 'text', text: `${filtered.length} event(s):\n${lines.join('\n')}` }] };
   }
@@ -285,8 +286,11 @@ server.tool(
     const games = Object.entries(night.selectedGames || {}).map(([id, g]) =>
       `  - ${id}: ${g.signedUpPlayers?.length ?? 0}/${g.maxPlayers} signed up`
     );
-    const rsvps = (night.rsvps || []).map(r => `  - ${r.userId}`);
-    const declined = (night.declined || []).map(id => `  - ${id}`);
+    const guests   = guestsLib.normalizeGuests(night);
+    const label    = g => g.name || g.email || g.userId || `(plus-one of ${g.invitedBy})`;
+    const rsvps    = guestsLib.attendingGuests(guests).map(g => `  - ${label(g)} [${g.response.type}]`);
+    const declined = guestsLib.declinedGuests(guests).map(g => `  - ${label(g)}`);
+    const pending  = guestsLib.pendingGuests(guests).map(g => `  - ${label(g)}`);
 
     const lines = [
       `Event: ${night.id}`,
@@ -294,9 +298,10 @@ server.tool(
       night.location    ? `Location: ${night.location}` : null,
       night.description ? `Description: ${night.description}` : null,
       `Host: ${night.hostUserId}`,
-      `Invited: ${(night.invited || []).length}`,
+      `Guests: ${guests.length}`,
       games.length > 0    ? `Games:\n${games.join('\n')}` : 'Games: none',
-      rsvps.length > 0    ? `RSVPs:\n${rsvps.join('\n')}` : 'RSVPs: none',
+      rsvps.length > 0    ? `Attending:\n${rsvps.join('\n')}` : 'Attending: none',
+      pending.length > 0  ? `Pending:\n${pending.join('\n')}` : null,
       declined.length > 0 ? `Declined:\n${declined.join('\n')}` : null,
     ].filter(Boolean);
 

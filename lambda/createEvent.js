@@ -14,6 +14,7 @@
 const crypto = require('node:crypto');
 const { Sentry } = require('./lib/sentry');
 const logger = require('./lib/logger');
+const guestsLib = require('./lib/guests');
 const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
 
 /**
@@ -127,9 +128,15 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
     location:      location      || '',
     description:   description   || '',
     selectedGames: gamesMap,
-    invited:       Array.isArray(invited) ? invited : [],
-    rsvps:         [],
-    declined:      [],
+    // ADR-0021: one guest entry per invitee (pending, attributed to the
+    // host) plus the host themselves as playing. Emails only at this point —
+    // invite_to_event → POST /invite resolves each to a Cognito user.
+    guests: [
+      guestsLib.newGuest({ userId: callerId, invitedBy: callerId, response: { type: 'playing' } }),
+      ...(Array.isArray(invited) ? invited : [])
+        .filter(e => typeof e === 'string' && e.includes('@'))
+        .map(e => guestsLib.newGuest({ email: e, invitedBy: callerId })),
+    ],
     suggestions:   [],
     hostUserId:    callerId,
     lastModified:  Date.now(),

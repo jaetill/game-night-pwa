@@ -1,5 +1,6 @@
 import { getCurrentUser } from '../auth/userStore.js';
 import { getProfile } from '../auth/profile.js';
+import { findGuest, newGuest } from '../data/guests.js';
 import { toastSuccess, toastError } from '../ui/toast.js';
 import { btn } from '../ui/elements.js';
 
@@ -125,9 +126,13 @@ export function renderGameNightForm({ night = null, onSave }) {
     submitBtn.textContent = 'Saving…';
 
     try {
-      const existing = night?.rsvps ? [...night.rsvps] : [];
-      if (!existing.some(r => r.userId === currentUser.userId)) {
-        existing.push({ userId: currentUser.userId, name: currentUser.name, type: 'playing', timestamp: Date.now() });
+      // The host is always on their own guest list, as playing (ADR-0021).
+      const guests = Array.isArray(night?.guests) ? [...night.guests] : [];
+      if (!findGuest(guests, { userId: currentUser.userId })) {
+        guests.push(newGuest({
+          userId: currentUser.userId, name: currentUser.name, email: currentUser.email,
+          invitedBy: currentUser.userId, response: { type: 'playing' },
+        }));
       }
 
       const updatedNight = {
@@ -141,7 +146,7 @@ export function renderGameNightForm({ night = null, onSave }) {
         allowSides:  sidesCheck.checked,
         hostUserId: night?.hostUserId || currentUser.userId,
         selectedGames: night?.selectedGames || {},
-        rsvps: existing,
+        guests,
         lastModified: Date.now(),
       };
 

@@ -53,6 +53,7 @@ const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client
 const { verifyRsvpToken } = require('./lib/rsvpToken');
 const { identityFields } = require('./lib/identity');
 const push = require('./lib/push');
+const guestsLib = require('./lib/guests');
 
 const BUCKET       = process.env.S3_BUCKET || 'jaetill-game-nights';
 const KEY          = 'gameNights.json';
@@ -178,14 +179,16 @@ function renderPickerPage(night, who, token, banner) {
   const t   = encodeURIComponent(token);
   const url = (choice, extra = '') => `?token=${t}&choice=${choice}${extra}`;
 
-  const myRsvp = (night.rsvps || []).find(r => r.userId === who.userId);
+  const me    = guestsLib.findGuest(guestsLib.normalizeGuests(night), who);
+  const myKey = me ? guestsLib.playerKey(me) : who.userId;
+  const myType = me?.response?.type ?? null;
   const rsvpLabel = {
     playing:    "You're in",
     any_game:   "You're in (put me in a game)",
     if_needed:  "You'll play if needed",
     spectating: "You're hanging out",
-  }[myRsvp?.type ?? 'playing'] ?? "You've RSVP'd";
-  const declined = (night.declined || []).includes(who.userId);
+  }[myType ?? 'playing'] ?? "You've RSVP'd";
+  const declined = myType === 'declined';
 
   const when = [formatDate(night.date), formatTime(night.time)].filter(Boolean).join(' · ');
 
@@ -199,11 +202,11 @@ function renderPickerPage(night, who, token, banner) {
   const statusHtml = declined
     ? `<p style="color:#64748b;font-size:14px;margin:0 0 18px;">You said you can't make it.
        <a href="${url('playing')}" style="color:#d97706;font-weight:600;">Changed your mind?</a></p>`
-    : myRsvp
+    : myType
       ? `<p style="color:#64748b;font-size:14px;margin:0 0 18px;">${escapeHtml(rsvpLabel)}.
          <span style="color:#94a3b8;">Change to:</span>
          ${[['any_game', 'any game'], ['if_needed', 'play if needed'], ['spectating', 'just hanging out'], ['declined', 'not coming']]
-           .filter(([k]) => k !== myRsvp.type)
+           .filter(([k]) => k !== myType)
            .map(([k, label]) => `<a href="${url(k)}" style="color:#d97706;">${label}</a>`)
            .join(' · ')}</p>`
       : `<p style="font-size:14px;margin:0 0 18px;">
@@ -224,8 +227,8 @@ function renderPickerPage(night, who, token, banner) {
       const interested = Array.isArray(g.interestedPlayers) ? g.interestedPlayers : [];
       const max        = Number(g.maxPlayers) || 4;
       const full       = signedUp.length >= max;
-      const inGame     = signedUp.some(p => p.userId === who.userId);
-      const isInt      = interested.some(p => p.userId === who.userId);
+      const inGame     = signedUp.some(p => p.userId === myKey);
+      const isInt      = interested.some(p => p.userId === myKey);
       const gid        = encodeURIComponent(gameId);
 
       const names = signedUp.map(p => escapeHtml(p.name || p.userId)).join(', ');
@@ -267,7 +270,7 @@ function renderPickerPage(night, who, token, banner) {
   let foodHtml = '';
   if (night.food) {
     const sides  = Array.isArray(night.sides) ? night.sides : [];
-    const mySide = sides.find(s => s.userId === who.userId);
+    const mySide = sides.find(s => s.userId === myKey);
     const sideList = sides.length
       ? `<ul style="margin:8px 0 0;padding-left:18px;font-size:13px;color:#475569;">${
           sides.map(s => `<li>${escapeHtml(s.name || s.userId)}: ${escapeHtml(s.description)}</li>`).join('')
@@ -340,13 +343,12 @@ async function loadNightsWithMeta() {
  * Resolve an invite key (email or Cognito username) to
  * { userId, name, email?, matched }.
  *
- * Falls back to the raw key when Cognito has no matching user — the app's
- * invited[]/rsvps[] handling tolerates email-shaped ids.
+ * When Cognito has no matching user, `userId` is null and the guest entry is
+ * matched by email instead (ADR-0021: lib/guests.findGuest fills the userId
+ * in on first contact once the account exists).
  *
  * `matched` reports whether Cognito actually resolved the invitee, so the
- * caller can log it. An unmatched RSVP still saves, but it lands in rsvps[]
- * under an email-shaped userId that will never equal the userId the app sees
- * once that person signs in — worth being able to spot in the logs.
+ * caller can log it.
  */
 async function resolveInvitee(invitee) {
   const isEmail = invitee.includes('@');
@@ -363,43 +365,61 @@ async function resolveInvitee(invitee) {
         const nameAttr = u.Attributes?.find(a => a.Name === 'name');
         return { userId: u.Username, name: nameAttr?.Value || emailLc.split('@')[0], email: emailLc, matched: true };
       }
-      return { userId: emailLc, name: emailLc.split('@')[0], email: emailLc, matched: false };
+      return { userId: null, name: emailLc.split('@')[0], email: emailLc, matched: false };
     }
     const u = await cognito.send(new AdminGetUserCommand({ UserPoolId: USER_POOL_ID, Username: invitee }));
     const nameAttr = u.UserAttributes?.find(a => a.Name === 'name');
     const emailAttr = u.UserAttributes?.find(a => a.Name === 'email');
     return { userId: invitee, name: nameAttr?.Value || emailAttr?.Value?.split('@')[0] || invitee, email: emailAttr?.Value, matched: true };
   } catch {
-    return { userId: invitee, name: isEmail ? invitee.split('@')[0] : invitee, email: isEmail ? invitee : undefined, matched: false };
+    return isEmail
+      ? { userId: null,    name: invitee.split('@')[0], email: invitee.toLowerCase(), matched: false }
+      : { userId: invitee, name: invitee,               email: undefined,             matched: false };
   }
 }
 
 // ── Mutations (pure, exported for unit tests) ─────────────────────────────
 
 /**
- * Apply a one-click RSVP choice to a night in place. Idempotent: strips any
- * prior RSVP/decline by this user first. Declining also withdraws the user
- * from every game and their side (same as the app's cancel path).
+ * Locate (or create) the guest entry for `who` on `night` and return it
+ * together with the player key used in selectedGames[] / sides[].
+ * A valid RSVP-link token is proof of invitation, so an invitee with no
+ * entry (e.g. invited before ADR-0021 by a path that never wrote one) gets a
+ * pending entry attributed to the host.
  */
-function applyChoice(night, { userId, name, email, invitee }, choice) {
-  night.rsvps    = (Array.isArray(night.rsvps) ? night.rsvps : []).filter(r => r.userId !== userId);
-  night.declined = (Array.isArray(night.declined) ? night.declined : []).filter(id => id !== userId);
+function ensureGuestFor(night, who) {
+  night.guests = guestsLib.normalizeGuests(night);
+  delete night.invited; delete night.rsvps; delete night.declined;
+  let g = guestsLib.claimGuest(night.guests, who);
+  if (!g) {
+    g = guestsLib.newGuest({ userId: who.userId, email: who.email, name: who.name, invitedBy: night.hostUserId });
+    night.guests.push(g);
+  }
+  return g;
+}
 
-  // Same behavior as the in-app RSVP: responding removes you from invited[].
-  const dropKeys = new Set([userId, invitee, invitee?.toLowerCase(), email, email?.toLowerCase()].filter(Boolean));
-  night.invited = (night.invited || []).filter(k => !dropKeys.has(k));
+/**
+ * Apply a one-click RSVP choice to a night in place. Idempotent: replaces
+ * any prior response by this person. Declining also withdraws the person
+ * from every game, drops their side, and removes any anonymous plus-ones
+ * they brought (same as the app's decline path).
+ */
+function applyChoice(night, who, choice) {
+  const g   = ensureGuestFor(night, who);
+  const key = guestsLib.playerKey(g);
+  guestsLib.respond(g, choice);
 
   if (choice === 'declined') {
-    night.declined.push(userId);
-    withdrawFromAllGames(night, userId);
-    night.sides = (Array.isArray(night.sides) ? night.sides : []).filter(s => s.userId !== userId);
-  } else {
+    withdrawFromAllGames(night, key);
+    night.sides = (Array.isArray(night.sides) ? night.sides : []).filter(s => s.userId !== key);
+    if (g.userId) {
+      const dropped = guestsLib.removeGuests(night, x => guestsLib.isPlusOne(x) && x.invitedBy === g.userId);
+      for (const d of dropped) withdrawFromAllGames(night, guestsLib.playerKey(d));
+    }
+  } else if (choice === 'spectating') {
     // "Just hanging out" means not playing — give any held seats back
     // (interest flags survive; they're a wish, not a seat).
-    if (choice === 'spectating') withdrawFromAllGames(night, userId, { keepInterest: true });
-    // `email` lets the app's Recent guests list match this RSVP to the
-    // email the invite went to (one entry per person, not email + userId).
-    night.rsvps.push({ userId, name, type: choice, ...(email ? { email: email.toLowerCase() } : {}) });
+    withdrawFromAllGames(night, key, { keepInterest: true });
   }
 
   night.lastModified = Date.now();
@@ -421,8 +441,10 @@ function withdrawFromAllGames(night, userId, { keepInterest = false } = {}) {
  * warn banner and no write.
  */
 function applyGameAction(night, who, choice, { gameId, desc } = {}) {
-  const { userId, name } = who;
-  const declined = (night.declined || []).includes(userId);
+  const g        = ensureGuestFor(night, who);
+  const userId   = guestsLib.playerKey(g);
+  const name     = who.name || g.name || userId;
+  const declined = g.response?.type === 'declined';
   const note = (tone, text) => ({ ok: true, changed: false, banner: { tone, text } });
 
   if (choice === 'games') return { ok: true, changed: false, banner: null };
@@ -459,10 +481,7 @@ function applyGameAction(night, who, choice, { gameId, desc } = {}) {
       if (game.signedUpPlayers.some(p => p.userId === userId)) return note('ok', `You're already in ${title}.`);
       if (game.signedUpPlayers.length >= max) return note('warn', `${title} is full — you can mark yourself interested in case a seat opens.`);
       // Joining requires a 'playing' RSVP (app rule). Upgrade or create.
-      night.rsvps = Array.isArray(night.rsvps) ? night.rsvps : [];
-      const mine = night.rsvps.find(r => r.userId === userId);
-      if (mine) mine.type = 'playing';
-      else night.rsvps.push({ userId, name, type: 'playing', ...(who.email ? { email: who.email.toLowerCase() } : {}) });
+      guestsLib.respond(g, 'playing');
       game.signedUpPlayers.push({ userId, name });
       game.interestedPlayers = game.interestedPlayers.filter(p => p.userId !== userId);
       night.lastModified = Date.now();

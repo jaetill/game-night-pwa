@@ -38,6 +38,7 @@ const crypto = require('node:crypto');
 const { signRsvpToken } = require('./lib/rsvpToken');
 const { buildIcs } = require('./lib/ics');
 const { emailHash, identityFields } = require('./lib/identity');
+const guestsLib = require('./lib/guests');
 
 const REQUIRED_GROUP = 'game-night-users';
 
@@ -66,8 +67,8 @@ async function getRsvpLinkSecret() {
 
 /**
  * Build the three one-click RSVP URLs for a recipient. `invitee` is the
- * invite key exactly as stored in night.invited[] (email or userId) — the
- * rsvpLink Lambda resolves it back to a Cognito user on click.
+ * guest's userId when known, else their email (ADR-0021) — the rsvpLink
+ * Lambda resolves it back to a Cognito user on click.
  * Tokens expire 2 days after the event date (or 45 days out when the night
  * has no date), so stale emails can't mutate long-gone events.
  */
@@ -211,9 +212,19 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
 
   const night = nights.find(n => n.id === nightId);
   if (!night) return respond(404, { error: 'Game night not found' }, CORS);
+  night.guests = guestsLib.normalizeGuests(night);
 
-  // ── Verify caller is the host ──
-  if (night.hostUserId !== callerId) return respond(403, { error: 'Only the host can do this' }, CORS);
+  // ── Verify caller may act ──
+  // Nudging is host-only. Inviting is open to the host and to any guest
+  // who is attending (ADR-0021: "a guest who has said yes can bring people").
+  const callerIsHost = night.hostUserId === callerId;
+  if (action === 'invite') {
+    if (!callerIsHost && !guestsLib.isAttending(night.guests, callerId)) {
+      return respond(403, { error: 'Only the host or an attending guest can invite' }, CORS);
+    }
+  } else if (!callerIsHost) {
+    return respond(403, { error: 'Only the host can do this' }, CORS);
+  }
 
   // ── Invite action: provision Cognito user (email) or resolve an existing
   //    member (userId), then send the invite email ───────────────────────────
@@ -229,9 +240,9 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
   if (action === 'invite') {
     const byUserId = typeof inviteUserId === 'string' && inviteUserId.length > 0 && !inviteUserId.includes('@');
 
-    let nightForEmail = night; // freshest copy after ensureInvited
+    let nightForEmail = night; // freshest copy after ensureGuest
     let targetEmail;      // where the Postmark invite goes
-    let inviteKey;        // what goes in night.invited[] (email or userId)
+    let inviteeUserId;    // Cognito username once known
     let inviteeName;      // greeting name
     let provisioned = { result: 'existing', tempPassword: null };
 
@@ -247,9 +258,9 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
         return respond(400, { error: 'User has no email on file' }, CORS);
       }
       const nameAttr = u.UserAttributes?.find(a => a.Name === 'name');
-      targetEmail = emailAttr.Value;
-      inviteKey   = inviteUserId;
-      inviteeName = nameAttr?.Value || targetEmail.split('@')[0];
+      targetEmail   = emailAttr.Value;
+      inviteeUserId = inviteUserId;
+      inviteeName   = nameAttr?.Value || targetEmail.split('@')[0];
       // Idempotent; keeps a meal-planner-only user able to RSVP here. Same
       // escalation guard as ensureGameNightUser (issue #165).
       if (REQUIRED_GROUP !== 'game-night-users') {
@@ -278,9 +289,9 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
       if (!isValidInviteEmail(inviteEmail)) {
         return respond(400, { error: 'Valid email or userId required for invite' }, CORS);
       }
-      targetEmail = inviteEmail;
-      inviteKey   = inviteEmail;
-      inviteeName = inviteEmail.split('@')[0];
+      targetEmail   = inviteEmail;
+      inviteeUserId = null; // resolved by ensureGameNightUser below
+      inviteeName   = inviteEmail.split('@')[0];
     }
 
     // Get host display name
@@ -291,25 +302,6 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
       if (attr?.Value) hostName = attr.Value;
     } catch { /* non-fatal */ }
 
-    // Add the invite key to night.invited[] so renderRSVP's gate recognises
-    // the user. Idempotent — skipped if already present. The frontend
-    // host-controls flow already updates invited[] client-side, but MCP's
-    // invite_to_event tool doesn't, and /invite is the canonical "this person
-    // is invited" event regardless of caller.
-    // Read-check-write under an ETag so parallel /invite calls (the app
-    // fires one per guest) and the app's own upload can't clobber each
-    // other. Before this, a plain PutObject here could load the file a
-    // moment before the host's save landed and overwrite an 8-guest invite
-    // list with a 1-guest one (2026-09-12, Sept 26 night).
-    let inviteListChanged = false;
-    try {
-      ({ changed: inviteListChanged, night: nightForEmail } = await ensureInvited(nightId, inviteKey));
-    } catch (e) {
-      logger.error('s3.put_failed', { request_id: context?.awsRequestId, key: 'gameNights.json', error: e.message });
-      Sentry.captureException(e);
-      return respond(500, { error: 'Could not update invited list' }, CORS);
-    }
-
     // Provision Cognito account + group membership (email path only —
     // userId invites are existing members by definition).
     // If the user already exists, AdminCreateUser is skipped — but we still
@@ -318,15 +310,40 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
     if (!byUserId) {
       try {
         provisioned = await ensureGameNightUser(inviteEmail);
+        if (provisioned.username) inviteeUserId = provisioned.username;
       } catch (e) {
         logger.error('cognito.provisioning_failed', { request_id: context?.awsRequestId, error: e.message });
         Sentry.captureException(e);
         // Fall through — still send the Postmark invite. If provisioning failed
         // for a transient reason, the host can retry; if the email was malformed
         // for Cognito's standards, the friend will see a Sign-In page where they
-        // can request access.
+        // can request access. The guest entry is written without a userId and
+        // resolved on their first RSVP (lib/guests.findGuest).
       }
     }
+
+    // Upsert the guest entry (ADR-0021). /invite is the canonical "this
+    // person is invited" event regardless of caller (app or MCP), so the
+    // entry is written here under an ETag so parallel /invite calls (the app
+    // fires one per guest) and the app's own upload can't clobber each
+    // other. Before this, a plain PutObject here could load the file a
+    // moment before the host's save landed and overwrite an 8-guest invite
+    // list with a 1-guest one (2026-09-12, Sept 26 night).
+    let guestEntry;
+    let inviteListChanged = false;
+    try {
+      ({ changed: inviteListChanged, night: nightForEmail, guest: guestEntry } = await ensureGuest(nightId, {
+        userId:    inviteeUserId,
+        email:     targetEmail,
+        name:      byUserId ? inviteeName : null,
+        invitedBy: callerId,
+      }));
+    } catch (e) {
+      logger.error('s3.put_failed', { request_id: context?.awsRequestId, key: 'gameNights.json', error: e.message });
+      Sentry.captureException(e);
+      return respond(500, { error: 'Could not update guest list' }, CORS);
+    }
+    const inviteKey = guestEntry.userId || guestEntry.email;
 
     const dateStr = formatDate(nightForEmail.date);
     const ctx = {
@@ -369,7 +386,7 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
         recipient_hash: emailHash(targetEmail),
         ...identityFields({ userId: callerId }),
       });
-      return respond(200, { sent: 1, provisioned: provisioned.result, inviteListChanged }, CORS);
+      return respond(200, { sent: 1, provisioned: provisioned.result, inviteListChanged, guest: guestEntry }, CORS);
     } catch (e) {
       logger.error('postmark.invite_failed', { request_id: context?.awsRequestId, error: e.message });
       Sentry.captureException(e);
@@ -378,9 +395,7 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
   }
 
   // ── Compute non-responders ──
-  const rsvpdIds   = new Set((night.rsvps    || []).map(r => r.userId));
-  const declinedIds = new Set(night.declined || []);
-  const nonResponders = (night.invited || []).filter(id => !rsvpdIds.has(id) && !declinedIds.has(id));
+  const nonResponders = guestsLib.pendingGuests(night.guests);
 
   if (nonResponders.length === 0) {
     return respond(200, { sent: 0, message: 'Everyone has already responded' }, CORS);
@@ -395,18 +410,21 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
   } catch { /* non-fatal */ }
 
   // ── Resolve email addresses for each non-responder ──
+  // The entry's cached email is used when present; otherwise Cognito.
   const targets = [];
-  for (const id of nonResponders) {
-    if (id.includes('@')) {
-      targets.push({ email: id, name: id.split('@')[0], inviteKey: id });
-    } else {
+  for (const g of nonResponders) {
+    const inviteKey = g.userId || g.email;
+    if (g.email) {
+      targets.push({ email: g.email, name: g.name || g.email.split('@')[0], inviteKey });
+    } else if (g.userId) {
       try {
-        const u        = await cognito.send(new AdminGetUserCommand({ UserPoolId: USER_POOL_ID, Username: id }));
+        const u        = await cognito.send(new AdminGetUserCommand({ UserPoolId: USER_POOL_ID, Username: g.userId }));
         const emailAttr = u.UserAttributes?.find(a => a.Name === 'email');
         const nameAttr  = u.UserAttributes?.find(a => a.Name === 'name');
-        if (emailAttr?.Value) targets.push({ email: emailAttr.Value, name: nameAttr?.Value || id, inviteKey: id });
+        if (emailAttr?.Value) targets.push({ email: emailAttr.Value, name: g.name || nameAttr?.Value || g.userId, inviteKey });
       } catch { /* user not found — skip */ }
     }
+    // Anonymous plus-ones (no userId, no email) can't be nudged.
   }
 
   if (targets.length === 0) {
@@ -469,13 +487,16 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
 });
 
 /**
- * Add `inviteKey` to the night's invited[] in S3 with an ETag-conditional
- * write, retrying on a lost race. Returns { changed, night } where `night`
- * is the freshest copy (post-write when changed). Throws only when the
- * write keeps losing or S3 fails outright.
+ * Upsert a guest entry on the night in S3 with an ETag-conditional write,
+ * retrying on a lost race (ADR-0021). Matches an existing entry by userId or
+ * email (filling in userId/email/name when newly known); otherwise appends
+ * a pending entry attributed to `invitedBy`.
+ *
+ * Returns { changed, night, guest } where `night` is the freshest copy
+ * (post-write when changed). Throws only when the write keeps losing or S3
+ * fails outright.
  */
-async function ensureInvited(nightId, inviteKey, maxAttempts = 3) {
-  const inviteKeyLc = inviteKey.toLowerCase();
+async function ensureGuest(nightId, { userId, email, name, invitedBy }, maxAttempts = 3) {
   let lastErr;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const obj    = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: 'gameNights.json' }));
@@ -484,11 +505,18 @@ async function ensureInvited(nightId, inviteKey, maxAttempts = 3) {
     const night  = nights.find(n => n.id === nightId);
     if (!night) throw new Error('night vanished during invite');
 
-    if (night.invited?.some(e => typeof e === 'string' && e.toLowerCase() === inviteKeyLc)) {
-      return { changed: false, night };
+    const before = JSON.stringify(night.guests || null);
+    night.guests = guestsLib.normalizeGuests(night);
+    delete night.invited; delete night.rsvps; delete night.declined;
+
+    let guest = guestsLib.claimGuest(night.guests, { userId, email, name });
+    if (!guest) {
+      guest = guestsLib.newGuest({ userId, email, name, invitedBy });
+      night.guests.push(guest);
     }
-    night.invited = Array.isArray(night.invited) ? night.invited : [];
-    night.invited.push(inviteKey);
+    if (JSON.stringify(night.guests) === before) {
+      return { changed: false, night, guest };
+    }
     night.lastModified = Date.now();
     try {
       await s3.send(new PutObjectCommand({
@@ -498,7 +526,7 @@ async function ensureInvited(nightId, inviteKey, maxAttempts = 3) {
         ContentType: 'application/json',
         ...(etag ? { IfMatch: etag } : { IfNoneMatch: '*' }),
       }));
-      return { changed: true, night };
+      return { changed: true, night, guest };
     } catch (e) {
       const isRace = e?.name === 'PreconditionFailed'
         || e?.$metadata?.httpStatusCode === 412
@@ -509,7 +537,7 @@ async function ensureInvited(nightId, inviteKey, maxAttempts = 3) {
   }
   throw lastErr || new Error('invite write lost the race');
 }
-exports._ensureInvited = ensureInvited;
+exports._ensureGuest = ensureGuest;
 
 // ── Helpers ───────────────────────────────────────────────
 
@@ -568,9 +596,9 @@ async function ensureGameNightUser(email) {
     // fixable in the Cognito console. Issue a fresh temp password so the
     // invite email carries working credentials again.
     if (existing.UserStatus === 'FORCE_CHANGE_PASSWORD') {
-      return await resetTempPassword(existing.Username);
+      return { ...(await resetTempPassword(existing.Username)), username: existing.Username };
     }
-    return { result: 'existing', tempPassword: null };
+    return { result: 'existing', tempPassword: null, username: existing.Username };
   }
 
   const username     = crypto.randomUUID();
@@ -591,7 +619,7 @@ async function ensureGameNightUser(email) {
     GroupName:  REQUIRED_GROUP,
   }));
 
-  return { result: 'created', tempPassword };
+  return { result: 'created', tempPassword, username };
 }
 
 /**

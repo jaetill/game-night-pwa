@@ -101,8 +101,8 @@ files are keyed in S3. Use `jaetill-dev` credentials + `ssm:PutParameter` to add
 
 ## S3 data layout (`jaetill-game-nights`)
 ```
-gameNights.json                   — master list of all game night events
-profiles/{userId}.json            — user profile (displayName, bggUsername, email, phone)
+gameNights.json                   — master list of all game night events (attendance in guests[] per ADR-0021)
+profiles/{userId}.json            — user profile (displayName, bggUsername, email, phone, address, defaultTime)
 collections/{userId}.json         — user's BGG game collection (userId = Cognito username)
 ```
 
@@ -294,6 +294,7 @@ Claude Code picks it up automatically on startup.
 - **Access-token user-pool ops** (e.g. UpdateUserAttributes for the deferred profile sync) require the `aws.cognito.signin.user.admin` scope. Already granted in this client's allowed scopes.
 - Host controls are per-night (`night.hostUserId === currentUser.userId`); any member can create a night (they become its host). There is no admin allowlist — the old `VITE_ADMIN_NAMES` var was never wired to anything and has been removed.
 - BGG XML API has CORS restrictions — bggProxy Lambda exists to work around this.
+- **Guest list (ADR-0021, 2026-09):** attendance is ONE array, `night.guests[]` — `{ id, userId, name, email, invitedBy, invitedAt, response }`, `response` null = pending or `{ type, at }`. There is no `invited[]`/`rsvps[]`/`declined[]` any more; `sanitizeNight` (client) and every Lambda read path fold legacy arrays in via `normalizeGuests` and drop them on write. Anonymous plus-ones are entries with `userId: null`; their game-signup key is the entry `id` (`playerKey`). Permission rules (host: anything; attending guest: add entries attributed to self, remove/rename own plus-ones; anyone: own `response` only) are enforced per entry in `GeneratePresignedPost.validateChanges`. The helper module lives twice — `lambda/lib/guests.js` (CJS) and `src/js/data/guests.js` (ESM) — kept identical by `tests/guestsParity.test.js`.
 - **Sync model (2026-08):** deletions are tombstones, `loadGameNights()` no longer pushes on load (saves happen only on actual mutations), local-only nights hosted by others are dropped as stale ("zombies"), and the upload Lambda uses S3 conditional writes. Auth tokens auto-refresh in `authFetch` before every API call. `profiles/{userId}.json` is shared between bggProxy (`/profiles`) and the groups Lambda — both must read-merge-write, never blind-overwrite.
 
 ---

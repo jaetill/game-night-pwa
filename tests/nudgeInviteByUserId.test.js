@@ -96,14 +96,17 @@ describe('handler invite — by userId (Recent guests)', () => {
     expect(postmarkCalls[0].TextBody).not.toContain('Temporary password');
   });
 
-  it('adds the userId (not the email) to night.invited and persists', async () => {
-    await nudge.handler(
+  it('writes a pending guest entry keyed by userId (ADR-0021) and returns it', async () => {
+    const res = await nudge.handler(
       makeEvent({ nightId: 'night-1', action: 'invite', userId: 'guest-uuid-1' }),
       { awsRequestId: 't-uid-2' },
     );
     expect(s3Writes).toHaveLength(1);
-    expect(s3Writes[0][0].invited).toContain('guest-uuid-1');
-    expect(s3Writes[0][0].invited).not.toContain('guest1@example.com');
+    const night = s3Writes[0][0];
+    expect(night.invited).toBeUndefined(); // legacy arrays dropped on write
+    const g = night.guests.find(x => x.userId === 'guest-uuid-1');
+    expect(g).toMatchObject({ email: 'guest1@example.com', name: 'Guest One', invitedBy: 'host-user', response: null });
+    expect(JSON.parse(res.body).guest).toMatchObject({ id: g.id, userId: 'guest-uuid-1' });
   });
 
   it('ensures group membership with game-night-users only', async () => {
@@ -190,5 +193,60 @@ describe('handler invite — by userId (Recent guests)', () => {
     expect(passwordResets).toHaveLength(1);
     expect(passwordResets[0].Username).toBe('stale-uuid');
     expect(postmarkCalls[0].TextBody).toContain('Temporary password');
+  });
+});
+
+describe('handler invite — who may invite (ADR-0021)', () => {
+  let postmarkCalls, s3Writes, nightGuests;
+  const asUser = (userId, body) => ({
+    httpMethod: 'POST', resource: '/invite',
+    headers: { origin: 'https://gamenights.jaetill.com' },
+    requestContext: { authorizer: { userId } },
+    body: JSON.stringify(body),
+  });
+
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    postmarkCalls = []; s3Writes = [];
+    nightGuests = [
+      { id: 'g-yes', userId: 'yes-uuid', name: 'Yes', email: 'yes@example.com', invitedBy: 'host-user', invitedAt: 1, response: { type: 'playing', at: 1 } },
+      { id: 'g-pen', userId: 'pen-uuid', name: 'Pen', email: 'pen@example.com', invitedBy: 'host-user', invitedAt: 1, response: null },
+    ];
+    nudge._setForTest({
+      smClient: { send: vi.fn(async () => ({ SecretString: JSON.stringify({ POSTMARK_API_KEY: 'k' }) })) },
+      s3: { send: vi.fn(async (cmd) => {
+        if (cmd.input?.Body !== undefined) { s3Writes.push(JSON.parse(cmd.input.Body)); return {}; }
+        return { ETag: '"v1"', Body: { transformToString: async () => JSON.stringify([{ ...NIGHT, guests: nightGuests }]) } };
+      }) },
+      cognito: { send: vi.fn(async (cmd) => {
+        if (cmd.input?.GroupName) return {};
+        if (cmd.input?.Filter) return { Users: [{ Username: 'new-uuid', UserStatus: 'CONFIRMED' }] };
+        return { UserAttributes: [{ Name: 'name', Value: 'Someone' }, { Name: 'email', Value: 'x@example.com' }] };
+      }) },
+      postmark: async (_key, msg) => { postmarkCalls.push(msg); return {}; },
+    });
+  });
+  afterEach(() => { nudge._resetForTest(); vi.restoreAllMocks(); });
+
+  it('lets an attending guest invite, attributing the entry to them', async () => {
+    const res = await nudge.handler(asUser('yes-uuid', { nightId: 'night-1', action: 'invite', email: 'friend@example.com' }), { awsRequestId: 'w1' });
+    expect(res.statusCode).toBe(200);
+    const g = s3Writes[0][0].guests.find(x => x.email === 'friend@example.com');
+    expect(g).toMatchObject({ userId: 'new-uuid', invitedBy: 'yes-uuid', response: null });
+    expect(postmarkCalls).toHaveLength(1);
+  });
+
+  it('refuses a pending guest and a stranger', async () => {
+    for (const who of ['pen-uuid', 'stranger']) {
+      const res = await nudge.handler(asUser(who, { nightId: 'night-1', action: 'invite', email: 'friend@example.com' }), { awsRequestId: 'w2' });
+      expect(res.statusCode).toBe(403);
+    }
+    expect(s3Writes).toHaveLength(0);
+    expect(postmarkCalls).toHaveLength(0);
+  });
+
+  it('nudging stays host-only', async () => {
+    const res = await nudge.handler(asUser('yes-uuid', { nightId: 'night-1', action: 'nudge' }), { awsRequestId: 'w3' });
+    expect(res.statusCode).toBe(403);
   });
 });

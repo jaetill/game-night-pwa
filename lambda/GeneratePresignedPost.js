@@ -12,6 +12,12 @@
 //     from clients whose localStorage predates a deletion)
 //   - hostUserId on existing events is immutable
 //   - HOST_ONLY fields can only be changed by the event's host
+//   - guests[] (ADR-0021): the host may change anything; a non-host's
+//     upload is MERGED onto the server copy — only their own response, the
+//     entries they add while attending, and their own anonymous plus-ones
+//     are taken from the upload; everyone else's entries are kept as the
+//     server has them (lib/guests.mergeGuestChanges). Only the actor's own
+//     illegal actions (e.g. adding themselves uninvited) are rejected.
 //   - selectedGames keys can only be added/removed by the host
 //   - deleting = writing a tombstone { id, hostUserId, deleted: true,
 //     lastModified }. Only the host can flip deleted on or off. Tombstones
@@ -41,6 +47,7 @@ const logger = require('./lib/logger');
 const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { identityFields } = require('./lib/identity');
 const push = require('./lib/push');
+const guestsLib = require('./lib/guests');
 
 const BUCKET = process.env.S3_BUCKET || 'jaetill-game-nights';
 const KEY    = 'gameNights.json';
@@ -52,10 +59,21 @@ const ALLOWED_ORIGINS = new Set([
   'https://jaetill.github.io',
 ]);
 
-// Note: `invited` is NOT host-only. Non-hosts need to remove their own email
-// from `invited` when they RSVP/decline — without this, the upload was rejected
-// 403 and the entire save silently failed (storage.js used to swallow the error).
+// `guests` is validated per entry (see validateChanges), not as a whole field.
 const HOST_ONLY = ['date', 'time', 'location', 'description', 'snacks'];
+const LEGACY_GUEST_FIELDS = ['invited', 'rsvps', 'declined'];
+
+/**
+ * Canonical form of a live night for storage: guests[] normalized (legacy
+ * arrays folded in and dropped). Tombstones pass through untouched.
+ */
+function canonicalNight(night) {
+  if (!night || night.deleted === true) return night;
+  const out = { ...night, guests: guestsLib.normalizeGuests(night) };
+  for (const f of LEGACY_GUEST_FIELDS) delete out[f];
+  return out;
+}
+exports._canonicalNight = canonicalNight;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -90,6 +108,8 @@ function makeTombstone(night) {
  * Exported for unit tests.
  */
 function validateChanges(current, incoming, userId) {
+  current  = current.map(canonicalNight);
+  incoming = incoming.map(canonicalNight);
   const currentById = new Map(current.map(n => [String(n.id), n]));
   const accepted = [];
 
@@ -135,6 +155,13 @@ function validateChanges(current, incoming, userId) {
     const newKeys      = Object.keys(night.selectedGames   || {}).sort().join(',');
     if (existingKeys !== newKeys && !isHost) {
       return { error: `Only the host can add or remove games on night ${night.id}` };
+    }
+
+    if (!isHost) {
+      const merged = guestsLib.mergeGuestChanges(existing.guests, night.guests, userId);
+      if (merged.error) return { error: `${merged.error} (night ${night.id})` };
+      accepted.push({ ...night, guests: merged.guests });
+      continue;
     }
 
     accepted.push(night);
@@ -203,34 +230,28 @@ function changedNightIds(current, accepted) {
 exports._changedNightIds = changedNightIds;
 
 function diffRsvpEvents(current, accepted, actorId) {
-  const currentById = new Map(current.map(n => [String(n.id), n]));
+  const currentById = new Map(current.map(n => [String(n.id), canonicalNight(n)]));
   const events = [];
 
-  for (const night of accepted) {
+  for (const raw of accepted) {
+    const night = canonicalNight(raw);
     if (night.deleted === true) continue;
     const before = currentById.get(String(night.id));
     if (!before || before.deleted === true) continue;           // new night — actor is its host
     if (night.hostUserId === actorId) continue;                 // host's own edit
 
-    const beforeRsvps = new Map((before.rsvps || []).map(r => [r.userId, r]));
-    const afterRsvps  = new Map((night.rsvps  || []).map(r => [r.userId, r]));
-    const beforeDecl  = new Set(before.declined || []);
-    const afterDecl   = new Set(night.declined  || []);
+    const mineBefore = (before.guests || []).find(g => g.userId === actorId) || null;
+    const mineAfter  = (night.guests  || []).find(g => g.userId === actorId) || null;
+    const t0 = mineBefore?.response?.type || null;
+    const t1 = mineAfter?.response?.type  || null;
+    if (t0 === t1) continue;
 
-    const mine = afterRsvps.get(actorId);
-    if (mine && !beforeRsvps.has(actorId)) {
-      events.push({ hostUserId: night.hostUserId, nightId: night.id, date: night.date,
-        body: `${mine.name || actorId} ${RSVP_TYPE_LABEL[mine.type] || 'responded'}` });
-    } else if (!mine && beforeRsvps.has(actorId) && !afterDecl.has(actorId)) {
-      const prev = beforeRsvps.get(actorId);
-      events.push({ hostUserId: night.hostUserId, nightId: night.id, date: night.date,
-        body: `${prev.name || actorId} cancelled their RSVP` });
-    }
-    if (afterDecl.has(actorId) && !beforeDecl.has(actorId)) {
-      const prev = beforeRsvps.get(actorId);
-      events.push({ hostUserId: night.hostUserId, nightId: night.id, date: night.date,
-        body: `${prev?.name || actorId} can't make it` });
-    }
+    const name = mineAfter?.name || mineBefore?.name || actorId;
+    const ev = (body) => events.push({ hostUserId: night.hostUserId, nightId: night.id, date: night.date, body });
+
+    if (t1 === 'declined')                       ev(`${name} can't make it`);
+    else if (t1 && RSVP_TYPE_LABEL[t1])          ev(`${name} ${RSVP_TYPE_LABEL[t1]}`);
+    else if (!t1 && t0 && t0 !== 'declined')     ev(`${name} cancelled their RSVP`);
   }
 
   return events;

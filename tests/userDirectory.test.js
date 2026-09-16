@@ -13,7 +13,10 @@ import {
   getDisplayName,
   _resetDirectoryForTest,
 } from '../src/js/utils/userDirectory.js';
+import { normalizeGuests } from '../src/js/data/guests.js';
 
+// ADR-0021: the directory is built from guests[] (email + userId caches).
+// Fixtures are legacy-shaped and normalized like loaded data would be.
 const NIGHTS = [
   { id: 'a', invited: ['deb@example.com', 'phil@example.com'], rsvps: [] },
   { id: 'b', invited: [], rsvps: [
@@ -21,7 +24,7 @@ const NIGHTS = [
     { userId: 'legacy-uuid', name: 'Legacy', type: 'playing' },           // pre-#367, no email
     { userId: 'junk-uuid', name: 'Junk', type: 'playing', email: 'not-an-email' },
   ] },
-];
+].map(n => ({ ...n, guests: normalizeGuests(n) }));
 
 beforeEach(() => { _resetDirectoryForTest(); buildDirectoryFromNights(NIGHTS); });
 

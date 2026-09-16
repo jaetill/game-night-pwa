@@ -27,6 +27,12 @@ const {
 const SECRET = 'unit-test-secret';
 const ME     = { userId: 'me-uuid', name: 'Deb', email: 'deb@example.com', matched: true };
 
+// ADR-0021: attendance lives in night.guests[]; these read my entry.
+const mine    = night => (night.guests || []).find(g => g.userId === 'me-uuid') || null;
+const myType  = night => mine(night)?.response?.type ?? null;
+// Legacy-shaped fixture helpers (the Lambda normalizes on read).
+const rsvpd   = (type) => ({ rsvps: [{ userId: 'me-uuid', name: 'Deb', type }] });
+
 function makeNight(over = {}) {
   return {
     id: 'n1',
@@ -56,7 +62,7 @@ describe('applyGameAction', () => {
     const night = makeNight();
     const r = applyGameAction(night, ME, 'games');
     expect(r).toEqual({ ok: true, changed: false, banner: null });
-    expect(night.rsvps).toHaveLength(0);
+    expect(myType(night)).toBeNull();
   });
 
   it('join adds the player and creates a playing RSVP when none exists', () => {
@@ -64,14 +70,21 @@ describe('applyGameAction', () => {
     const r = applyGameAction(night, ME, 'join', { gameId: 'g1' });
     expect(r.changed).toBe(true);
     expect(night.selectedGames.g1.signedUpPlayers).toEqual([{ userId: 'me-uuid', name: 'Deb' }]);
-    expect(night.rsvps).toEqual([{ userId: 'me-uuid', name: 'Deb', type: 'playing', email: 'deb@example.com' }]);
+    expect(mine(night)).toMatchObject({ userId: 'me-uuid', name: 'Deb', email: 'deb@example.com', response: { type: 'playing' } });
+    // The two legacy invite keys (userId + email) can't be proven to be one
+    // person from the data alone, so both entries survive normalization —
+    // the email one stays pending until the host removes it. Matching by
+    // userId wins, so the response lands on the right entry.
+    expect(night.guests).toHaveLength(2);
+    expect(night.guests.find(g => g.email === 'deb@example.com' && !g.userId).response).toBeNull();
+    expect(night.invited).toBeUndefined();
   });
 
   it('join upgrades an if_needed RSVP to playing (app rule: only playing can join)', () => {
-    const night = makeNight({ rsvps: [{ userId: 'me-uuid', name: 'Deb', type: 'if_needed' }] });
+    const night = makeNight(rsvpd('if_needed'));
     applyGameAction(night, ME, 'join', { gameId: 'g1' });
-    expect(night.rsvps).toHaveLength(1);
-    expect(night.rsvps[0].type).toBe('playing');
+    expect(night.guests.filter(g => g.userId === 'me-uuid')).toHaveLength(1);
+    expect(myType(night)).toBe('playing');
   });
 
   it('join clears a prior interest flag on the same game', () => {
@@ -95,7 +108,7 @@ describe('applyGameAction', () => {
     expect(r.changed).toBe(false);
     expect(r.banner.tone).toBe('warn');
     expect(night.selectedGames.g2.signedUpPlayers).toHaveLength(2);
-    expect(night.rsvps).toHaveLength(0);
+    expect(myType(night)).toBeNull();
   });
 
   it('join with an unknown or missing gameId is a warn no-op', () => {
@@ -107,12 +120,12 @@ describe('applyGameAction', () => {
   });
 
   it('leave removes the player but keeps their RSVP', () => {
-    const night = makeNight({ rsvps: [{ userId: 'me-uuid', name: 'Deb', type: 'playing' }] });
+    const night = makeNight(rsvpd('playing'));
     night.selectedGames.g1.signedUpPlayers.push({ userId: 'me-uuid', name: 'Deb' });
     const r = applyGameAction(night, ME, 'leave', { gameId: 'g1' });
     expect(r.changed).toBe(true);
     expect(night.selectedGames.g1.signedUpPlayers).toEqual([]);
-    expect(night.rsvps).toHaveLength(1);
+    expect(myType(night)).toBe('playing');
   });
 
   it('interested / uninterested toggle and are idempotent', () => {
@@ -195,51 +208,79 @@ describe('applyChoice', () => {
 
     applyChoice(night, { ...ME, invitee: 'deb@example.com' }, 'declined');
 
-    expect(night.declined).toEqual(['me-uuid']);
-    expect(night.rsvps).toEqual([]);
+    expect(myType(night)).toBe('declined');
     expect(night.sides).toEqual([]);
     expect(night.selectedGames.g1.signedUpPlayers).toEqual([]);
     expect(night.selectedGames.g2.interestedPlayers).toEqual([]);
     // Other people's seats are untouched.
     expect(night.selectedGames.g2.signedUpPlayers).toHaveLength(2);
-    // Both invite keys are dropped.
-    expect(night.invited).toEqual([]);
+    // Still on the guest list — declining is a response, not a removal.
+    expect(night.guests.filter(g => g.userId === 'me-uuid')).toHaveLength(1);
+    expect(night.invited).toBeUndefined();
+    expect(night.rsvps).toBeUndefined();
+    expect(night.declined).toBeUndefined();
+  });
+
+  it('declining also drops the anonymous plus-ones I brought (and their seats)', () => {
+    const night = makeNight({ guests: [
+      { id: 'me', userId: 'me-uuid', name: 'Deb', email: 'deb@example.com', invitedBy: 'jaetill', invitedAt: 1, response: { type: 'playing', at: 1 } },
+      { id: 'p1', userId: null, name: null, email: null, invitedBy: 'me-uuid', invitedAt: 1, response: { type: 'if_needed', at: 1 } },
+      { id: 'f1', userId: 'friend', name: 'F', email: null, invitedBy: 'me-uuid', invitedAt: 1, response: null },
+    ] });
+    night.selectedGames.g1.signedUpPlayers.push({ userId: 'p1', name: "Deb's guest" });
+    applyChoice(night, { ...ME, invitee: 'me-uuid' }, 'declined');
+    expect(night.guests.map(g => g.id).sort()).toEqual(['f1', 'me']); // named friend keeps standing
+    expect(night.selectedGames.g1.signedUpPlayers).toEqual([]);
+  });
+
+  it('creates a pending-then-responded entry for a token holder with no entry (token = proof of invite)', () => {
+    const night = makeNight({ invited: [], guests: undefined });
+    delete night.guests;
+    applyChoice(night, { ...ME, invitee: 'me-uuid' }, 'playing');
+    expect(mine(night)).toMatchObject({ invitedBy: 'jaetill', response: { type: 'playing' } });
   });
 
   it('switching to "just hanging out" gives seats back but keeps interest flags', () => {
-    const night = makeNight({ rsvps: [{ userId: 'me-uuid', name: 'Deb', type: 'playing' }] });
+    const night = makeNight(rsvpd('playing'));
     night.selectedGames.g1.signedUpPlayers.push({ userId: 'me-uuid', name: 'Deb' });
     night.selectedGames.g2.interestedPlayers.push({ userId: 'me-uuid', name: 'Deb' });
     applyChoice(night, { ...ME, invitee: 'me-uuid' }, 'spectating');
-    expect(night.rsvps).toEqual([{ userId: 'me-uuid', name: 'Deb', type: 'spectating', email: 'deb@example.com' }]);
+    expect(mine(night)).toMatchObject({ name: 'Deb', email: 'deb@example.com', response: { type: 'spectating' } });
     expect(night.selectedGames.g1.signedUpPlayers).toEqual([]);
     expect(night.selectedGames.g2.interestedPlayers).toHaveLength(1);
   });
 
   it('any_game and if_needed keep any seats already held', () => {
     for (const type of ['any_game', 'if_needed']) {
-      const night = makeNight({ rsvps: [{ userId: 'me-uuid', name: 'Deb', type: 'playing' }] });
+      const night = makeNight(rsvpd('playing'));
       night.selectedGames.g1.signedUpPlayers.push({ userId: 'me-uuid', name: 'Deb' });
       applyChoice(night, { ...ME, invitee: 'me-uuid' }, type);
-      expect(night.rsvps[0].type).toBe(type);
+      expect(myType(night)).toBe(type);
       expect(night.selectedGames.g1.signedUpPlayers).toHaveLength(1);
     }
   });
 
-  it('stamps the resolved email onto the RSVP entry, and omits it when unknown', () => {
+  it('caches the resolved email on the entry, and leaves it null when unknown', () => {
     const a = makeNight();
     applyChoice(a, { ...ME, invitee: 'me-uuid' }, 'playing');
-    expect(a.rsvps[0].email).toBe('deb@example.com');
+    expect(mine(a).email).toBe('deb@example.com');
     const b = makeNight();
     applyChoice(b, { userId: 'x', name: 'X', invitee: 'x' }, 'playing');
-    expect(b.rsvps[0]).not.toHaveProperty('email');
+    expect(b.guests.find(g => g.userId === 'x').email).toBeNull();
+  });
+
+  it('an unresolved email invitee (no Cognito account) responds against their email entry', () => {
+    const night = makeNight({ invited: ['deb@example.com'] });
+    applyChoice(night, { userId: null, name: 'deb', email: 'deb@example.com', invitee: 'deb@example.com' }, 'playing');
+    expect(night.guests).toHaveLength(1);
+    expect(night.guests[0]).toMatchObject({ userId: null, email: 'deb@example.com', response: { type: 'playing' } });
   });
 
   it('re-RSVPing after a decline clears the decline (idempotent swap)', () => {
     const night = makeNight({ declined: ['me-uuid'] });
     applyChoice(night, { ...ME, invitee: 'me-uuid' }, 'playing');
-    expect(night.declined).toEqual([]);
-    expect(night.rsvps).toEqual([{ userId: 'me-uuid', name: 'Deb', type: 'playing', email: 'deb@example.com' }]);
+    expect(night.guests.filter(g => g.userId === 'me-uuid')).toHaveLength(1);
+    expect(mine(night)).toMatchObject({ name: 'Deb', email: 'deb@example.com', response: { type: 'playing' } });
   });
 });
 
@@ -294,9 +335,10 @@ describe('renderPickerPage', () => {
     expect(rsvpd).not.toContain('choice=if_needed');   // current answer isn't offered as a change
     expect(rsvpd).toContain('choice=spectating');       // the others are
 
-    // An RSVP type this page doesn't know about still gets a label.
+    // An RSVP type outside RESPONSE_TYPES normalizes to "not answered"
+    // (ADR-0021: the enum lives in lib/guests.js and is validated on read).
     const odd = renderPickerPage(makeNight({ rsvps: [{ userId: 'me-uuid', name: 'Deb', type: 'future_type' }] }), ME, TOKEN, null);
-    expect(odd).toContain("You&#39;ve RSVP&#39;d");
+    expect(odd).toContain('choice=if_needed');
   });
 
   it('renders the food plan, existing sides, and the side form only when allowSides', () => {
@@ -397,7 +439,7 @@ describe('handler', () => {
     expect(puts[0].IfMatch).toBe('"e1"');
     const saved = JSON.parse(stored)[0];
     expect(saved.selectedGames.g1.signedUpPlayers).toEqual([{ userId: 'me-uuid', name: 'Deb' }]);
-    expect(saved.rsvps[0].type).toBe('playing');
+    expect(saved.guests.find(g => g.userId === 'me-uuid').response.type).toBe('playing');
     expect(res.body).toContain("You&#39;re in Catan!");
     expect(res.body).toContain('choice=leave&game=g1');
   });
@@ -428,13 +470,13 @@ describe('handler', () => {
     for (const choice of ['any_game', 'spectating']) {
       const r = await rsvpLink.handler(evt({ token: tok(), choice }), ctx);
       expect(r.statusCode).toBe(200);
-      expect(JSON.parse(stored)[0].rsvps[0].type).toBe(choice);
+      expect(JSON.parse(stored)[0].guests.find(g => g.userId === 'me-uuid').response.type).toBe(choice);
     }
 
     const no = await rsvpLink.handler(evt({ token: tok(), choice: 'declined' }), ctx);
     expect(no.body).toContain("Sorry you can&#39;t make it.");
     expect(no.body).not.toContain('Catan');
-    expect(JSON.parse(stored)[0].declined).toEqual(['me-uuid']);
+    expect(JSON.parse(stored)[0].guests.find(g => g.userId === 'me-uuid').response.type).toBe('declined');
   });
 
   it('the token pins the night: a token for another night cannot touch this one', async () => {

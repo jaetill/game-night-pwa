@@ -1,50 +1,71 @@
 import { withdrawFromAllGames } from '../utils/index.js';
 import { getCurrentUser } from '../auth/userStore.js';
 import { saveGameNights } from '../data/index.js';
-import { sanitizeNight } from '../data/storage.js';
+import {
+  findGuest, claimGuest, newGuest, respond, playerKey, pendingGuests, declinedGuests, guestsOfType,
+  plusOnesOf, isPlusOne, removeGuests, isAttending,
+} from '../data/guests.js';
 import { DEBUG_MODE } from '../config.js';
-import { getDisplayName } from '../utils/userDirectory.js';
-import { btn } from '../ui/elements.js';
+import { getDisplayName, guestLabel } from '../utils/userDirectory.js';
+import { sendInviteEmail, addPlaceholder } from '../utils/invite.js';
+import { btn, input } from '../ui/elements.js';
 import { toastSuccess, toastError, toastInfo } from '../ui/toast.js';
 
 import { renderGameNights } from './renderGameNights.js';
+
+// Attendance is night.guests[] (ADR-0021). The current user's own entry is
+// found by userId (or by the email their invite went to, on first contact —
+// findGuest fills the userId in). Responding sets `response`; it never
+// removes anyone from the list.
+
+function myEntry(night, currentUser) {
+  // Read-only lookup for rendering; the write paths claim the entry.
+  return findGuest(night.guests, { userId: currentUser.userId, email: currentUser.email });
+}
+
+/** Remove the sponsor's anonymous plus-ones and free any seats they held. */
+function dropMyPlusOnes(night, sponsorUserId) {
+  const dropped = removeGuests(night, g => isPlusOne(g) && g.invitedBy === sponsorUserId);
+  for (const d of dropped) withdrawFromAllGames(night, { userId: playerKey(d) });
+  return dropped.length;
+}
 
 export function renderRSVP(night, nights, currentUser) {
   const wrapper = document.createElement('div');
   currentUser = currentUser || getCurrentUser();
   if (!currentUser) return wrapper;
 
-  const { userId, email } = currentUser;
-  const alreadyRSVPd    = night.rsvps?.some(r => r.userId === userId);
-  const alreadyDeclined = night.declined?.includes(userId);
-  const isInvited       = night.invited?.includes(userId) ||
-                          (email && night.invited?.includes(email.toLowerCase()));
+  const me = myEntry(night, currentUser);
+  const isHost = night.hostUserId === currentUser.userId;
 
   const section = document.createElement('div');
   section.className = 'space-y-3';
 
-  // ── Action buttons ───────────────────────────────────────
-  if (isInvited && !alreadyRSVPd && !alreadyDeclined) {
+  // ── Action buttons — shown to anyone on the list who hasn't answered ──
+  // (the host is implicitly on the list; the form adds them as playing)
+  if ((me || isHost) && !me?.response) {
     const actions = document.createElement('div');
     actions.className = 'flex flex-wrap gap-2';
 
-    async function doRSVP(type, btnEl, label) {
+    async function answer(type, btnEl, label, toast) {
       btnEl.disabled = true;
       btnEl.textContent = 'Saving…';
       try {
-        night.rsvps = Array.isArray(night.rsvps) ? night.rsvps : [];
-        // `email` lets the host's Recent guests list match this RSVP to the
-        // email the invite went to (see utils/userDirectory.js).
-        night.rsvps.push({
-          userId, name: currentUser.name || currentUser.userId, type,
-          ...(email ? { email: email.toLowerCase() } : {}),
-        });
-        if (email) night.invited = (night.invited || []).filter(e => e !== email.toLowerCase());
+        // Claim fills in userId/name on an email-only invite (first contact).
+        let entry = claimGuest(night.guests, { userId: currentUser.userId, email: currentUser.email, name: currentUser.name });
+        if (!entry && isHost) {
+          entry = newGuest({ userId: currentUser.userId, name: currentUser.name, email: currentUser.email, invitedBy: currentUser.userId });
+          night.guests.push(entry);
+        }
+        respond(entry, type);
+        if (type === 'declined') {
+          withdrawFromAllGames(night, currentUser);
+          dropMyPlusOnes(night, currentUser.userId);
+        }
         night.lastModified = Date.now();
-        sanitizeNight(night);
         await saveGameNights(nights);
         renderGameNights(nights, currentUser);
-        toastSuccess(label);
+        toast(label);
       } catch {
         toastError('Could not save RSVP. Try again.');
         btnEl.disabled = false;
@@ -53,34 +74,19 @@ export function renderRSVP(night, nights, currentUser) {
     }
 
     const playingBtn = btn('Reserve a seat', 'primary');
-    playingBtn.onclick = () => doRSVP('playing', playingBtn, 'Reserve a seat');
+    playingBtn.onclick = () => answer('playing', playingBtn, 'Reserve a seat', toastSuccess);
 
     const anyGameBtn = btn('Put me in a game', 'secondary');
-    anyGameBtn.onclick = () => doRSVP('any_game', anyGameBtn, 'Put me in a game');
+    anyGameBtn.onclick = () => answer('any_game', anyGameBtn, 'Put me in a game', toastSuccess);
 
     const ifNeededBtn = btn("I'll play if needed", 'secondary');
-    ifNeededBtn.onclick = () => doRSVP('if_needed', ifNeededBtn, "I'll play if needed");
+    ifNeededBtn.onclick = () => answer('if_needed', ifNeededBtn, "I'll play if needed", toastSuccess);
 
     const specBtn = btn('Just hang out', 'secondary');
-    specBtn.onclick = () => doRSVP('spectating', specBtn, 'Just hang out');
+    specBtn.onclick = () => answer('spectating', specBtn, 'Just hang out', toastSuccess);
 
     const declineBtn = btn("Can't make it", 'ghost');
-    declineBtn.onclick = async () => {
-      declineBtn.disabled = true;
-      try {
-        night.declined = Array.isArray(night.declined) ? night.declined : [];
-        night.declined.push(userId);
-        if (email) night.invited = (night.invited || []).filter(e => e !== email.toLowerCase());
-        night.lastModified = Date.now();
-        sanitizeNight(night);
-        await saveGameNights(nights);
-        renderGameNights(nights, currentUser);
-        toastInfo("Marked as not attending.");
-      } catch {
-        toastError('Could not save. Try again.');
-        declineBtn.disabled = false;
-      }
-    };
+    declineBtn.onclick = () => answer('declined', declineBtn, "Can't make it", () => toastInfo('Marked as not attending.'));
 
     actions.appendChild(playingBtn);
     actions.appendChild(anyGameBtn);
@@ -100,43 +106,20 @@ export function renderAttendeeGroups(night, nights, currentUser) {
   const wrapper = document.createElement('div');
   wrapper.className = 'space-y-3';
 
-  // Pending + declined sections below must render even with zero RSVPs.
-  night.rsvps = Array.isArray(night.rsvps) ? night.rsvps : [];
-
-  // Migrate legacy 'flexible' type to 'if_needed'
-  night.rsvps.forEach(r => { if (r.type === 'flexible') r.type = 'if_needed'; });
+  const guests = night.guests = Array.isArray(night.guests) ? night.guests : [];
 
   // 'playing' people not yet in any game
-  const assignedUserIds = new Set(
-    Object.values(night.selectedGames || {}).flatMap(g => g.signedUpPlayers.map(p => p.userId))
+  const assignedKeys = new Set(
+    Object.values(night.selectedGames || {}).flatMap(g => (g.signedUpPlayers || []).map(p => p.userId))
   );
-  const unassignedPlaying = night.rsvps.filter(
-    r => (r.type ?? 'playing') === 'playing' && !assignedUserIds.has(r.userId)
-  );
+  const unassignedPlaying = guestsOfType(guests, 'playing').filter(g => !assignedKeys.has(playerKey(g)));
 
   const groups = [
-    { members: unassignedPlaying,                                               heading: "Hasn't picked a game yet" },
-    { members: night.rsvps.filter(r => r.type === 'any_game'),                  heading: 'Put me in a game' },
-    { members: night.rsvps.filter(r => r.type === 'if_needed'),                 heading: "I'll play if needed" },
-    { members: night.rsvps.filter(r => r.type === 'spectating'),                heading: 'Just hanging out' },
+    { members: unassignedPlaying,                 heading: "Hasn't picked a game yet" },
+    { members: guestsOfType(guests, 'any_game'),   heading: 'Put me in a game' },
+    { members: guestsOfType(guests, 'if_needed'),  heading: "I'll play if needed" },
+    { members: guestsOfType(guests, 'spectating'), heading: 'Just hanging out' },
   ];
-
-  // Expand guest entries from all RSVPs into the if_needed group
-  function guestEntriesFor(rsvp) {
-    const count = rsvp.guests || 0;
-    const entries = [];
-    const sponsorName = rsvp.name || getDisplayName(rsvp.userId);
-    for (let i = 1; i <= count; i++) {
-      entries.push({
-        userId: `${rsvp.userId}_guest_${i}`,
-        name:   `${sponsorName}'s Guest #${i}`,
-        _guest: true,
-      });
-    }
-    return entries;
-  }
-
-  const allGuests = night.rsvps.flatMap(guestEntriesFor);
 
   function makeCancelBtn() {
     const cancelBtn = btn('Cancel RSVP', 'danger');
@@ -144,10 +127,12 @@ export function renderAttendeeGroups(night, nights, currentUser) {
     cancelBtn.onclick = async () => {
       cancelBtn.disabled = true;
       try {
-        night.rsvps = night.rsvps.filter(r => r.userId !== userId);
+        // Back to "not answered" — still on the list.
+        const me = findGuest(night.guests, { userId });
+        if (me) respond(me, null);
         withdrawFromAllGames(night, currentUser);
+        dropMyPlusOnes(night, userId);
         night.lastModified = Date.now();
-        sanitizeNight(night);
         await saveGameNights(nights);
         renderGameNights(nights, currentUser);
         toastInfo('RSVP cancelled.');
@@ -159,7 +144,9 @@ export function renderAttendeeGroups(night, nights, currentUser) {
     return cancelBtn;
   }
 
-  function makeGuestStepper(rsvp) {
+  // "+guests" stepper: each click adds/removes an anonymous plus-one entry
+  // sponsored by the current user (ADR-0021 sub-decision 3).
+  function makeGuestStepper() {
     const stepper = document.createElement('div');
     stepper.className = 'flex items-center gap-1 ml-2';
 
@@ -174,18 +161,17 @@ export function renderAttendeeGroups(night, nights, currentUser) {
 
     const countEl = document.createElement('span');
     countEl.className = 'text-xs w-4 text-center font-medium';
-    countEl.textContent = rsvp.guests || 0;
+    countEl.textContent = plusOnesOf(guests, userId).length;
 
     const plusBtn = document.createElement('button');
     plusBtn.type = 'button';
     plusBtn.className = 'w-5 h-5 rounded text-xs bg-gray-200 hover:bg-gray-300 font-bold leading-none';
     plusBtn.textContent = '+';
 
-    async function setGuests(n) {
+    async function commit() {
       minusBtn.disabled = true;
       plusBtn.disabled  = true;
       try {
-        rsvp.guests = n;
         night.lastModified = Date.now();
         await saveGameNights(nights);
         renderGameNights(nights, currentUser);
@@ -196,8 +182,18 @@ export function renderAttendeeGroups(night, nights, currentUser) {
       }
     }
 
-    minusBtn.onclick = () => { if ((rsvp.guests || 0) > 0) setGuests((rsvp.guests || 0) - 1); };
-    plusBtn.onclick  = () => setGuests((rsvp.guests || 0) + 1);
+    minusBtn.onclick = () => {
+      const mine = plusOnesOf(night.guests, userId);
+      if (mine.length === 0) return;
+      const last = mine[mine.length - 1];
+      withdrawFromAllGames(night, { userId: playerKey(last) });
+      removeGuests(night, g => g.id === last.id);
+      commit();
+    };
+    plusBtn.onclick = () => {
+      night.guests.push(newGuest({ invitedBy: userId, response: { type: 'if_needed' } }));
+      commit();
+    };
 
     stepper.appendChild(label);
     stepper.appendChild(minusBtn);
@@ -206,15 +202,38 @@ export function renderAttendeeGroups(night, nights, currentUser) {
     return stepper;
   }
 
-  // Augment if_needed group with guest entries
-  const ifNeededIndex = groups.findIndex(g => g.heading === "I'll play if needed");
-  if (ifNeededIndex >= 0) {
-    groups[ifNeededIndex] = {
-      ...groups[ifNeededIndex],
-      members: [...groups[ifNeededIndex].members, ...allGuests],
+  // "Bring a friend" — an attending guest may invite someone by email
+  // (ADR-0021 permission rule 2). The Lambda writes the entry attributed to
+  // the sponsor and sends the invite; the placeholder shows immediately.
+  function makeBringFriendRow() {
+    const row = document.createElement('div');
+    row.className = 'flex gap-2 items-center mt-1';
+    const emailInput = input('Bring a friend — their email…');
+    emailInput.type = 'email';
+    emailInput.className = 'field flex-1 text-sm';
+    const addBtn = btn('Invite', 'secondary');
+    addBtn.className += ' text-xs';
+    addBtn.onclick = async () => {
+      const email = emailInput.value.trim().toLowerCase();
+      if (!email || !email.includes('@')) { toastError('Please enter a valid email address.'); return; }
+      if (!addPlaceholder(night, email, userId)) { toastInfo(`${email} is already on the list.`); emailInput.value = ''; return; }
+      addBtn.disabled = true;
+      try {
+        night.lastModified = Date.now();
+        await saveGameNights(nights);
+        sendInviteEmail(night, email);
+        renderGameNights(nights, currentUser);
+        toastSuccess(`${email} invited!`);
+      } catch {
+        removeGuests(night, g => !g.userId && g.email === email && g.invitedBy === userId && !g.response);
+        toastError('Could not save. Try again.');
+        addBtn.disabled = false;
+      }
     };
-  } else if (allGuests.length > 0) {
-    groups.push({ members: allGuests, heading: "I'll play if needed" });
+    emailInput.addEventListener('keydown', e => { if (e.key === 'Enter') addBtn.click(); });
+    row.appendChild(emailInput);
+    row.appendChild(addBtn);
+    return row;
   }
 
   for (const { members, heading } of groups) {
@@ -228,7 +247,7 @@ export function renderAttendeeGroups(night, nights, currentUser) {
     const list = document.createElement('ul');
     list.className = 'space-y-1 pl-3';
 
-    members.forEach(rsvp => {
+    members.forEach(g => {
       const item = document.createElement('li');
       item.className = 'flex items-center justify-between text-sm';
 
@@ -236,14 +255,15 @@ export function renderAttendeeGroups(night, nights, currentUser) {
       left.className = 'flex items-center';
 
       const name = document.createElement('span');
-      name.className = rsvp._guest ? 'text-gray-400 italic' : 'text-gray-700';
-      name.textContent = rsvp.name || getDisplayName(rsvp.userId);
+      name.className = isPlusOne(g) ? 'text-gray-400 italic' : 'text-gray-700';
+      name.textContent = guestLabel(g);
       left.appendChild(name);
 
-      if (rsvp.userId === userId) left.appendChild(makeGuestStepper(rsvp));
+      const isMe = g.userId === userId;
+      if (isMe && isAttending(guests, userId)) left.appendChild(makeGuestStepper());
       item.appendChild(left);
 
-      if (rsvp.userId === userId) item.appendChild(makeCancelBtn());
+      if (isMe) item.appendChild(makeCancelBtn());
 
       list.appendChild(item);
     });
@@ -251,11 +271,12 @@ export function renderAttendeeGroups(night, nights, currentUser) {
     wrapper.appendChild(list);
   }
 
+  if (userId && night.hostUserId !== userId && isAttending(guests, userId)) {
+    wrapper.appendChild(makeBringFriendRow());
+  }
+
   // ── Pending invites ───────────────────────────────────────
-  const pending = (night.invited || []).filter(id =>
-    !night.rsvps?.some(r => r.userId === id) &&
-    !night.declined?.includes(id)
-  );
+  const pending = pendingGuests(guests);
 
   if (pending.length > 0) {
     const label = document.createElement('span');
@@ -265,17 +286,18 @@ export function renderAttendeeGroups(night, nights, currentUser) {
 
     const pendingDiv = document.createElement('div');
     pendingDiv.className = 'flex flex-wrap gap-1';
-    pending.forEach(id => {
+    pending.forEach(g => {
       const chip = document.createElement('span');
       chip.className = 'text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full';
-      chip.textContent = getDisplayName(id);
+      chip.textContent = guestLabel(g);
+      if (g.invitedBy && g.invitedBy !== night.hostUserId) chip.title = `Invited by ${getDisplayName(g.invitedBy)}`;
       pendingDiv.appendChild(chip);
 
       if (DEBUG_MODE) {
         const removeBtn = btn('×', 'ghost');
         removeBtn.className += ' text-xs py-0 px-1';
         removeBtn.onclick = () => {
-          night.invited = night.invited.filter(uid => uid !== id);
+          removeGuests(night, x => x.id === g.id);
           night.lastModified = Date.now();
           renderGameNights(nights, currentUser);
         };
@@ -289,7 +311,7 @@ export function renderAttendeeGroups(night, nights, currentUser) {
   // Without this, a decline is invisible to the host: the person just
   // vanishes from "Awaiting reply", which reads the same as "never got the
   // invite" — and the host can't trust the pending count for headcount.
-  const declined = (night.declined || []).filter(id => !night.rsvps?.some(r => r.userId === id));
+  const declined = declinedGuests(guests);
   if (declined.length > 0) {
     const label = document.createElement('span');
     label.className = 'section-label';
@@ -298,10 +320,10 @@ export function renderAttendeeGroups(night, nights, currentUser) {
 
     const declinedDiv = document.createElement('div');
     declinedDiv.className = 'flex flex-wrap gap-1';
-    declined.forEach(id => {
+    declined.forEach(g => {
       const chip = document.createElement('span');
       chip.className = 'text-xs bg-red-50 text-red-400 px-2 py-0.5 rounded-full line-through';
-      chip.textContent = getDisplayName(id);
+      chip.textContent = guestLabel(g);
       chip.title = 'Declined';
       declinedDiv.appendChild(chip);
     });

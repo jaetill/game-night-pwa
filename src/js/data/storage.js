@@ -2,10 +2,16 @@ import { getCurrentUser } from '../auth/userStore.js';
 import { authFetch } from '../utils/authFetch.js';
 import { API_BASE } from '../config.js';
 
+import { normalizeGuests } from './guests.js';
+
 /**
  * Ensures a game night object has full structure and valid fields.
  * Tombstones (deleted nights) pass through untouched — they intentionally
  * carry only { id, hostUserId, deleted, lastModified }.
+ *
+ * Attendance is the unified `guests[]` list (ADR-0021). Legacy
+ * invited[] / rsvps[] / declined[] arrays are folded into it here and
+ * dropped, so no other code ever sees them.
  */
 export function sanitizeNight(night) {
   if (night.deleted) {
@@ -41,14 +47,14 @@ export function sanitizeNight(night) {
     selectedGames = night.selectedGames;
   }
 
+  // eslint-disable-next-line no-unused-vars
+  const { invited, rsvps, declined, ...rest } = night;
   return {
-    ...night,
+    ...rest,
     selectedGames,
     description: night.description || '',
     location: night.location || '',
-    invited: Array.isArray(night.invited) ? night.invited : [],
-    rsvps: Array.isArray(night.rsvps) ? night.rsvps : [],
-    declined: Array.isArray(night.declined) ? night.declined : [],
+    guests: normalizeGuests(night),
     suggestions: Array.isArray(night.suggestions) ? night.suggestions : [],
     hostUserId: night.hostUserId || getCurrentUser()?.userId,
     lastModified: typeof night.lastModified === 'number' ? night.lastModified : Date.now()
