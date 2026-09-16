@@ -57,6 +57,7 @@ export function renderRSVP(night, nights, currentUser) {
           entry = newGuest({ userId: currentUser.userId, name: currentUser.name, email: currentUser.email, invitedBy: currentUser.userId });
           night.guests.push(entry);
         }
+        if (!entry) throw new Error('not on the guest list');
         respond(entry, type);
         if (type === 'declined') {
           withdrawFromAllGames(night, currentUser);

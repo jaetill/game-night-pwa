@@ -222,6 +222,11 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
     if (!callerIsHost && !guestsLib.isAttending(night.guests, callerId)) {
       return respond(403, { error: 'Only the host or an attending guest can invite' }, CORS);
     }
+    if (!callerIsHost) {
+      // Guest-sponsored invites provision accounts and send mail from the
+      // host's address; WARN so a misbehaving sponsor is visible in Grafana.
+      logger.warn('invite.by_guest', { request_id: context?.awsRequestId, night_id: nightId, ...identityFields({ userId: callerId }) });
+    }
   } else if (!callerIsHost) {
     return respond(403, { error: 'Only the host can do this' }, CORS);
   }
@@ -505,6 +510,9 @@ async function ensureGuest(nightId, { userId, email, name, invitedBy }, maxAttem
     const night  = nights.find(n => n.id === nightId);
     if (!night) throw new Error('night vanished during invite');
 
+    // Snapshot BEFORE normalization on purpose: a still-legacy night (no
+    // guests[] yet) is written back in the new shape on its first /invite
+    // even when the person was already listed — one migration write.
     const before = JSON.stringify(night.guests || null);
     night.guests = guestsLib.normalizeGuests(night);
     delete night.invited; delete night.rsvps; delete night.declined;

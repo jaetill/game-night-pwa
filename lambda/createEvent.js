@@ -133,6 +133,8 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
     // invite_to_event → POST /invite resolves each to a Cognito user.
     guests: [
       guestsLib.newGuest({ userId: callerId, invitedBy: callerId, response: { type: 'playing' } }),
+      // Only email addresses are accepted here; userId invites go through
+      // POST /invite ({ userId }) after creation.
       ...(Array.isArray(invited) ? invited : [])
         .filter(e => typeof e === 'string' && e.includes('@'))
         .map(e => guestsLib.newGuest({ email: e, invitedBy: callerId })),

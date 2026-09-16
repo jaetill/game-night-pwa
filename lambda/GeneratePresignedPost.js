@@ -107,7 +107,7 @@ function makeTombstone(night) {
  * dropped, missing tombstones carried forward, host omissions tombstoned).
  * Exported for unit tests.
  */
-function validateChanges(current, incoming, userId) {
+function validateChanges(current, incoming, userId, actorEmail = null) {
   current  = current.map(canonicalNight);
   incoming = incoming.map(canonicalNight);
   const currentById = new Map(current.map(n => [String(n.id), n]));
@@ -158,7 +158,7 @@ function validateChanges(current, incoming, userId) {
     }
 
     if (!isHost) {
-      const merged = guestsLib.mergeGuestChanges(existing.guests, night.guests, userId);
+      const merged = guestsLib.mergeGuestChanges(existing.guests, night.guests, userId, { actorEmail });
       if (merged.error) return { error: `${merged.error} (night ${night.id})` };
       accepted.push({ ...night, guests: merged.guests });
       continue;
@@ -213,13 +213,15 @@ const RSVP_TYPE_LABEL = {
  * Exported for unit tests.
  */
 function changedNightIds(current, accepted) {
-  const beforeById = new Map((current || []).map(n => [String(n.id), JSON.stringify(n)]));
+  // Both sides canonicalized so a still-legacy night that merely got its
+  // shape rewritten (ADR-0021) does not count as changed.
+  const beforeById = new Map((current || []).map(n => [String(n.id), JSON.stringify(canonicalNight(n))]));
   const changed = [];
 
   for (const night of accepted || []) {
     const id = String(night.id);
     const before = beforeById.get(id);
-    if (before === undefined || before !== JSON.stringify(night)) changed.push(id);
+    if (before === undefined || before !== JSON.stringify(canonicalNight(night))) changed.push(id);
     beforeById.delete(id);
   }
   // Anything left in beforeById was dropped from the payload entirely.
@@ -308,6 +310,8 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
 
   const userId = event.requestContext?.authorizer?.userId;
   if (!userId) return respond(401, { error: 'Unauthorized' }, CORS);
+  // Verified by the authorizer from the JWT; absent for API-key callers.
+  const actorEmail = event.requestContext?.authorizer?.email || null;
 
   let incoming;
   try {
@@ -329,7 +333,7 @@ exports.handler = Sentry.wrapHandler(async (event, context) => {
       return respond(500, { error: 'Failed to load current data' }, CORS);
     }
 
-    const { error, accepted } = validateChanges(current, incoming, userId);
+    const { error, accepted } = validateChanges(current, incoming, userId, actorEmail);
     if (error) {
       logger.warn('upload.rejected', { request_id: context?.awsRequestId, user_id: userId, violation: error });
       return respond(403, { error }, CORS);

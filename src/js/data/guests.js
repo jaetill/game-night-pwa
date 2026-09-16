@@ -275,7 +275,9 @@ function isYes(g) { return !!(g?.response && YES_TYPES.includes(g.response.type)
  *
  * Permitted for the actor (rule 2 + 3 of the ADR):
  *   - own entry: `response`, and the name / email / userId caches
- *     (an email-only entry may be claimed by the actor on first contact)
+ *     (an email-only entry may be claimed by the actor on first contact —
+ *     ONLY when `actorEmail`, the authorizer-verified email, matches it;
+ *     the client's own claim of an email is never trusted)
  *   - if attending (before or after): ADD entries with invitedBy === actor
  *   - own anonymous plus-ones (invitedBy === actor, no userId, no email):
  *     rename / respond / remove
@@ -283,8 +285,12 @@ function isYes(g) { return !!(g?.response && YES_TYPES.includes(g.response.type)
  * `before`. Returns { guests } or { error } — errors are reserved for the
  * actor's OWN illegal actions, never for someone else's drift.
  */
-function mergeGuestChanges(before, after, actorId) {
+function mergeGuestChanges(before, after, actorId, { actorEmail = null, now = Date.now() } = {}) {
   const server = clone(before || []);
+  const verifiedEmail = lc(actorEmail);
+  // Client clocks are not trusted into the future: a forged respondedAt of
+  // MAX_SAFE_INTEGER would otherwise pin the actor's entry forever.
+  const clampTs = (t) => (typeof t === 'number' && Number.isFinite(t)) ? Math.min(t, now + 5 * 60 * 1000) : 0;
   const wanted = clone(after  || []);
   const byId   = new Map(wanted.map(g => [g.id, g]));
 
@@ -293,9 +299,11 @@ function mergeGuestChanges(before, after, actorId) {
   let mine = server.find(g => g.userId === actorId) || null;
   if (!mine) {
     const claimed = wanted.find(g => g.userId === actorId) || null;
-    const onServer = claimed
-      ? (server.find(g => g.id === claimed.id && !g.userId && g.email && g.email === claimed.email)
-         || (claimed.email ? server.find(g => !g.userId && g.email === claimed.email) : null))
+    // Match the server's email-only entry against the VERIFIED email, not
+    // whatever the client wrote on the entry.
+    const onServer = claimed && verifiedEmail
+      ? (server.find(g => g.id === claimed.id && !g.userId && g.email === verifiedEmail)
+         || server.find(g => !g.userId && g.email === verifiedEmail))
       : null;
     if (onServer) {
       onServer.userId = actorId;
@@ -312,7 +320,7 @@ function mergeGuestChanges(before, after, actorId) {
     // Newest answer wins: a stale tab (opened before I answered from my
     // phone / the email link) must not revert my newer response.
     const tServer = typeof mine.respondedAt === 'number' ? mine.respondedAt : 0;
-    const tClient = typeof mineWanted.respondedAt === 'number' ? mineWanted.respondedAt : 0;
+    const tClient = clampTs(mineWanted.respondedAt);
     if (tClient >= tServer) {
       mine.response    = normalizeResponse(mineWanted.response);
       mine.respondedAt = tClient || mine.respondedAt || null;
@@ -330,7 +338,7 @@ function mergeGuestChanges(before, after, actorId) {
     if (!w) { server.splice(i, 1); continue; }
     if (typeof w.name === 'string' && w.name.trim()) g.name = w.name.trim();
     g.response    = normalizeResponse(w.response);
-    g.respondedAt = typeof w.respondedAt === 'number' ? w.respondedAt : g.respondedAt;
+    g.respondedAt = typeof w.respondedAt === 'number' ? clampTs(w.respondedAt) : g.respondedAt;
   }
 
   // Additions attributed to the actor (plus-ones or named friends).

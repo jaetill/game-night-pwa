@@ -157,4 +157,11 @@ describe('_validateChanges — guests[] (ADR-0021)', () => {
     expect(_validateChanges([before], [after], 'bob').error).toBeUndefined();
     expect(_validateChanges([after], [live('n1', 'alice', { guests: [] })], 'alice').error).toBeUndefined();
   });
+  it('lets an email invitee claim their entry only when the authorizer-verified email matches', () => {
+    const before = live('n1', 'alice', { guests: [newGuest({ id: 'e', email: 'bob@x.com', invitedBy: 'alice', invitedAt: 1 })] });
+    const after  = live('n1', 'alice', { guests: [newGuest({ id: 'e', userId: 'bob', email: 'bob@x.com', invitedBy: 'alice', invitedAt: 1, response: { type: 'playing', at: 2 } })] });
+    expect(_validateChanges([before], [after], 'bob', 'bob@x.com').accepted[0].guests[0].userId).toBe('bob');
+    expect(_validateChanges([before], [after], 'bob').error).toMatch(/not on the guest list/);
+    expect(_validateChanges([before], [after], 'bob', 'mallory@x.com').error).toMatch(/not on the guest list/);
+  });
 });

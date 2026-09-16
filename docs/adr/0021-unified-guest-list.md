@@ -82,7 +82,8 @@ night.guests = [
 - `name`, `email` — display and routing caches (see sub-decision 2).
 - `invitedBy` — userId of whoever added the entry (host or a sponsoring guest).
 - `response` — `null` (pending) or `{ type, at }` with `type ∈ playing | any_game | if_needed | spectating | declined`.
-- `respondedAt` — when `response` last changed, including a cancel back to `null`; `null` if never answered. The merge below uses it so a stale tab cannot revert a person's own newer answer.
+- `respondedAt` — when `response` last changed, including a cancel back to `null`; `null` if never answered. The merge below uses it so a stale tab cannot revert a person's own newer answer. Client-supplied values are clamped to "now + 5 min" server-side so they cannot be forged into the future.
+- Guest-sponsored invites (rule 2) provision Cognito accounts and send Postmark mail from the host's address, so `/invite` logs them at WARN (`invite.by_guest`) with the sponsor's identity fields. Accepted for a friend group; a per-sponsor rate limit is the next step if it is ever abused.
 
 Derived sets, computed by one shared helper module and nowhere else:
 
@@ -94,7 +95,7 @@ Derived sets, computed by one shared helper module and nowhere else:
 
 1. The host may add, remove, or change any entry.
 2. A guest whose own response is a yes-type may **add** entries with `invitedBy` = themselves, and may **remove or edit** only the anonymous plus-ones they brought (`userId === null && email === null`). A named friend they invited by email has their own standing from the moment the entry exists.
-3. Anyone may change **only** `response` (and refresh `name`/`email`) on the entry whose `userId` is their own.
+3. Anyone may change **only** `response` (and refresh `name`/`email`) on the entry whose `userId` is their own. Claiming an email-only entry on first contact requires the **authorizer-verified** JWT email to match the entry's email — the client's own statement of its email is never trusted (a member could otherwise hijack another invitee's pending entry). API-key callers (MCP) have no verified email and cannot claim.
 
 **Enforcement is a merge, not a rejection.** The client uploads its whole in-memory array and never re-fetches first, so by the time Bob taps "Reserve a seat" the server copy has usually moved on (Carol responded, the host invited Dan). Rejecting Bob's upload because *someone else's* entry differs would make "Could not save" the normal experience of a PWA tab left open. So for a non-host, `mergeGuestChanges(serverGuests, uploadedGuests, actor)` starts from the **server's** list and applies only the actor's permitted deltas from the upload; everything else is kept as the server has it. The only rejections are the actor's own illegal actions (adding themselves to a night they were not invited to; bringing people while pending). The host's saves remain whole-night authoritative, as before (ADR-0018's accepted LWW granularity).
 

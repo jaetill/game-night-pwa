@@ -180,13 +180,16 @@ describe('mergeGuestChanges — non-host saves are merged, not rejected', () => 
     expect(byId(out, 'm')).toMatchObject({ invitedBy: HOST, invitedAt: 1 });
   });
 
-  it('lets an email invitee claim their entry (userId fill-in) and respond', () => {
+  it('lets an email invitee claim their entry (userId fill-in) and respond — only with a verified matching email', () => {
     const before = [newGuest({ id: 'e', email: 'me@x.com', invitedBy: HOST, invitedAt: 1 })];
     const after  = clone(before);
     after[0].userId = me; after[0].name = 'Me'; after[0].response = { type: 'playing', at: 2 };
-    const out = ok(mergeGuestChanges(before, after, me));
+    const out = ok(mergeGuestChanges(before, after, me, { actorEmail: 'Me@X.com' }));
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ id: 'e', userId: me, name: 'Me', response: { type: 'playing' } });
+    // The client's stated email is not proof: no verified email, or a different one → not on the list.
+    expect(mergeGuestChanges(before, clone(after), me).error).toMatch(/not on the guest list/);
+    expect(mergeGuestChanges(before, clone(after), me, { actorEmail: 'someone-else@x.com' }).error).toMatch(/not on the guest list/);
   });
 
   it('rejects adding myself when I am not on the list', () => {
@@ -267,10 +270,18 @@ describe('mergeGuestChanges — non-host saves are merged, not rejected', () => 
     expect(byId(ok(mergeGuestChanges(before, newer, me)), 'm').response).toBeNull();
   });
 
+  it('clamps a future-dated respondedAt so it cannot pin the entry forever', () => {
+    const before = base(); before[1].response = { type: 'playing', at: 50 }; before[1].respondedAt = 50;
+    const forged = clone(base()); forged[1].response = null; forged[1].respondedAt = Number.MAX_SAFE_INTEGER;
+    const out = ok(mergeGuestChanges(before, forged, me, { now: 100 }));
+    expect(byId(out, 'm').response).toBeNull();                 // it still wins now (it is newer)…
+    expect(byId(out, 'm').respondedAt).toBeLessThanOrEqual(100 + 5 * 60 * 1000); // …but with a sane timestamp
+  });
+
   it('claims an email-only entry that exists under a different id (legacy drift)', () => {
     const before = [newGuest({ id: 'srv', email: 'me@x.com', invitedBy: HOST, invitedAt: 1 })];
     const after  = [newGuest({ id: 'cli', userId: me, email: 'me@x.com', invitedBy: HOST, invitedAt: 1, response: { type: 'playing', at: 2 } })];
-    const out = ok(mergeGuestChanges(before, after, me));
+    const out = ok(mergeGuestChanges(before, after, me, { actorEmail: 'me@x.com' }));
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ id: 'srv', userId: me, response: { type: 'playing' } });
   });
