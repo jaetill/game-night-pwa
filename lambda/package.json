@@ -13,6 +13,6 @@
     "@octokit/rest": "^22.0.1",
     "@sentry/aws-serverless": "^10.75.0",
     "aws-jwt-verify": "^5.2.1",
-    "web-push": "^3.6.7"
+    "web-push": "^4.0.0"
   }
 }
